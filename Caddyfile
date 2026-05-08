@@ -1,0 +1,20 @@
+# 3API Caddyfile — auto-HTTPS via Let's Encrypt
+# Replace YOUR_DOMAIN with your actual domain.
+
+YOUR_DOMAIN {
+    reverse_proxy panel:8080
+
+    # Static assets (Next.js exports under /ui)
+    handle_path /static/* {
+        root * /app/public
+        file_server
+    }
+}
+
+# (Multi-tenant SaaS mode — uncomment in TENANT_MODE=multi)
+# *.3api.pro, :443 {
+#     tls {
+#         on_demand
+#     }
+#     reverse_proxy panel:8080
+# }
