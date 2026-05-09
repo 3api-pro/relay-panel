@@ -1,25 +1,25 @@
 # 3API Relay Panel — single-tenant deployment with bundled Postgres
-version: '3.9'
+# (Compose v2+; no `version:` field needed.)
 
 services:
   panel:
-    image: ghcr.io/3api-pro/relay-panel:latest
+    # Default: build from source (`docker compose build`).
+    # To pull from a registry instead, override at compose-up time:
+    #   IMAGE_SOURCE=ghcr.io/3api-pro/relay-panel:latest docker compose up -d
+    image: ${PANEL_IMAGE:-3api-relay-panel:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: 3api-panel
     restart: unless-stopped
     env_file:
       - .env
-    environment:
-      DATABASE_URL: postgresql://3api:3api_secret_change_me@postgres:5432/relay_panel
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+    # Healthcheck is defined in the Dockerfile so it follows ${PORT}.
 
   postgres:
     image: postgres:16-alpine
@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: 3api
-      POSTGRES_PASSWORD: 3api_secret_change_me
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-3api_secret_change_me}
       POSTGRES_DB: relay_panel
     volumes:
       - ./pgdata:/var/lib/postgresql/data
