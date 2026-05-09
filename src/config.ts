@@ -16,6 +16,13 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
   adminDefaultPassword: process.env.ADMIN_DEFAULT_PASSWORD || 'admin',
 
+  /**
+   * Static secret guarding the platform tenant-provisioning routes
+   * (POST /platform/tenants). When unset, those routes return 503 —
+   * they are only reachable when explicitly enabled via PLATFORM_TOKEN env.
+   */
+  platformToken: process.env.PLATFORM_TOKEN || '',
+
   logLevel: process.env.LOG_LEVEL || 'info',
   autoUpdate: process.env.AUTO_UPDATE !== 'off',
 } as const;
