@@ -19,6 +19,7 @@ import { customerAuthRouter } from './routes/auth-customer';
 import { customerRouter } from './routes/customer';
 import { authCustomer } from './middleware/auth-customer';
 import { platformRouter } from './routes/platform';
+import { signupTenantRouter } from './routes/signup-tenant';
 import { landingRouter } from './routes/landing';
 import { ensureDefaultAdmin } from './services/auth';
 
@@ -79,6 +80,7 @@ async function main(): Promise<void> {
     router.use('/customer', tenantResolver, authCustomer, customerRouter);
     router.use('/v1', tenantResolver, authToken, relayRouter);
     router.use('/platform', platformRouter);
+    router.use('/signup-tenant', signupTenantRouter);
   }
   const apiRouter = Router();
   mountApi(apiRouter);

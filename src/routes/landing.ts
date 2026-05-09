@@ -91,8 +91,8 @@ const HTML = `<!doctype html>
       内置批发上游, 不需要自己谈号池。MIT 开源, 借鉴 one-api / new-api 的成熟模式。
     </p>
     <div class="ctas">
-      <a href="https://github.com/3api-pro/relay-panel" class="btn primary">在 GitHub 上查看</a>
-      <a href="#install" class="btn ghost">查看安装命令</a>
+      <a href="/create/" class="btn primary">免费开店 →</a>
+      <a href="https://github.com/3api-pro/relay-panel" class="btn ghost">在 GitHub 上自部署</a>
     </div>
     <div class="install" id="install">
       <pre><span class="c"># Ubuntu 22.04 / Debian / RHEL — 5 分钟一键装</span>
@@ -186,6 +186,16 @@ const NOT_FOUND_HTML = `<!doctype html>
  * Subdomains fall through (`next()`) to /api/* and the static UI bundle.
  * Single-tenant deploys (no saasDomain configured) skip entirely.
  */
+// Paths that ARE valid on the root domain (no tenant context required).
+// Anything else on the root domain falls to a clean HTML 404 below.
+const ROOT_DOMAIN_ALLOW: Array<RegExp> = [
+  /^\/health$/,
+  /^\/create\/?$/,                      // tenant signup form (UI page)
+  /^\/api\/signup-tenant(\/.*)?$/,      // public tenant signup API
+  /^\/api\/health$/,                    // alias used by some monitors
+  /^\/_next\//,                         // Next.js static assets
+];
+
 landingRouter.use((req: Request, res: Response, next) => {
   const host = (req.hostname || '').toLowerCase();
   const saas = (config.saasDomain || '').toLowerCase();
@@ -197,8 +207,7 @@ landingRouter.use((req: Request, res: Response, next) => {
     res.type('html').status(200).send(HTML);
     return;
   }
-  // /health is the only API surface root domain is allowed to expose
-  if (req.method === 'GET' && req.path === '/health') return next();
+  if (ROOT_DOMAIN_ALLOW.some((re) => re.test(req.path))) return next();
 
   res.status(404).type('html').send(NOT_FOUND_HTML);
 });

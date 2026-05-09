@@ -27,6 +27,7 @@ docker run -d --name 3api-panel \
   -e ADMIN_DEFAULT_EMAIL='admin@3api.pro' \
   -e ADMIN_DEFAULT_PASSWORD='admin-3api-init-pwd-CHANGEME' \
   -e PLATFORM_TOKEN="${PT}" \
+  -e TENANT_SELF_SIGNUP='on' \
   3api-panel:local
 
 sleep 3
