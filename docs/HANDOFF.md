@@ -1,6 +1,12 @@
 # 3API Project — State & Handoff
 
 > 5/9/2026 snapshot. What's done, what's blocked on user-side action.
+>
+> **Local container `3api-panel` runs healthy on `127.0.0.1:3199`** (multi-tenant
+> mode, restart=unless-stopped). HEALTHCHECK now respects `${PORT}`. The
+> `/platform/tenants` operator API is live behind `X-Platform-Token`; the
+> generated token is at `/root/.3api-platform-token` (mode 0600) and matches
+> the `PLATFORM_TOKEN` env baked into the running container.
 
 ## ✅ What's done (verified)
 
@@ -36,8 +42,10 @@ Repo PUBLIC. 11 commits.
 | relay (POST /v1/messages) | `src/routes/relay.ts` | streaming + non-streaming |
 | Admin routes (11 endpoints) | `src/routes/admin.ts` | |
 | Customer routes (8 endpoints) | `src/routes/customer.ts` | |
-| Default admin auto-creation | `src/services/auth.ts` | |
-| smoke-test.sh (13 checks) | `scripts/smoke-test.sh` | **all PASS** |
+| Default admin auto-creation | `src/services/auth.ts` | + `createAdminForTenant()` helper for multi-tenant |
+| Platform tenant provisioning (POST /platform/tenants etc.) | `src/routes/platform.ts` | guarded by `X-Platform-Token` header (env `PLATFORM_TOKEN`) |
+| smoke-test.sh (13 checks, single mode) | `scripts/smoke-test.sh` | accepts `HOST_HEADER=…` for multi mode |
+| smoke-platform.sh (14 checks, multi mode) | `scripts/smoke-platform.sh` | **14/14 PASS** on local 3api-panel |
 | UI: Next.js + Tailwind | `ui/` (5 functional pages) | |
 | One-click installer | `install.sh` | logic written, real VPS test pending |
 | docker-compose (with bundled PG) | `docker-compose.yml` | |
