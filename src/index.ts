@@ -3,7 +3,7 @@
  * Single-tenant default; multi-tenant via TENANT_MODE=multi.
  */
 import express from 'express';
-import dotenv from 'dotenv';
+// dotenv loaded via dynamic require to avoid type dep:
 import { initDatabase } from './services/database';
 import { config } from './config';
 import { logger } from './services/logger';
@@ -11,7 +11,7 @@ import { tenantResolver } from './middleware/tenant-resolver';
 import { authToken } from './middleware/auth-token';
 import { relayRouter } from './routes/relay';
 
-dotenv.config();
+try { require('dotenv').config(); } catch {}
 
 async function main(): Promise<void> {
   await initDatabase();
