@@ -171,22 +171,34 @@ curl -fsSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/install.s
 </html>
 `;
 
+const NOT_FOUND_HTML = `<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>404 — 3api.pro</title>
+<style>body{font-family:-apple-system,sans-serif;background:#f8fafc;color:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}.b{text-align:center;padding:32px}.t{font-size:64px;font-weight:700;color:#0d9488;margin:0}p{color:#475569;margin:12px 0 24px}a{color:#0f766e;text-decoration:none}</style>
+</head><body><div class="b"><div class="t">404</div><p>这是 3api.pro 根域。<br>分销面板要走子域 (例如 acme.3api.pro)。</p>
+<p><a href="/">返回首页</a> · <a href="https://github.com/3api-pro/relay-panel">GitHub</a></p></div></body></html>`;
+
 /**
- * Mount this BEFORE tenant routes. It only activates when the request hits
- * the saasDomain root (or www.saasDomain) — subdomains fall through to
- * tenant resolution.
+ * Mount this BEFORE tenant routes. On the SaaS root domain (or www) it owns
+ * the entire request lifecycle: GET / serves marketing, anything else is a
+ * dedicated 404 — root domain has no tenant context, so leaking subdomain
+ * pages here would confuse users.
+ *
+ * Subdomains fall through (`next()`) to /api/* and the static UI bundle.
+ * Single-tenant deploys (no saasDomain configured) skip entirely.
  */
-landingRouter.get('/', (req: Request, res: Response, next) => {
+landingRouter.use((req: Request, res: Response, next) => {
   const host = (req.hostname || '').toLowerCase();
   const saas = (config.saasDomain || '').toLowerCase();
-  if (!saas) {
-    // single-tenant deploys never use the SaaS domain — let the request fall
-    // through to the panel's own /admin/login etc.
-    return next();
-  }
-  if (host === saas || host === `www.${saas}`) {
+  if (!saas) return next();
+  const isRoot = host === saas || host === `www.${saas}`;
+  if (!isRoot) return next();
+
+  if (req.method === 'GET' && (req.path === '/' || req.path === '')) {
     res.type('html').status(200).send(HTML);
     return;
   }
-  return next();
+  // /health is the only API surface root domain is allowed to expose
+  if (req.method === 'GET' && req.path === '/health') return next();
+
+  res.status(404).type('html').send(NOT_FOUND_HTML);
 });

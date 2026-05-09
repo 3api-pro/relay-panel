@@ -2,7 +2,9 @@
  * 3API Relay Panel — entry point.
  * Single-tenant default; multi-tenant via TENANT_MODE=multi.
  */
-import express from 'express';
+import path from 'path';
+import fs from 'fs';
+import express, { Router } from 'express';
 // dotenv loaded via dynamic require to avoid type dep:
 import { initDatabase } from './services/database';
 import { config } from './config';
@@ -38,31 +40,61 @@ async function main(): Promise<void> {
     });
   });
 
-  // Marketing landing page on the SaaS root domain (3api.pro / www.3api.pro).
-  // Subdomains fall through to tenant resolution below.
+  // Marketing landing on the SaaS root domain (3api.pro / www).
+  // Subdomains and single-tenant deploys fall through.
   app.use('/', landingRouter);
 
-  // /admin/login + /admin/logout — public (no auth required, just tenant)
-  app.use('/admin', tenantResolver, adminAuthRouter);
+  // ---------------------------------------------------------------------
+  // Static UI — Next.js export at /app/public, GET-only.
+  //
+  // Mounted BEFORE the API so a browser hitting GET /admin/login on a
+  // subdomain gets the rendered Next page instead of authAdmin's 401.
+  // POST /admin/login etc. fall through (express.static is GET/HEAD only).
+  // ---------------------------------------------------------------------
+  const UI_DIR = path.resolve(__dirname, '../public');
+  if (fs.existsSync(UI_DIR)) {
+    app.use(express.static(UI_DIR, { index: 'index.html', extensions: ['html'] }));
+    // Next emits per-route `name/index.html` files (trailingSlash:true).
+    // Dispatch GET /login → /login/index.html, /admin/login → /admin/login/index.html.
+    app.get(/^\/[^.]*$/, (req, res, next) => {
+      const candidate = path.join(UI_DIR, req.path, 'index.html');
+      if (fs.existsSync(candidate)) return res.sendFile(candidate);
+      return next();
+    });
+  } else {
+    logger.warn({ uiDir: UI_DIR }, 'ui:not_built — run `npm --prefix ui run build` and rebuild the image');
+  }
 
-  // /admin/* — protected admin routes
-  app.use('/admin', tenantResolver, authAdmin, adminRouter);
+  // ---------------------------------------------------------------------
+  // API mounts.
+  //
+  // Two paths reach the same handlers:
+  //   /api/{admin,customer,v1,platform}/...   — used by the bundled UI (lib/api.ts)
+  //   /{admin,customer,v1,platform}/...       — stable, callable by curl / SDKs
+  // ---------------------------------------------------------------------
+  function mountApi(router: express.Router): void {
+    router.use('/admin', tenantResolver, adminAuthRouter);
+    router.use('/admin', tenantResolver, authAdmin, adminRouter);
+    router.use('/customer', tenantResolver, customerAuthRouter);
+    router.use('/customer', tenantResolver, authCustomer, customerRouter);
+    router.use('/v1', tenantResolver, authToken, relayRouter);
+    router.use('/platform', platformRouter);
+  }
+  const apiRouter = Router();
+  mountApi(apiRouter);
+  app.use('/api', apiRouter);
+  mountApi(app as unknown as express.Router);
 
-
-  // /customer/signup + /customer/login — public (no auth, just tenant)
-  app.use('/customer', tenantResolver, customerAuthRouter);
-
-  // /customer/* — protected customer self-service
-  app.use('/customer', tenantResolver, authCustomer, customerRouter);
-
-  // /platform/* — platform-operator only (no tenant resolver, X-Platform-Token header).
-  app.use('/platform', platformRouter);
-
-  // /v1/* — relay path: tenant resolver → token auth → upstream proxy
-  app.use('/v1', tenantResolver, authToken, relayRouter);
-
-  // 404 fallback
-  app.use((_req, res) => {
+  // 404 fallback. HTML for browser-ish requests, JSON for SDK paths.
+  app.use((req, res) => {
+    if (
+      req.accepts('html') &&
+      !req.path.startsWith('/api') &&
+      !req.path.startsWith('/v1')
+    ) {
+      const html = path.join(UI_DIR, '404.html');
+      if (fs.existsSync(html)) return res.status(404).sendFile(html);
+    }
     res.status(404).json({ error: { type: 'not_found', message: 'Route not found' } });
   });
 

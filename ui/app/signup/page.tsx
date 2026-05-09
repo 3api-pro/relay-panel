@@ -45,8 +45,13 @@ export default function SignupPage() {
   );
 }
 
-function Field({ label, ...rest }: { label: string } & React.InputHTMLAttributes<HTMLInputElement> & { onChange: (v: string) => void }) {
-  const { onChange, value, ...inputProps } = rest as any;
+type FieldProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> & {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+};
+
+function Field({ label, value, onChange, ...inputProps }: FieldProps) {
   return (
     <label className="block">
       <div className="text-sm font-medium text-slate-700 mb-1">{label}</div>

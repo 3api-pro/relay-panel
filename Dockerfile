@@ -12,11 +12,20 @@ COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npx tsc
 
+# UI build — Next.js static export → /app/ui/out
+FROM node:20-alpine AS ui
+WORKDIR /app/ui
+COPY ui/package.json ui/package-lock.json* ./
+RUN npm config set registry https://registry.npmmirror.com && npm install --no-audit --no-fund
+COPY ui/ ./
+RUN npx next build
+
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=deps  /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY --from=ui    /app/ui/out ./public
 COPY db/ ./db/
 COPY package.json ./
 

@@ -1,14 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
-  async rewrites() {
-    // In dev: proxy /api/* to backend on 3199. In prod: same-origin.
-    if (process.env.NODE_ENV === 'development') {
-      return [
-        { source: '/api/:path*', destination: 'http://localhost:3199/:path*' },
-      ];
-    }
-    return [];
-  },
+  // Static export — Express serves the resulting `out/` directory.
+  // Calls to /api/* go to Express; everything else is a static page.
+  output: 'export',
+  trailingSlash: true,
+  images: { unoptimized: true },
 };
 module.exports = nextConfig;
