@@ -10,11 +10,16 @@ import { logger } from './services/logger';
 import { tenantResolver } from './middleware/tenant-resolver';
 import { authToken } from './middleware/auth-token';
 import { relayRouter } from './routes/relay';
+import { adminAuthRouter } from './routes/auth-admin';
+import { adminRouter } from './routes/admin';
+import { authAdmin } from './middleware/auth-admin';
+import { ensureDefaultAdmin } from './services/auth';
 
 try { require('dotenv').config(); } catch {}
 
 async function main(): Promise<void> {
   await initDatabase();
+  await ensureDefaultAdmin();
 
   const app = express();
   app.set('trust proxy', true);
@@ -27,6 +32,13 @@ async function main(): Promise<void> {
       tenant_mode: config.tenantMode,
     });
   });
+
+
+  // /admin/login + /admin/logout — public (no auth required, just tenant)
+  app.use('/admin', tenantResolver, adminAuthRouter);
+
+  // /admin/* — protected admin routes
+  app.use('/admin', tenantResolver, authAdmin, adminRouter);
 
   // /v1/* — relay path: tenant resolver → token auth → upstream proxy
   app.use('/v1', tenantResolver, authToken, relayRouter);
