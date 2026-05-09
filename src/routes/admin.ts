@@ -7,8 +7,12 @@ import { Router, Request, Response } from 'express';
 import { query, withTransaction } from '../services/database';
 import { hashPassword } from '../services/auth';
 import { logger } from '../services/logger';
+import { channelsRouter } from './admin-channels';
 
 export const adminRouter = Router();
+
+// /admin/channels/* — upstream-channel CRUD (BYOK)
+adminRouter.use('/channels', channelsRouter);
 
 // =============== End users ===============
 

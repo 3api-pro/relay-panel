@@ -6,11 +6,47 @@ import {
   callUpstream,
   callUpstreamStream,
   extractUsageFromSse,
+  UpstreamChannel,
 } from '../services/upstream';
 import { recordUsageAndBill } from '../services/billing';
+import { query } from '../services/database';
+import { config } from '../config';
 import { logger } from '../services/logger';
 
 export const relayRouter = Router();
+
+/**
+ * Pick the active default channel for the tenant, falling back to env in
+ * single-tenant deploys. Returns null + an error response if neither is
+ * available.
+ */
+async function resolveChannel(
+  tenantId: number,
+): Promise<{ channel: UpstreamChannel | null; channelId: number | null; error?: string }> {
+  const rows = await query<{ id: number; base_url: string; api_key: string }>(
+    `SELECT id, base_url, api_key
+       FROM upstream_channel
+      WHERE tenant_id = $1 AND status = 'active'
+      ORDER BY is_default DESC, weight DESC, priority ASC, id ASC
+      LIMIT 1`,
+    [tenantId],
+  );
+  if (rows.length > 0) {
+    return {
+      channel: { id: rows[0].id, base_url: rows[0].base_url, api_key: rows[0].api_key },
+      channelId: rows[0].id,
+    };
+  }
+  // Fallback: env (single-tenant or pre-channel deploy)
+  if (config.upstreamKey && config.upstreamBaseUrl) {
+    return { channel: null, channelId: null };
+  }
+  return {
+    channel: null,
+    channelId: null,
+    error: 'no upstream channel configured for this tenant — admin must add one in /admin/channels',
+  };
+}
 
 relayRouter.post('/messages', async (req: Request, res: Response) => {
   const start = Date.now();
@@ -24,14 +60,22 @@ relayRouter.post('/messages', async (req: Request, res: Response) => {
     return;
   }
 
+  const resolved = await resolveChannel(tok.tenantId);
+  if (resolved.error) {
+    res.status(503).json({
+      error: { type: 'upstream_not_configured', message: resolved.error },
+    });
+    return;
+  }
+
   const wantsStream =
     req.body?.stream === true ||
     String(req.headers['accept'] ?? '').includes('text/event-stream');
 
   if (wantsStream) {
-    return handleStream(req, res, requestedModel, start);
+    return handleStream(req, res, requestedModel, start, resolved.channel, resolved.channelId);
   }
-  return handleJson(req, res, requestedModel, start);
+  return handleJson(req, res, requestedModel, start, resolved.channel, resolved.channelId);
 });
 
 async function handleJson(
@@ -39,19 +83,26 @@ async function handleJson(
   res: Response,
   model: string,
   start: number,
+  channel: UpstreamChannel | null,
+  channelId: number | null,
 ): Promise<void> {
   const tok = req.endToken!;
   const usr = req.endUser!;
 
   let upstreamJson;
   try {
-    upstreamJson = await callUpstream({ path: '/messages', body: req.body });
+    upstreamJson = await callUpstream({
+      path: '/messages',
+      body: req.body,
+      ...(channel ? { channel } : {}),
+    });
   } catch (err: any) {
     logger.error({ err: err.message }, 'relay:upstream_error');
     await recordUsageAndBill({
       tenantId: tok.tenantId, endUserId: usr.id, endTokenId: tok.id,
       modelName: model, promptTokens: 0, completionTokens: 0,
       requestId: null, elapsedMs: Date.now() - start, isStream: false, status: 'failure',
+      channelId,
     }).catch(() => {});
     res.status(502).json({ error: { type: 'upstream_error', message: 'Upstream unavailable' } });
     return;
@@ -70,6 +121,7 @@ async function handleJson(
     requestId: upstreamJson.body?.id ?? null, elapsedMs: Date.now() - start,
     isStream: false,
     status: upstreamJson.status >= 200 && upstreamJson.status < 300 ? 'success' : 'failure',
+    channelId,
   }).catch(() => null);
 
   if (billOut && upstreamJson.body && typeof upstreamJson.body === 'object') {
@@ -86,13 +138,19 @@ async function handleStream(
   res: Response,
   model: string,
   start: number,
+  channel: UpstreamChannel | null,
+  channelId: number | null,
 ): Promise<void> {
   const tok = req.endToken!;
   const usr = req.endUser!;
 
   let upstreamHttp: globalThis.Response;
   try {
-    upstreamHttp = await callUpstreamStream({ path: '/messages', body: req.body });
+    upstreamHttp = await callUpstreamStream({
+      path: '/messages',
+      body: req.body,
+      ...(channel ? { channel } : {}),
+    });
   } catch (err: any) {
     logger.error({ err: err.message }, 'relay:upstream_stream_error');
     res.status(502).json({ error: { type: 'upstream_error', message: 'Upstream unavailable' } });
@@ -106,6 +164,7 @@ async function handleStream(
       tenantId: tok.tenantId, endUserId: usr.id, endTokenId: tok.id,
       modelName: model, promptTokens: 0, completionTokens: 0,
       requestId: null, elapsedMs: Date.now() - start, isStream: true, status: 'failure',
+      channelId,
     }).catch(() => {});
     return;
   }
@@ -155,6 +214,7 @@ async function handleStream(
     elapsedMs: Date.now() - start,
     isStream: true,
     status: aborted ? 'failure' : 'success',
+    channelId,
   }).catch(() => null);
 }
 

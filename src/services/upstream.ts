@@ -2,14 +2,35 @@
  * Upstream HTTP client. Two modes:
  *  - JSON (non-streaming): callUpstream({ stream: false })
  *  - SSE (streaming):      callUpstreamStream(...) — yields chunks
+ *
+ * Multi-tenant note: pass `channel` to override the env-driven defaults
+ * with a per-tenant upstream_channel row. Single-tenant deploys can
+ * keep using config.upstreamBaseUrl + config.upstreamKey.
  */
 import { config } from '../config';
 import { logger } from './logger';
+
+export interface UpstreamChannel {
+  id?: number;
+  base_url: string;
+  api_key: string;
+}
 
 export interface UpstreamRequest {
   path: string;
   body: any;
   apiKey?: string;
+  channel?: UpstreamChannel;
+}
+
+function resolveTarget(req: UpstreamRequest): { baseUrl: string; apiKey: string } {
+  if (req.channel) {
+    return { baseUrl: req.channel.base_url, apiKey: req.channel.api_key };
+  }
+  return {
+    baseUrl: config.upstreamBaseUrl,
+    apiKey: req.apiKey || config.upstreamKey,
+  };
 }
 
 export interface UpstreamJsonResponse {
@@ -19,9 +40,9 @@ export interface UpstreamJsonResponse {
 }
 
 export async function callUpstream(req: UpstreamRequest): Promise<UpstreamJsonResponse> {
-  const url = `${config.upstreamBaseUrl.replace(/\/$/, '')}${req.path}`;
-  const apiKey = req.apiKey || config.upstreamKey;
-  if (!apiKey) throw new Error('UPSTREAM_KEY not configured');
+  const { baseUrl, apiKey } = resolveTarget(req);
+  const url = `${baseUrl.replace(/\/$/, '')}${req.path}`;
+  if (!apiKey) throw new Error('upstream not configured: no api_key on channel and no UPSTREAM_KEY env');
 
   const start = Date.now();
   let res: Response;
@@ -59,9 +80,9 @@ export async function callUpstream(req: UpstreamRequest): Promise<UpstreamJsonRe
  * Returns: { upstreamRes, parseUsage(buffer): {input,output} }
  */
 export async function callUpstreamStream(req: UpstreamRequest): Promise<Response> {
-  const url = `${config.upstreamBaseUrl.replace(/\/$/, '')}${req.path}`;
-  const apiKey = req.apiKey || config.upstreamKey;
-  if (!apiKey) throw new Error('UPSTREAM_KEY not configured');
+  const { baseUrl, apiKey } = resolveTarget(req);
+  const url = `${baseUrl.replace(/\/$/, '')}${req.path}`;
+  if (!apiKey) throw new Error('upstream not configured: no api_key on channel and no UPSTREAM_KEY env');
 
   const res = await fetch(url, {
     method: 'POST',

@@ -27,7 +27,11 @@ export default function AdminDashboard() {
       <header className="bg-slate-800 text-white">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="text-xl font-semibold">3API Admin</div>
-          <button onClick={logout} className="text-sm hover:text-amber-400">退出</button>
+          <nav className="flex items-center gap-5 text-sm">
+            <a href="/admin/dashboard/" className="text-amber-400">客户</a>
+            <a href="/admin/channels/" className="hover:text-amber-400">上游 Channel</a>
+            <button onClick={logout} className="hover:text-amber-400">退出</button>
+          </nav>
         </div>
       </header>
       <div className="max-w-6xl mx-auto px-6 py-8">
