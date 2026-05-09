@@ -1,22 +1,41 @@
-# 3API Relay Panel — single-tenant default deployment
+# 3API Relay Panel — single-tenant deployment with bundled Postgres
 version: '3.9'
 
 services:
   panel:
-    image: ghcr.io/3api/relay-panel:latest
+    image: ghcr.io/3api-pro/relay-panel:latest
     container_name: 3api-panel
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql://3api:3api_secret_change_me@postgres:5432/relay_panel
     ports:
       - "8080:8080"
-    volumes:
-      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: 3api-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: 3api
+      POSTGRES_PASSWORD: 3api_secret_change_me
+      POSTGRES_DB: relay_panel
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U 3api -d relay_panel"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   caddy:
     image: caddy:2-alpine

@@ -29,9 +29,9 @@ mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
 # 3. Pull docker-compose.yml
-curl -sSL https://raw.githubusercontent.com/3api/relay-panel/main/docker-compose.yml -o docker-compose.yml
-curl -sSL https://raw.githubusercontent.com/3api/relay-panel/main/Caddyfile -o Caddyfile
-curl -sSL https://raw.githubusercontent.com/3api/relay-panel/main/.env.example -o .env.example
+curl -sSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/docker-compose.yml -o docker-compose.yml
+curl -sSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/Caddyfile -o Caddyfile
+curl -sSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/.env.example -o .env.example
 [ -f .env ] || cp .env.example .env
 
 # 4. Prompt for domain + wholesale key (interactive)

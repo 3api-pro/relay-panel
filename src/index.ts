@@ -1,5 +1,5 @@
 /**
- * 3API Relay Panel — entry point
+ * 3API Relay Panel — entry point.
  * Single-tenant default; multi-tenant via TENANT_MODE=multi.
  */
 import express from 'express';
@@ -7,6 +7,9 @@ import dotenv from 'dotenv';
 import { initDatabase } from './services/database';
 import { config } from './config';
 import { logger } from './services/logger';
+import { tenantResolver } from './middleware/tenant-resolver';
+import { authToken } from './middleware/auth-token';
+import { relayRouter } from './routes/relay';
 
 dotenv.config();
 
@@ -14,13 +17,30 @@ async function main(): Promise<void> {
   await initDatabase();
 
   const app = express();
+  app.set('trust proxy', true);
   app.use(express.json({ limit: '50mb' }));
 
   app.get('/health', (_req, res) => {
-    res.json({ ok: true, tenant_mode: config.tenantMode, version: '0.1.0-alpha' });
+    res.json({
+      ok: true,
+      version: '0.1.0-alpha',
+      tenant_mode: config.tenantMode,
+    });
   });
 
-  // TODO: mount tenant resolver, admin routes, customer routes, relay routes
+  // /v1/* — relay path: tenant resolver → token auth → upstream proxy
+  app.use('/v1', tenantResolver, authToken, relayRouter);
+
+  // 404 fallback
+  app.use((_req, res) => {
+    res.status(404).json({ error: { type: 'not_found', message: 'Route not found' } });
+  });
+
+  // Generic error handler
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    logger.error({ err: err?.message ?? String(err) }, 'unhandled_error');
+    res.status(500).json({ error: { type: 'internal_error', message: 'Internal error' } });
+  });
 
   app.listen(config.port, () => {
     logger.info(
@@ -31,6 +51,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  logger.error({ err }, '3api-panel:fatal');
+  logger.error({ err: err?.message ?? String(err) }, '3api-panel:fatal');
   process.exit(1);
 });

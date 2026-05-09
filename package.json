@@ -14,9 +14,7 @@
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
-    "@types/better-sqlite3": "^7.6.10",
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^11.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
