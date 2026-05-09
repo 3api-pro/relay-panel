@@ -64,27 +64,27 @@ async function handleJson(
   }
 
   const promptTokens =
-    upstreamRes.body?.usage?.input_tokens ??
-    upstreamRes.body?.usage?.prompt_tokens ?? 0;
+    upstreamHttp.body?.usage?.input_tokens ??
+    upstreamHttp.body?.usage?.prompt_tokens ?? 0;
   const completionTokens =
-    upstreamRes.body?.usage?.output_tokens ??
-    upstreamRes.body?.usage?.completion_tokens ?? 0;
+    upstreamHttp.body?.usage?.output_tokens ??
+    upstreamHttp.body?.usage?.completion_tokens ?? 0;
 
   const billOut = await recordUsageAndBill({
     tenantId: tok.tenantId, endUserId: usr.id, endTokenId: tok.id,
     modelName: model, promptTokens, completionTokens,
-    requestId: upstreamRes.body?.id ?? null, elapsedMs: Date.now() - start,
+    requestId: upstreamHttp.body?.id ?? null, elapsedMs: Date.now() - start,
     isStream: false,
-    status: upstreamRes.status >= 200 && upstreamRes.status < 300 ? 'success' : 'failure',
+    status: upstreamHttp.status >= 200 && upstreamHttp.status < 300 ? 'success' : 'failure',
   }).catch(() => null);
 
-  if (billOut && upstreamRes.body && typeof upstreamRes.body === 'object') {
-    upstreamRes.body._3api = {
+  if (billOut && upstreamHttp.body && typeof upstreamHttp.body === 'object') {
+    upstreamHttp.body._3api = {
       charged_cents: billOut.chargedCents,
       remain_quota_cents: billOut.remainCents,
     };
   }
-  res.status(upstreamRes.status).json(upstreamRes.body);
+  res.status(upstreamHttp.status).json(upstreamHttp.body);
 }
 
 async function handleStream(
@@ -96,18 +96,18 @@ async function handleStream(
   const tok = req.endToken!;
   const usr = req.endUser!;
 
-  let upstreamRes: Response;
+  let upstreamHttp: globalThis.Response;
   try {
-    upstreamRes = await callUpstreamStream({ path: '/messages', body: req.body });
+    upstreamHttp = await callUpstreamStream({ path: '/messages', body: req.body });
   } catch (err: any) {
     logger.error({ err: err.message }, 'relay:upstream_stream_error');
     res.status(502).json({ error: { type: 'upstream_error', message: 'Upstream unavailable' } });
     return;
   }
 
-  if (upstreamRes.status !== 200) {
-    const errText = await upstreamRes.text();
-    res.status(upstreamRes.status).type('application/json').send(errText);
+  if (upstreamHttp.status !== 200) {
+    const errText = await upstreamHttp.text();
+    res.status(upstreamHttp.status).type('application/json').send(errText);
     await recordUsageAndBill({
       tenantId: tok.tenantId, endUserId: usr.id, endTokenId: tok.id,
       modelName: model, promptTokens: 0, completionTokens: 0,
@@ -122,12 +122,12 @@ async function handleStream(
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
 
-  if (!upstreamRes.body) {
+  if (!upstreamHttp.body) {
     res.end();
     return;
   }
 
-  const reader = upstreamRes.body.getReader();
+  const reader = upstreamHttp.body.getReader();
   const decoder = new TextDecoder();
   let accumulated = '';
   let aborted = false;
