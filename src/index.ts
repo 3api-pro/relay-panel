@@ -13,6 +13,9 @@ import { relayRouter } from './routes/relay';
 import { adminAuthRouter } from './routes/auth-admin';
 import { adminRouter } from './routes/admin';
 import { authAdmin } from './middleware/auth-admin';
+import { customerAuthRouter } from './routes/auth-customer';
+import { customerRouter } from './routes/customer';
+import { authCustomer } from './middleware/auth-customer';
 import { ensureDefaultAdmin } from './services/auth';
 
 try { require('dotenv').config(); } catch {}
@@ -39,6 +42,13 @@ async function main(): Promise<void> {
 
   // /admin/* — protected admin routes
   app.use('/admin', tenantResolver, authAdmin, adminRouter);
+
+
+  // /customer/signup + /customer/login — public (no auth, just tenant)
+  app.use('/customer', tenantResolver, customerAuthRouter);
+
+  // /customer/* — protected customer self-service
+  app.use('/customer', tenantResolver, authCustomer, customerRouter);
 
   // /v1/* — relay path: tenant resolver → token auth → upstream proxy
   app.use('/v1', tenantResolver, authToken, relayRouter);
