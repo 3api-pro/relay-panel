@@ -17,6 +17,7 @@ import { customerAuthRouter } from './routes/auth-customer';
 import { customerRouter } from './routes/customer';
 import { authCustomer } from './middleware/auth-customer';
 import { platformRouter } from './routes/platform';
+import { landingRouter } from './routes/landing';
 import { ensureDefaultAdmin } from './services/auth';
 
 try { require('dotenv').config(); } catch {}
@@ -37,6 +38,9 @@ async function main(): Promise<void> {
     });
   });
 
+  // Marketing landing page on the SaaS root domain (3api.pro / www.3api.pro).
+  // Subdomains fall through to tenant resolution below.
+  app.use('/', landingRouter);
 
   // /admin/login + /admin/logout — public (no auth required, just tenant)
   app.use('/admin', tenantResolver, adminAuthRouter);

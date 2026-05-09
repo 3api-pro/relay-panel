@@ -1,11 +1,19 @@
 #!/bin/bash
-# Regenerate PLATFORM_TOKEN, persist, restart container with full env.
+# Restart 3api-panel with the persisted PLATFORM_TOKEN.
+# - First run (no token file): generate one and store it 0600.
+# - Subsequent runs: preserve. Force regeneration with FORCE_NEW_TOKEN=1.
 set -euo pipefail
 
-PT="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
-echo "${PT}" > /root/.3api-platform-token
-chmod 600 /root/.3api-platform-token
-echo "PT_LEN=${#PT}"
+TOKEN_FILE=/root/.3api-platform-token
+if [[ "${FORCE_NEW_TOKEN:-0}" == "1" ]] || [[ ! -s "$TOKEN_FILE" ]]; then
+  PT="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
+  echo "${PT}" > "$TOKEN_FILE"
+  chmod 600 "$TOKEN_FILE"
+  echo "PT_LEN=${#PT} (newly generated)"
+else
+  PT=$(cat "$TOKEN_FILE")
+  echo "PT_LEN=${#PT} (preserved from $TOKEN_FILE)"
+fi
 
 docker rm -f 3api-panel 2>/dev/null || true
 docker run -d --name 3api-panel \
