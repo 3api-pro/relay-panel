@@ -2,12 +2,12 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev
+RUN npm config set registry https://registry.npmmirror.com && npm ci --omit=dev
 
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm config set registry https://registry.npmmirror.com && npm ci
 COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npx tsc
