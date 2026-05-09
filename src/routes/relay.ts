@@ -1,10 +1,5 @@
 /**
  * /v1/messages relay — supports both JSON and SSE streaming.
- *
- * Protocol detection:
- *   - body.stream === true       → SSE
- *   - Accept: text/event-stream  → SSE
- *   - else                       → JSON
  */
 import { Router, Request, Response } from 'express';
 import {
@@ -20,7 +15,6 @@ export const relayRouter = Router();
 relayRouter.post('/messages', async (req: Request, res: Response) => {
   const start = Date.now();
   const tok = req.endToken!;
-  const usr = req.endUser!;
   const requestedModel = String(req.body?.model || 'claude-sonnet-4-7');
 
   if (tok.allowedModels && !tok.allowedModels.includes(requestedModel)) {
@@ -49,9 +43,9 @@ async function handleJson(
   const tok = req.endToken!;
   const usr = req.endUser!;
 
-  let upstreamRes;
+  let upstreamJson;
   try {
-    upstreamRes = await callUpstream({ path: '/messages', body: req.body });
+    upstreamJson = await callUpstream({ path: '/messages', body: req.body });
   } catch (err: any) {
     logger.error({ err: err.message }, 'relay:upstream_error');
     await recordUsageAndBill({
@@ -64,27 +58,27 @@ async function handleJson(
   }
 
   const promptTokens =
-    upstreamHttp.body?.usage?.input_tokens ??
-    upstreamHttp.body?.usage?.prompt_tokens ?? 0;
+    upstreamJson.body?.usage?.input_tokens ??
+    upstreamJson.body?.usage?.prompt_tokens ?? 0;
   const completionTokens =
-    upstreamHttp.body?.usage?.output_tokens ??
-    upstreamHttp.body?.usage?.completion_tokens ?? 0;
+    upstreamJson.body?.usage?.output_tokens ??
+    upstreamJson.body?.usage?.completion_tokens ?? 0;
 
   const billOut = await recordUsageAndBill({
     tenantId: tok.tenantId, endUserId: usr.id, endTokenId: tok.id,
     modelName: model, promptTokens, completionTokens,
-    requestId: upstreamHttp.body?.id ?? null, elapsedMs: Date.now() - start,
+    requestId: upstreamJson.body?.id ?? null, elapsedMs: Date.now() - start,
     isStream: false,
-    status: upstreamHttp.status >= 200 && upstreamHttp.status < 300 ? 'success' : 'failure',
+    status: upstreamJson.status >= 200 && upstreamJson.status < 300 ? 'success' : 'failure',
   }).catch(() => null);
 
-  if (billOut && upstreamHttp.body && typeof upstreamHttp.body === 'object') {
-    upstreamHttp.body._3api = {
+  if (billOut && upstreamJson.body && typeof upstreamJson.body === 'object') {
+    upstreamJson.body._3api = {
       charged_cents: billOut.chargedCents,
       remain_quota_cents: billOut.remainCents,
     };
   }
-  res.status(upstreamHttp.status).json(upstreamHttp.body);
+  res.status(upstreamJson.status).json(upstreamJson.body);
 }
 
 async function handleStream(
@@ -151,7 +145,6 @@ async function handleStream(
     if (!aborted) res.end();
   }
 
-  // Bill after stream completes
   const usage = extractUsageFromSse(accumulated);
   await recordUsageAndBill({
     tenantId: tok.tenantId, endUserId: usr.id, endTokenId: tok.id,
