@@ -69,3 +69,15 @@ curl -sSL https://3api.pro/install | bash
 ### License
 
 MIT。借鉴自 `one-api` (Apache-2.0) 和 `new-api`。
+
+---
+
+## Development
+
+### Local smoke test
+
+
+
+The smoke test exercises the full admin + customer + /v1 auth surface
+(13 checks). Upstream call (#9) returns 502 because UPSTREAM_KEY is fake;
+that's expected — wire a real wsk-* token from your 3API account.
