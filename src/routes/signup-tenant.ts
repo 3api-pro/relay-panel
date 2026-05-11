@@ -11,6 +11,7 @@
 import { Router, Request, Response } from 'express';
 import { withTransaction, query } from '../services/database';
 import { createAdminForTenant } from '../services/auth';
+import { seedPlansForTenant, seedBrandConfigForTenant, ensureWholesaleBalance } from '../services/plans-seed';
 import { RateLimiter } from '../services/rate-limit';
 import { config } from '../config';
 import { logger } from '../services/logger';
@@ -113,6 +114,11 @@ signupTenantRouter.post('/', async (req: Request, res: Response) => {
         admin_password,
         'Owner',
       );
+      // Seed default plans + brand_config + wholesale_balance.
+      // All idempotent (ON CONFLICT DO NOTHING) so re-running platform/signup is safe.
+      await seedPlansForTenant(client, tenant.id);
+      await seedBrandConfigForTenant(client, tenant.id, tenant.slug);
+      await ensureWholesaleBalance(client, tenant.id, 0);
       return { tenant, adminId };
     });
 

@@ -20,7 +20,8 @@ import { customerRouter } from './routes/customer';
 import { authCustomer } from './middleware/auth-customer';
 import { platformRouter } from './routes/platform';
 import { signupTenantRouter } from './routes/signup-tenant';
-import { landingRouter } from './routes/landing';
+import { landingRouter } from "./routes/landing";
+import { storefrontRouter } from "./routes/storefront";
 import { ensureDefaultAdmin } from './services/auth';
 
 try { require('dotenv').config(); } catch {}
@@ -80,7 +81,8 @@ async function main(): Promise<void> {
     router.use('/customer', tenantResolver, authCustomer, customerRouter);
     router.use('/v1', tenantResolver, authToken, relayRouter);
     router.use('/platform', platformRouter);
-    router.use('/signup-tenant', signupTenantRouter);
+    router.use("/signup-tenant", signupTenantRouter);
+    router.use("/storefront", tenantResolver, storefrontRouter);
   }
   const apiRouter = Router();
   mountApi(apiRouter);

@@ -31,6 +31,8 @@ declare module 'express-serve-static-core' {
       remainQuotaCents: number;
       unlimitedQuota: boolean;
       allowedModels: string[] | null;
+      subscriptionId: number | null;
+      subscriptionRemainingTokens: number | null;
     };
   }
 }

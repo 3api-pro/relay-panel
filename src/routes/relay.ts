@@ -9,11 +9,50 @@ import {
   UpstreamChannel,
 } from '../services/upstream';
 import { recordUsageAndBill } from '../services/billing';
+import { recordUsage as recordSubscriptionUsage } from '../services/order-engine';
 import { query } from '../services/database';
 import { config } from '../config';
 import { logger } from '../services/logger';
 
+
+function modelMatchesAllowlist(model: string, allow: string[]): boolean {
+  for (const pat of allow) {
+    if (pat === model) return true;
+    if (pat.endsWith("*")) {
+      const prefix = pat.slice(0, -1);
+      if (model.startsWith(prefix)) return true;
+    }
+  }
+  return false;
+}
+
 export const relayRouter = Router();
+
+// Subscription-aware usage recorder: subscription tokens decrement
+// remaining_tokens via order-engine; legacy cents tokens go through billing.
+async function recordUsageRouted(req: any, input: any): Promise<{ chargedCents?: number; remainCents?: number; remaining_tokens?: number | null }> {
+  const tok = req.endToken;
+  if (tok?.subscriptionId) {
+    const r = await recordSubscriptionUsage({
+      tenantId: input.tenantId,
+      endUserId: input.endUserId,
+      endTokenId: input.endTokenId,
+      subscriptionId: tok.subscriptionId,
+      channelId: input.channelId ?? null,
+      modelName: input.modelName,
+      promptTokens: input.promptTokens,
+      completionTokens: input.completionTokens,
+      costCents: 0,
+      requestId: input.requestId ?? null,
+      elapsedMs: input.elapsedMs,
+      isStream: input.isStream,
+      status: input.status,
+    });
+    return { remaining_tokens: r.remaining_tokens };
+  }
+  return recordUsageAndBill(input);
+}
+
 
 /**
  * Pick the active default channel for the tenant, falling back to env in
@@ -53,7 +92,10 @@ relayRouter.post('/messages', async (req: Request, res: Response) => {
   const tok = req.endToken!;
   const requestedModel = String(req.body?.model || 'claude-sonnet-4-7');
 
-  if (tok.allowedModels && !tok.allowedModels.includes(requestedModel)) {
+  // Allow exact match OR glob wildcard ("claude-*" / "claude-sonnet-*").
+  // Plan-derived allow lists are typically wildcards; the legacy admin-issued
+  // tokens use exact model names. Both flow through here.
+  if (tok.allowedModels && !modelMatchesAllowlist(requestedModel, tok.allowedModels)) {
     res.status(403).json({
       error: { type: 'permission_error', message: `Model not allowed: ${requestedModel}` },
     });
@@ -98,7 +140,7 @@ async function handleJson(
     });
   } catch (err: any) {
     logger.error({ err: err.message }, 'relay:upstream_error');
-    await recordUsageAndBill({
+    await recordUsageRouted(req, {
       tenantId: tok.tenantId, endUserId: usr.id, endTokenId: tok.id,
       modelName: model, promptTokens: 0, completionTokens: 0,
       requestId: null, elapsedMs: Date.now() - start, isStream: false, status: 'failure',
@@ -115,7 +157,7 @@ async function handleJson(
     upstreamJson.body?.usage?.output_tokens ??
     upstreamJson.body?.usage?.completion_tokens ?? 0;
 
-  const billOut = await recordUsageAndBill({
+  const billOut = await recordUsageRouted(req, {
     tenantId: tok.tenantId, endUserId: usr.id, endTokenId: tok.id,
     modelName: model, promptTokens, completionTokens,
     requestId: upstreamJson.body?.id ?? null, elapsedMs: Date.now() - start,
@@ -160,7 +202,7 @@ async function handleStream(
   if (upstreamHttp.status !== 200) {
     const errText = await upstreamHttp.text();
     res.status(upstreamHttp.status).type('application/json').send(errText);
-    await recordUsageAndBill({
+    await recordUsageRouted(req, {
       tenantId: tok.tenantId, endUserId: usr.id, endTokenId: tok.id,
       modelName: model, promptTokens: 0, completionTokens: 0,
       requestId: null, elapsedMs: Date.now() - start, isStream: true, status: 'failure',
@@ -205,7 +247,7 @@ async function handleStream(
   }
 
   const usage = extractUsageFromSse(accumulated);
-  await recordUsageAndBill({
+  await recordUsageRouted(req, {
     tenantId: tok.tenantId, endUserId: usr.id, endTokenId: tok.id,
     modelName: model,
     promptTokens: usage.input,

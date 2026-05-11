@@ -33,9 +33,15 @@ export async function authToken(
     const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
 
     const tokens = await query<any>(
-      `SELECT t.*, u.email, u.group_name, u.quota_cents, u.used_quota_cents
+      `SELECT t.*, u.email, u.group_name, u.quota_cents, u.used_quota_cents,
+              s.id AS subscription_id,
+              s.remaining_tokens AS sub_remaining_tokens,
+              s.expires_at AS sub_expires_at,
+              s.status AS sub_status,
+              s.plan_id AS sub_plan_id
          FROM end_token t
          JOIN end_user u ON u.id = t.end_user_id AND u.tenant_id = t.tenant_id
+         LEFT JOIN subscription s ON s.id = t.subscription_id
         WHERE t.tenant_id = $1
           AND t.key_prefix = $2
           AND t.key_hash = $3
@@ -56,18 +62,40 @@ export async function authToken(
       return;
     }
 
-    if (!tok.unlimited_quota && Number(tok.remain_quota_cents) <= 0) {
-      res.status(402).json({
-        error: { type: 'insufficient_quota', message: 'Token quota exhausted' },
-      });
-      return;
-    }
-
-    if (Number(tok.quota_cents) - Number(tok.used_quota_cents) <= 0) {
-      res.status(402).json({
-        error: { type: 'insufficient_quota', message: 'Account balance exhausted' },
-      });
-      return;
+    // Subscription-bound token: check remaining_tokens + expiry.
+    // Legacy token (no subscription_id): fall back to cents-based check.
+    if (tok.subscription_id) {
+      if (tok.sub_status !== 'active') {
+        res.status(402).json({
+          error: { type: 'insufficient_quota', message: 'Subscription is not active' },
+        });
+        return;
+      }
+      if (tok.sub_expires_at && new Date(tok.sub_expires_at).getTime() < Date.now()) {
+        res.status(402).json({
+          error: { type: 'insufficient_quota', message: 'Subscription expired' },
+        });
+        return;
+      }
+      if (Number(tok.sub_remaining_tokens ?? 0) <= 0) {
+        res.status(402).json({
+          error: { type: 'insufficient_quota', message: 'Subscription token quota exhausted' },
+        });
+        return;
+      }
+    } else {
+      if (!tok.unlimited_quota && Number(tok.remain_quota_cents) <= 0) {
+        res.status(402).json({
+          error: { type: 'insufficient_quota', message: 'Token quota exhausted' },
+        });
+        return;
+      }
+      if (Number(tok.quota_cents) - Number(tok.used_quota_cents) <= 0) {
+        res.status(402).json({
+          error: { type: 'insufficient_quota', message: 'Account balance exhausted' },
+        });
+        return;
+      }
     }
 
     req.endToken = {
@@ -77,6 +105,8 @@ export async function authToken(
       remainQuotaCents: Number(tok.remain_quota_cents),
       unlimitedQuota: !!tok.unlimited_quota,
       allowedModels: parseAllowedModels(tok.allowed_models),
+      subscriptionId: tok.subscription_id ?? null,
+      subscriptionRemainingTokens: tok.subscription_id ? Number(tok.sub_remaining_tokens ?? 0) : null,
     };
     req.endUser = {
       id: tok.end_user_id,
