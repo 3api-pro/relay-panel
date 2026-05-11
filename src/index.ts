@@ -26,6 +26,7 @@ import { paymentsRouter, storefrontPaymentsRouter } from "./routes/payments";
 import { ensureDefaultAdmin } from './services/auth';
 import { startUsdtWatcher } from "./services/payments/usdt-watcher";
 import { startEmailCron } from "./services/email-cron";
+import { startWholesaleSync } from "./services/wholesale-sync";
 
 try { require('dotenv').config(); } catch {}
 
@@ -118,6 +119,7 @@ async function main(): Promise<void> {
   // Background workers — soft-fail safe.
   try { startUsdtWatcher(); } catch (e: any) { logger.warn({ err: e.message }, 'usdt:watcher:start:fail'); }
   try { startEmailCron(); } catch (e: any) { logger.warn({ err: e.message }, 'email:cron:start:fail'); }
+  try { startWholesaleSync(); } catch (e: any) { logger.warn({ err: e.message }, 'wholesale:sync:start:fail'); }
 
   app.listen(config.port, () => {
     logger.info(
