@@ -1,9 +1,9 @@
 /**
  * Public tenant self-signup — no auth required.
  *
- * Rate-limited per IP (1/min, 10/hour). Validates slug + email + password,
- * then atomically creates a tenant row + reseller_admin row using the same
- * helpers as the platform-token route.
+ * Rate-limited per IP. Validates email + password, then atomically creates a
+ * tenant + reseller_admin. **slug is auto-generated** (market convention —
+ * Vercel/Supabase/Netlify style); admins can rename it later from settings.
  *
  * Disabled by default. Set TENANT_SELF_SIGNUP=on to enable. When off the
  * route returns 503; operators on private deployments leave it that way.
@@ -22,17 +22,50 @@ const RESERVED_SLUGS = new Set([
   'www', 'root', 'api', 'mail', 'ftp', 'ns', 'ns1', 'ns2',
   'support', 'help', 'admin', 'app', 'static', 'cdn',
   'demo', 'docs', 'blog', 'about', 'status',
+  'platform', 'panel', 'auth', 'console', 'dashboard',
+  'pay', 'payment', 'webhook', 'create', 'signup', 'login',
+  'pricing', 'compare', 'comparison', 'changelog',
 ]);
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 
 const limiter = new RateLimiter([
-  { windowMs: 60_000,    max: 1  },  // 1 per minute
-  { windowMs: 3_600_000, max: 10 },  // 10 per hour
+  { windowMs: 60_000,    max: 1  },
+  { windowMs: 3_600_000, max: 10 },
 ]);
 
 function enabled(): boolean {
   return (process.env.TENANT_SELF_SIGNUP || '').toLowerCase() === 'on';
+}
+
+const ADJ = ['swift', 'bright', 'calm', 'clever', 'bold', 'crisp', 'cozy', 'fair',
+             'kind', 'lucky', 'merry', 'nimble', 'proud', 'quick', 'royal', 'silver',
+             'star', 'sunny', 'true', 'warm', 'wise', 'zen', 'amber', 'azure',
+             'coral', 'echo', 'flux', 'glow', 'haze', 'iris', 'jade', 'lark'];
+const NOUN = ['fox', 'owl', 'cat', 'crab', 'dawn', 'echo', 'eagle', 'fern',
+              'flame', 'forge', 'glade', 'harbor', 'lake', 'leaf', 'lion', 'loom',
+              'maple', 'nest', 'oak', 'orca', 'peak', 'pine', 'reef', 'river',
+              'shore', 'sky', 'spark', 'storm', 'tide', 'wave', 'wolf', 'wren'];
+
+function randomSlugCandidate(): string {
+  const a = ADJ[Math.floor(Math.random() * ADJ.length)];
+  const n = NOUN[Math.floor(Math.random() * NOUN.length)];
+  const tail = Math.random().toString(36).slice(2, 6);
+  return `${a}-${n}-${tail}`;
+}
+
+async function generateUniqueSlug(maxTries = 12): Promise<string> {
+  for (let i = 0; i < maxTries; i++) {
+    const candidate = randomSlugCandidate();
+    if (RESERVED_SLUGS.has(candidate)) continue;
+    const dup = await query<{ id: number }>(
+      `SELECT id FROM tenant WHERE slug = $1 LIMIT 1`,
+      [candidate],
+    );
+    if (dup.length === 0) return candidate;
+  }
+  // Fallback: pure-random 12-char base36
+  return Math.random().toString(36).slice(2, 14);
 }
 
 signupTenantRouter.get('/info', (_req, res) => {
@@ -40,6 +73,7 @@ signupTenantRouter.get('/info', (_req, res) => {
     enabled: enabled(),
     saas_domain: config.saasDomain || null,
     reserved_slugs: Array.from(RESERVED_SLUGS),
+    slug_auto_assigned: true,
   });
 });
 
@@ -63,18 +97,8 @@ signupTenantRouter.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  const { slug, admin_email, admin_password } = req.body ?? {};
+  const { slug: maybeSlug, admin_email, admin_password } = req.body ?? {};
 
-  if (typeof slug !== 'string' || !SLUG_RE.test(slug) || RESERVED_SLUGS.has(slug)) {
-    res.status(400).json({
-      error: {
-        type: 'invalid_request_error',
-        message:
-          'slug must be 1–32 chars [a-z0-9-], start/end alphanumeric, and not a reserved name',
-      },
-    });
-    return;
-  }
   if (typeof admin_email !== 'string' || !admin_email.includes('@') || admin_email.length > 255) {
     res.status(400).json({
       error: { type: 'invalid_request_error', message: 'valid admin_email required' },
@@ -88,23 +112,40 @@ signupTenantRouter.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  // Cheap pre-check (cuts a unique-violation roundtrip + nicer error message)
-  const dup = await query<{ id: number }>(
-    `SELECT id FROM tenant WHERE slug = $1 LIMIT 1`,
-    [slug.toLowerCase()],
-  );
-  if (dup.length > 0) {
-    res.status(409).json({
-      error: { type: 'conflict', message: 'slug already taken' },
-    });
-    return;
+  // slug is optional; if provided, validate. Otherwise auto-generate.
+  let slug: string;
+  if (typeof maybeSlug === 'string' && maybeSlug.length > 0) {
+    const normalized = maybeSlug.toLowerCase();
+    if (!SLUG_RE.test(normalized) || RESERVED_SLUGS.has(normalized)) {
+      res.status(400).json({
+        error: {
+          type: 'invalid_request_error',
+          message:
+            'slug must be 1–32 chars [a-z0-9-], start/end alphanumeric, and not a reserved name',
+        },
+      });
+      return;
+    }
+    const dup = await query<{ id: number }>(
+      `SELECT id FROM tenant WHERE slug = $1 LIMIT 1`,
+      [normalized],
+    );
+    if (dup.length > 0) {
+      res.status(409).json({
+        error: { type: 'conflict', message: 'slug already taken — try a different one or leave blank for auto' },
+      });
+      return;
+    }
+    slug = normalized;
+  } else {
+    slug = await generateUniqueSlug();
   }
 
   try {
     const result = await withTransaction(async (client) => {
       const t = await client.query<{ id: number; slug: string }>(
         `INSERT INTO tenant (slug, status) VALUES ($1, 'active') RETURNING id, slug`,
-        [slug.toLowerCase()],
+        [slug],
       );
       const tenant = t.rows[0];
       const adminId = await createAdminForTenant(
@@ -114,27 +155,30 @@ signupTenantRouter.post('/', async (req: Request, res: Response) => {
         admin_password,
         'Owner',
       );
-      // Seed default plans + brand_config + wholesale_balance.
-      // All idempotent (ON CONFLICT DO NOTHING) so re-running platform/signup is safe.
       await seedPlansForTenant(client, tenant.id);
       await seedBrandConfigForTenant(client, tenant.id, tenant.slug);
       await ensureWholesaleBalance(client, tenant.id, 0);
       return { tenant, adminId };
     });
 
+    const storeUrl = config.saasDomain
+      ? `https://${result.tenant.slug}.${config.saasDomain}/`
+      : `/`;
     const loginUrl = config.saasDomain
-      ? `https://${slug.toLowerCase()}.${config.saasDomain}/admin/login/`
+      ? `https://${result.tenant.slug}.${config.saasDomain}/admin/login/`
       : `/admin/login/`;
 
     logger.info(
-      { tenantId: result.tenant.id, slug: result.tenant.slug, adminId: result.adminId, ip },
+      { tenantId: result.tenant.id, slug: result.tenant.slug, adminId: result.adminId, ip, autoSlug: !maybeSlug },
       'tenant:self_signup',
     );
 
     res.status(201).json({
       tenant: { id: result.tenant.id, slug: result.tenant.slug },
       admin: { id: result.adminId, email: admin_email.toLowerCase() },
+      store_url: storeUrl,
       login_url: loginUrl,
+      slug_was_auto: !maybeSlug,
     });
   } catch (err: any) {
     if (err?.code === '23505') {

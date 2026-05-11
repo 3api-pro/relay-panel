@@ -78,7 +78,8 @@ const HTML = `<!doctype html>
     <nav>
       <a href="https://github.com/3api-pro/relay-panel">GitHub</a>
       <a href="https://github.com/3api-pro/relay-panel#readme">Docs</a>
-      <a href="https://github.com/3api-pro/relay-panel" class="cta">开始 →</a>
+      <a href="/admin/login/">登录</a>
+      <a href="/create/" class="cta">开始 →</a>
     </nav>
   </div>
 </header>
