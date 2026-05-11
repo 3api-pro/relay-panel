@@ -1,83 +1,134 @@
-# 3API Panel
-
-> Open-source AI API reseller platform with built-in upstream. One-click VPS install. Multi-tenant SaaS mode.
->
-> 开源 AI API 中转 + 二次分销面板, 内置上游, 一键 VPS 部署, 支持托管多租户。
-
-[简体中文](#简体中文) | [English](#english)
+<div align="center">
+  <img src="docs/assets/logo.svg" alt="3api" width="120"/>
+  <h1>3api / relay-panel</h1>
+  <p><strong>Open-source multi-tenant Claude-compatible relay panel &mdash; turn yourself into an AI reseller in 30 minutes.</strong></p>
+  <p>
+    <a href="https://github.com/3api-pro/relay-panel/blob/main/LICENSE"><img src="https://img.shields.io/github/license/3api-pro/relay-panel?color=blue" alt="License"/></a>
+    <a href="https://github.com/3api-pro/relay-panel/releases"><img src="https://img.shields.io/github/v/release/3api-pro/relay-panel?include_prereleases&sort=semver" alt="Release"/></a>
+    <a href="https://github.com/3api-pro/relay-panel/actions/workflows/ci.yml"><img src="https://github.com/3api-pro/relay-panel/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
+    <a href="https://github.com/3api-pro/relay-panel/stargazers"><img src="https://img.shields.io/github/stars/3api-pro/relay-panel?style=social" alt="Stars"/></a>
+  </p>
+  <p>
+    <a href="https://3api.pro">Website</a> &middot;
+    <a href="https://demo.3api.pro">Live Demo</a> &middot;
+    <a href="docs/QUICKSTART.md">Quick Start</a> &middot;
+    <a href="docs/ARCHITECTURE.md">Architecture</a> &middot;
+    <a href="https://github.com/3api-pro/relay-panel/discussions">Discussions</a>
+  </p>
+  <p><em>English &middot; <a href="docs/README.zh-CN.md">简体中文</a></em></p>
+</div>
 
 ---
 
-## English
+## What is this?
 
-### What is this?
+**3api/relay-panel** is the missing self-hostable control panel for anyone who wants
+to resell access to Claude-compatible LLM APIs. Spin up a branded
+`<your-slug>.3api.pro` (or your own custom domain), let customers self-signup,
+sell them subscriptions or token packs, and route their `/v1/messages` traffic to
+**any** Anthropic-compatible upstream &mdash; your own keys, our wholesale pool,
+or both with failover.
 
-3API Panel is an open-source self-hostable platform that lets anyone become an AI API reseller in minutes. Unlike `one-api` / `new-api`, it ships with a **built-in upstream** — you don't need to negotiate provider keys yourself. Just install, set your retail price, and start selling.
+Unlike Go-based `one-api` / `new-api`, this is a modern **TypeScript + Postgres +
+Next.js** stack with first-class multi-tenancy, an onboarding wizard, a real
+storefront UI, and native subscription billing &mdash; not just token quota.
 
-### Two ways to run
-
-1. **Self-host** (this repo, MIT) — Run on your own VPS. `curl ... | bash` and you're live in 5 minutes.
-2. **Hosted SaaS at 3api.pro** — We run it for you. Get a `<your-name>.3api.pro` subdomain, or bring your own custom domain. Free tier available.
-
-### Quick start (self-host)
+## 30-second Quick Start
 
 ```bash
-curl -sSL https://3api.pro/install | bash
+git clone https://github.com/3api-pro/relay-panel
+cd relay-panel
+cp .env.example .env       # edit POSTGRES_PASSWORD, JWT_SECRET
+docker compose up -d
+# → open http://localhost:8080 → signup → onboarding wizard → done
 ```
 
-Then visit `https://your-vps-ip/admin` to set up your reseller account.
+Full walkthrough in [docs/QUICKSTART.md](docs/QUICKSTART.md) (clone &rarr; first
+paying customer in 5 minutes).
 
-### Architecture (one-line)
+## Screenshots
 
-`Customer → Your Panel (this repo) → 3API wholesale endpoint → Claude-compatible API`
+> Real screenshots land with v0.2 demo. SVG placeholders below.
 
-You bill customers however you want (per-token, monthly subscription, prepaid quota). We bill you wholesale per subscription. Margin is yours.
+| Marketing landing | Admin onboarding | Storefront |
+|---|---|---|
+| ![landing](docs/assets/screenshot-landing.svg) | ![onboarding](docs/assets/screenshot-onboarding.svg) | ![storefront](docs/assets/screenshot-storefront.svg) |
 
-### License
+| Admin dashboard | End-user dashboard |
+|---|---|
+| ![admin](docs/assets/screenshot-admin.svg) | ![user](docs/assets/screenshot-user.svg) |
 
-MIT. Built using ideas from `one-api` (Apache-2.0) and `new-api`.
+## Why 3api vs one-api / new-api / sub2api
 
----
+|                                                  | **3api** | one-api | new-api | sub2api |
+|--------------------------------------------------|:--------:|:-------:|:-------:|:-------:|
+| Multi-tenant (subdomain per reseller)            | ✅       | ❌      | ❌      | ❌      |
+| Bundled wholesale upstream (no key sourcing)     | ✅       | ❌      | ❌      | ⚠️      |
+| Custom domain w/ auto-TLS (Caddy on-demand)      | ✅       | ❌      | ❌      | ❌      |
+| Modern Next.js + Tailwind UI                     | ✅       | ❌      | ⚠️      | ✅      |
+| Native subscription billing (not just token)     | ✅       | ❌      | ⚠️      | ✅      |
+| Alipay + USDT checkout                           | ✅       | ⚠️      | ✅      | ✅      |
+| TypeScript + Postgres (modern stack)             | ✅       | ❌ Go   | ❌ Go   | ❌ Go   |
+| MIT licensed                                     | ✅       | ✅      | ✅      | ❓      |
 
-## 简体中文
+> ⚠️ = partial / community plugin only. See
+> [docs/COMPARISON.md](docs/COMPARISON.md) for the full matrix and the
+> rationale behind each ✅.
 
-### 这是什么?
+## Architecture
 
-3API Panel 是一个开源的、可自部署的 AI API 中转 + 二次分销平台。让任何人能在几分钟内开自己的"AI API 中转站"。
-
-跟 `one-api` / `new-api` 的区别: **内置上游**, 不需要你自己谈 OpenAI/Anthropic 的 key — 安装即可开卖。
-
-### 两种部署方式
-
-1. **自部署** (本仓, MIT) — 装到自己 VPS, `curl | bash` 5 分钟开站
-2. **托管 SaaS @ 3api.pro** — 我们帮你跑, 你拿一个 `<你的名字>.3api.pro` 子域 (或绑定自己的域名), 免费
-
-### 快速开始 (自部署)
-
-```bash
-curl -sSL https://3api.pro/install | bash
+```
+Customer ──▶ <slug>.3api.pro ──▶ Tenant Middleware ──▶ /v1/messages Relay ──▶ Upstream (BYOK or wholesale)
+                  │                       │
+                  ▼                       ▼
+              Admin UI                Postgres (tenants/plans/subs/usage)
 ```
 
-然后访问 `https://你的VPS地址/admin` 配置分销账号。
+Full diagram, multi-tenant strategy, money flow and security boundaries:
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-### 架构 (一句话)
+## What's Inside
 
-`终端用户 → 你的面板 (本仓) → 3API 上游 → Claude 协议兼容 API`
+- **Multi-tenant routing** &mdash; tenant resolved from subdomain or custom domain
+- **Admin onboarding wizard** &mdash; upstream config, branding, first plan, first customer
+- **Plans / orders / subscriptions / API tokens** &mdash; full CRUD on both sides
+- **Anthropic-compatible relay** &mdash; `POST /v1/messages` with streaming, billing, usage logging
+- **BYOK + wholesale** &mdash; mix your own keys with our pool, priority + failover
+- **Storefront** &mdash; brand-customizable (logo, color, announcement, hero copy)
+- **Checkout** &mdash; Alipay + USDT (Paddle / Stripe on roadmap)
+- **Analytics dashboard** &mdash; per-tenant revenue, usage, top customers
+- **Resend mailer** &mdash; transactional emails out of the box
+- **One-click VPS install** &mdash; `curl -sSL https://3api.pro/install | bash`
 
-你按自己想要的方式向终端收费 (按 token / 包月 / 预付额度), 我们按套餐批发收你, 差价是你的利润。
+## Roadmap
 
-### License
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the live execution plan. Highlights:
 
-MIT。借鉴自 `one-api` (Apache-2.0) 和 `new-api`。
+- [x] **v0.1.0** &mdash; MVP storefront, BYOK relay, multi-tenant routing (current)
+- [ ] **v0.2.0** &mdash; Custom-domain auto-TLS, referral program, public OpenAPI spec
+- [ ] **v0.3.0** &mdash; Telegram bot, Discord webhook notifications, audit log export
+- [ ] **v0.4.0** &mdash; Mobile-optimized storefront, PWA, white-label mobile app
 
----
+## Contributing
 
-## Development
+Bug reports → [issues](https://github.com/3api-pro/relay-panel/issues).
+Feature ideas → [discussions](https://github.com/3api-pro/relay-panel/discussions).
+PRs welcome &mdash; please read [CONTRIBUTING.md](CONTRIBUTING.md) first
+(`npm test` PASS, conventional commits, no `src/` churn without an issue).
 
-### Local smoke test
+Security disclosures → see [SECURITY.md](SECURITY.md).
 
+By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
+## License
 
-The smoke test exercises the full admin + customer + /v1 auth surface
-(13 checks). Upstream call (#9) returns 502 because UPSTREAM_KEY is fake;
-that's expected — wire a real wsk-* token from your 3API account.
+[MIT](LICENSE) &copy; 2026 3api-pro contributors. Built upon ideas from
+`one-api` (Apache-2.0) and `new-api`.
+
+## Disclaimer
+
+Independent open-source project. **Not affiliated** with Anthropic, OpenAI,
+or any LLM vendor. The default upstream `api.llmapi.pro` is operated by an
+independent provider; you can swap it for any Anthropic-compatible endpoint
+in the admin panel. You are responsible for complying with your upstream's
+terms of service and your local laws when reselling.

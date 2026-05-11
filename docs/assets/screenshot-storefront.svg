@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500">
+  <rect width="800" height="500" fill="#fff"/>
+  <rect x="0" y="0" width="800" height="56" fill="#0ea5e9"/>
+  <circle cx="28" cy="28" r="10" fill="#fff"/>
+  <text x="50" y="34" font-family="ui-sans-serif,system-ui,sans-serif" font-size="18" font-weight="700" fill="#fff">Acme AI</text>
+  <text x="700" y="34" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="#fff">Sign up</text>
+  <text x="400" y="120" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="28" font-weight="800" fill="#0f172a">Claude Sonnet, your way</text>
+  <text x="400" y="148" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="14" fill="#64748b">Subscriptions and token packs. Cancel anytime.</text>
+  <rect x="60" y="200" width="220" height="240" rx="12" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="170" y="234" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="16" font-weight="700" fill="#0f172a">Pro</text>
+  <text x="170" y="276" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="30" font-weight="800" fill="#0f172a">¥29</text>
+  <text x="170" y="296" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" fill="#64748b">/ month</text>
+  <text x="170" y="334" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" fill="#475569">5M tokens / mo</text>
+  <text x="170" y="354" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" fill="#475569">Sonnet 4 + Haiku</text>
+  <rect x="80" y="390" width="180" height="36" rx="6" fill="#0ea5e9"/>
+  <text x="170" y="413" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" font-weight="600" fill="#fff">Choose Pro</text>
+  <rect x="290" y="200" width="220" height="240" rx="12" fill="#0ea5e9" stroke="#0ea5e9" stroke-width="1.5"/>
+  <text x="400" y="234" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="16" font-weight="700" fill="#fff">Max5x</text>
+  <text x="400" y="276" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="30" font-weight="800" fill="#fff">¥149</text>
+  <text x="400" y="296" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" fill="#e0f2fe">/ month</text>
+  <text x="400" y="334" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" fill="#e0f2fe">25M tokens / mo</text>
+  <text x="400" y="354" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" fill="#e0f2fe">Sonnet 4 + Opus 4</text>
+  <rect x="310" y="390" width="180" height="36" rx="6" fill="#fff"/>
+  <text x="400" y="413" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" font-weight="600" fill="#0ea5e9">Choose Max5x</text>
+  <rect x="520" y="200" width="220" height="240" rx="12" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="630" y="234" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="16" font-weight="700" fill="#0f172a">Ultra</text>
+  <text x="630" y="276" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="30" font-weight="800" fill="#0f172a">¥599</text>
+  <text x="630" y="296" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" fill="#64748b">/ month</text>
+  <text x="630" y="334" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" fill="#475569">300M tokens / mo</text>
+  <text x="630" y="354" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" fill="#475569">All models, priority</text>
+  <rect x="540" y="390" width="180" height="36" rx="6" fill="#0ea5e9"/>
+  <text x="630" y="413" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" font-weight="600" fill="#fff">Choose Ultra</text>
+  <text x="400" y="482" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-size="11" fill="#94a3b8">screenshot placeholder · real shot lands v0.2</text>
+</svg>

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Quickstart troubleshooting
+    url: https://github.com/3api-pro/relay-panel/blob/main/docs/QUICKSTART.md#troubleshooting
+    about: Common boot / config issues live in the QUICKSTART troubleshooting matrix.
+  - name: General questions
+    url: https://github.com/3api-pro/relay-panel/discussions
+    about: Open-ended questions, deployment chat, show-and-tell.
+  - name: Security disclosure
+    url: https://github.com/3api-pro/relay-panel/blob/main/SECURITY.md
+    about: Please do not open a public issue for security problems.
