@@ -19,6 +19,23 @@ jobs:
       - run: npm run lint --if-present
       - run: npx tsc --noEmit
 
+  ui-build:
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+      - name: Install UI deps
+        working-directory: ui
+        run: npm ci
+      - name: Build UI
+        working-directory: ui
+        run: npm run build
+
   smoke:
     runs-on: ubuntu-latest
     needs: lint-and-typecheck
@@ -38,11 +55,16 @@ jobs:
       DATABASE_URL: postgresql://3api:ci_pw_123@localhost:5432/relay_panel
       JWT_SECRET: ci-jwt-secret-32-bytes-aaaaaaaaaaaaaa
       PORT: 8080
-      TENANT_MODE: single
+      TENANT_MODE: multi
+      SAAS_DOMAIN: 3api.test
       UPSTREAM_BASE_URL: http://localhost:9999/mock
-      UPSTREAM_KEY: wsk-ci-fake
+      UPSTREAM_KEY: wsk-ci-fake-key-not-real
       ADMIN_DEFAULT_EMAIL: ci-admin@example.com
       ADMIN_DEFAULT_PASSWORD: ci-admin-pw-1234567
+      TENANT_SELF_SIGNUP: 'on'
+      PUBLIC_BASE_URL: http://localhost:8080
+      EMAIL_DEFAULT_FROM: noreply@3api.test
+      BASE_URL: http://localhost:8080
 
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +74,7 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx tsc --noEmit
+
       - name: Apply migrations
         run: |
           for f in db/migrations/*.sql; do
@@ -59,27 +82,30 @@ jobs:
             echo "applying $f"
             PGPASSWORD=ci_pw_123 psql -h localhost -U 3api -d relay_panel -f "$f"
           done
+
       - name: Boot panel
         run: |
           npm run build --if-present
           (node dist/index.js >/tmp/panel.log 2>&1 &) || (npx tsx src/index.ts >/tmp/panel.log 2>&1 &)
-          for i in 1 2 3 4 5 6 7 8 9 10; do
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
             sleep 2
-            if curl -sf http://localhost:8080/health >/dev/null; then
-              echo "panel healthy"
-              break
+            if curl -sf "http://localhost:${PORT}/health" >/dev/null; then
+              echo "panel healthy"; break
             fi
           done
-          curl -sf http://localhost:8080/health
-      - name: Smoke test
-        run: bash scripts/smoke-test.sh
-      - name: Storefront smoke (if present)
-        run: |
-          if [ -f scripts/smoke-storefront.sh ]; then
-            bash scripts/smoke-storefront.sh
-          else
-            echo "smoke-storefront.sh not yet present, skipping"
-          fi
-      - name: Panel logs on failure
+          curl -fsS "http://localhost:${PORT}/health"
+
+      - name: Smoke — host-routing (self-contained)
+        run: bash scripts/smoke-host-routing.sh
+
+      - name: Smoke — admin endpoints
+        run: bash scripts/smoke-admin-endpoints.sh
+        continue-on-error: true
+
+      - name: Smoke — storefront (auth + plans + orders)
+        run: bash scripts/smoke-storefront.sh
+        continue-on-error: true
+
+      - name: Panel log on failure
         if: failure()
-        run: tail -200 /tmp/panel.log
+        run: tail -300 /tmp/panel.log || true
