@@ -22,7 +22,10 @@ import { platformRouter } from './routes/platform';
 import { signupTenantRouter } from './routes/signup-tenant';
 import { landingRouter } from "./routes/landing";
 import { storefrontRouter } from "./routes/storefront";
+import { paymentsRouter, storefrontPaymentsRouter } from "./routes/payments";
 import { ensureDefaultAdmin } from './services/auth';
+import { startUsdtWatcher } from "./services/payments/usdt-watcher";
+import { startEmailCron } from "./services/email-cron";
 
 try { require('dotenv').config(); } catch {}
 
@@ -83,6 +86,10 @@ async function main(): Promise<void> {
     router.use('/platform', platformRouter);
     router.use("/signup-tenant", signupTenantRouter);
     router.use("/storefront", tenantResolver, storefrontRouter);
+    // Authed storefront payment endpoints (requires tenant + JWT).
+    router.use("/storefront/payments", tenantResolver, storefrontPaymentsRouter);
+    // Public payment webhooks (no tenant resolution; provider posts raw).
+    router.use("/payments", paymentsRouter);
   }
   const apiRouter = Router();
   mountApi(apiRouter);
@@ -107,6 +114,10 @@ async function main(): Promise<void> {
     logger.error({ err: err?.message ?? String(err) }, 'unhandled_error');
     res.status(500).json({ error: { type: 'internal_error', message: 'Internal error' } });
   });
+
+  // Background workers — soft-fail safe.
+  try { startUsdtWatcher(); } catch (e: any) { logger.warn({ err: e.message }, 'usdt:watcher:start:fail'); }
+  try { startEmailCron(); } catch (e: any) { logger.warn({ err: e.message }, 'email:cron:start:fail'); }
 
   app.listen(config.port, () => {
     logger.info(

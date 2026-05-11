@@ -21,7 +21,8 @@
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.5",
     "pino": "^9.0.0",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "alipay-sdk": "^4.14.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

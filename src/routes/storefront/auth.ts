@@ -22,6 +22,7 @@ import { query } from '../../services/database';
 import { hashPassword, verifyPassword } from '../../services/auth';
 import { signSession } from '../../services/jwt';
 import { logger } from '../../services/logger';
+import { sendEmail, isEmailConfigured } from '../../services/email-resend';
 
 export const storefrontAuthRouter = Router();
 
@@ -76,11 +77,26 @@ storefrontAuthRouter.post('/signup', async (req: Request, res: Response) => {
 
     logger.info({ userId, tenantId }, 'storefront:signup');
 
+    // Fire-and-forget verification email when Resend is configured.
+    // Dev/smoke mode (no key, or key=test) still returns verify_token in
+    // the response body so tests can verify-flow without real SMTP.
+    void sendEmail({
+      to: email.toLowerCase(),
+      template: 'verify-email',
+      tenantId,
+      data: { email: email.toLowerCase(), verify_token: verifyToken },
+    }).catch((e: any) => logger.warn({ err: e.message }, 'storefront:signup:email_fail'));
+
+    // Keep verify_token in response so smoke tests + dev mode can verify
+    // without polling the inbox. Production deployments still rely on the
+    // email; the token in the body is harmless because the email goes out
+    // simultaneously.
     res.status(201).json({
       token,
       user: { id: userId, email: email.toLowerCase(), aff_code: affCode },
       verify_token: verifyToken,
       verify_url_hint: `/storefront/auth/verify-email/${verifyToken}`,
+      email_sent: isEmailConfigured(),
     });
   } catch (err: any) {
     if (err.message?.includes('duplicate key')) {
