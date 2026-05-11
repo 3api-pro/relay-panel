@@ -58,3 +58,27 @@ export const auth = {
       body: JSON.stringify({ email, password }),
     }).then((r: any) => { setToken(r.token); return r; }),
 };
+
+/**
+ * Try an API call; return `fallback` on any error.
+ * Used for endpoints that may not exist yet (orders, brand, payment-config)
+ * so the dashboard renders empty-state instead of crashing.
+ */
+export async function safe<T>(p: Promise<T>, fallback: T): Promise<T> {
+  try { return await p; } catch { return fallback; }
+}
+
+/** Format cents as ¥X.XX */
+export function fmtCNY(cents: number | null | undefined): string {
+  const n = Number(cents ?? 0);
+  return `¥${(n / 100).toFixed(2)}`;
+}
+
+/** Format an ISO timestamp as YYYY-MM-DD HH:mm */
+export function fmtDate(s: string | null | undefined): string {
+  if (!s) return '—';
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return '—';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

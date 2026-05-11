@@ -15,7 +15,12 @@ export default function AdminLogin() {
     setBusy(true); setErr('');
     try {
       await auth.adminLogin(email, password);
-      router.push('/admin/dashboard');
+      // Route to new admin home (/admin). If onboarding was paused mid-way, resume it.
+      const paused =
+        typeof window !== 'undefined' &&
+        localStorage.getItem('onboarding_done') !== '1' &&
+        !!localStorage.getItem('onboarding_step');
+      router.push(paused ? '/admin/onboarding' : '/admin');
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   }
 
