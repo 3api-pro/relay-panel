@@ -1,10 +1,15 @@
 'use client';
+/**
+ * Top-level "/signup" page. Host-aware (Task #17).
+ */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { auth } from '@/lib/api';
+import { useHostMode } from '@/components/HostAware';
+import { StoreSignup } from '@/components/store/StoreSignup';
 
-export default function SignupPage() {
+function MarketingSignup() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,7 +31,7 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4">
+    <main className="min-h-screen flex items-center justify-center px-4" data-marketing-signup>
       <div className="w-full max-w-md bg-white rounded-lg shadow-sm border border-slate-200 p-8">
         <h1 className="text-2xl font-semibold mb-1">注册账号</h1>
         <p className="text-sm text-slate-500 mb-6">已有账号? <Link href="/login" className="text-brand-600">登录</Link></p>
@@ -60,4 +65,10 @@ function Field({ label, value, onChange, ...inputProps }: FieldProps) {
         className="w-full px-3 py-2 rounded-md border border-slate-300 focus:border-brand-500 focus:outline-none" />
     </label>
   );
+}
+
+export default function SignupPage() {
+  const mode = useHostMode();
+  if (mode === null) return <main className="min-h-screen bg-slate-50" />;
+  return mode === 'store' ? <StoreSignup /> : <MarketingSignup />;
 }

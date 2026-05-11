@@ -10,6 +10,7 @@ import { logger } from '../services/logger';
 import { channelsRouter } from "./admin-channels";
 import { adminPlansRouter } from "./admin/plans";
 import { adminWholesaleRouter } from "./admin/wholesale";
+import { adminExtrasRouter } from "./admin/extras";
 
 export const adminRouter = Router();
 
@@ -17,6 +18,9 @@ export const adminRouter = Router();
 adminRouter.use('/channels', channelsRouter);
 adminRouter.use('/plans', adminPlansRouter);
 adminRouter.use('/wholesale', adminWholesaleRouter);
+// Extras (me / brand / orders / refund / stats / change-password / payment-config).
+// Mounted BEFORE the legacy '/me' below so the richer payload wins.
+adminRouter.use('/', adminExtrasRouter);
 
 // =============== End users ===============
 

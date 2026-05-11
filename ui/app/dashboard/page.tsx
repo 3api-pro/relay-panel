@@ -1,7 +1,13 @@
 'use client';
+/**
+ * Top-level "/dashboard" page. Host-aware (Task #17).
+ *   - root marketing host  → legacy customer dashboard (/api/customer)
+ *   - tenant subdomain     → redirect to /dashboard/keys (store dashboard)
+ */
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, auth } from '@/lib/api';
+import { useHostMode } from '@/components/HostAware';
 
 interface Me {
   id: number;
@@ -23,7 +29,7 @@ interface Token {
   created_at: string;
 }
 
-export default function CustomerDashboard() {
+function MarketingDashboard() {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
   const [tokens, setTokens] = useState<Token[]>([]);
@@ -78,7 +84,7 @@ export default function CustomerDashboard() {
   if (!me) return <main className="min-h-screen flex items-center justify-center text-slate-500">加载中…</main>;
 
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen" data-marketing-dashboard>
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="text-xl font-semibold text-brand-700">3API Panel</div>
@@ -153,4 +159,23 @@ function Card({ label, value }: { label: string; value: string }) {
       <div className="text-2xl font-semibold mt-1 text-slate-900">{value}</div>
     </div>
   );
+}
+
+export default function CustomerDashboard() {
+  const router = useRouter();
+  const mode = useHostMode();
+  useEffect(() => {
+    if (mode === 'store' && typeof window !== 'undefined') {
+      router.replace('/dashboard/keys');
+    }
+  }, [mode, router]);
+  if (mode === null) return <main className="min-h-screen bg-slate-50" />;
+  if (mode === 'store') {
+    return (
+      <main className="min-h-screen flex items-center justify-center text-slate-500" data-store-dashboard-redirect>
+        Loading…
+      </main>
+    );
+  }
+  return <MarketingDashboard />;
 }

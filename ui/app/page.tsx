@@ -1,8 +1,16 @@
+'use client';
+/**
+ * Top-level "/" page. Host-aware: subdomains see the brand store landing,
+ * the root marketing domain sees the 3api marketing page. See HostAware.tsx
+ * for the rationale (Task #17).
+ */
 import Link from 'next/link';
+import { useHostMode } from '@/components/HostAware';
+import { StoreLanding } from '@/components/store/StoreLanding';
 
-export default function Landing() {
+function Marketing() {
   return (
-    <main className="min-h-screen flex flex-col">
+    <main className="min-h-screen flex flex-col" data-marketing-landing>
       <header className="border-b border-slate-200 bg-white">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="text-xl font-semibold text-brand-700">3API Panel</div>
@@ -42,4 +50,13 @@ export default function Landing() {
       </footer>
     </main>
   );
+}
+
+export default function Landing() {
+  const mode = useHostMode();
+  if (mode === null) {
+    // Pre-hydration: render a tiny neutral shell so neither variant flashes.
+    return <main className="min-h-screen bg-slate-50" />;
+  }
+  return mode === 'store' ? <StoreLanding /> : <Marketing />;
 }

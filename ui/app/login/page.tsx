@@ -1,10 +1,17 @@
 'use client';
+/**
+ * Top-level "/login" page. Host-aware (Task #17).
+ *   - root marketing host  → 3api customer/admin login (uses /api/customer)
+ *   - tenant subdomain     → store login (uses /api/storefront/auth)
+ */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { auth } from '@/lib/api';
+import { useHostMode } from '@/components/HostAware';
+import { StoreLogin } from '@/components/store/StoreLogin';
 
-export default function LoginPage() {
+function MarketingLogin() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,7 +32,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4">
+    <main className="min-h-screen flex items-center justify-center px-4" data-marketing-login>
       <div className="w-full max-w-md bg-white rounded-lg shadow-sm border border-slate-200 p-8">
         <h1 className="text-2xl font-semibold mb-1">登录</h1>
         <p className="text-sm text-slate-500 mb-6">没账号? <Link href="/signup" className="text-brand-600">注册</Link></p>
@@ -52,4 +59,10 @@ export default function LoginPage() {
       </div>
     </main>
   );
+}
+
+export default function LoginPage() {
+  const mode = useHostMode();
+  if (mode === null) return <main className="min-h-screen bg-slate-50" />;
+  return mode === 'store' ? <StoreLogin /> : <MarketingLogin />;
 }
