@@ -104,7 +104,8 @@
       "default_admin_name": "Admin",
       "account_settings": "Account settings",
       "brand_profile": "Brand profile",
-      "show_tour": "Replay onboarding tour"
+      "show_tour": "Replay onboarding tour",
+      "open_menu": "Open menu"
     },
     "login": {
       "title": "Sign in to your shop",

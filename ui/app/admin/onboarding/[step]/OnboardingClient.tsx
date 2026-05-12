@@ -134,34 +134,50 @@ export default function OnboardingClient({ step: stepParam }: { step: string }) 
 /* ------------------------------------------------------------------ */
 function StepIndicator({ current }: { current: number }) {
   const t = useTranslations('admin.onboarding');
+  const tCommon = useTranslations('common');
+  const currentTitle = t(STEP_KEYS[current - 1].titleKey);
+
   return (
-    <div className="flex items-center">
-      {STEP_KEYS.map((s, idx) => {
-        const done = s.n < current;
-        const active = s.n === current;
-        return (
-          <div key={s.n} className="flex items-center flex-1 last:flex-none">
-            <div className="flex flex-col items-center">
-              <div className={
-                'w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ' +
-                (done ? 'bg-brand-600 text-white' :
-                 active ? 'bg-brand-600 text-white ring-4 ring-brand-100' :
-                 'bg-accent text-muted-foreground')
-              }>
-                {done ? '✓' : s.n}
+    <>
+      {/* Mobile: compact "Step X / N · current-title" pill — full stepper would
+          either overflow off-screen or shrink labels into ellipsis. */}
+      <div className="md:hidden flex items-center gap-2 text-sm">
+        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-brand-600 text-white text-xs font-medium">
+          {current}
+        </span>
+        <span className="text-muted-foreground">/ {STEP_KEYS.length}</span>
+        <span className="text-foreground font-medium truncate">{currentTitle}</span>
+      </div>
+
+      {/* Desktop: full 5-step horizontal stepper with connecting lines. */}
+      <div className="hidden md:flex items-center">
+        {STEP_KEYS.map((s, idx) => {
+          const done = s.n < current;
+          const active = s.n === current;
+          return (
+            <div key={s.n} className="flex items-center flex-1 last:flex-none">
+              <div className="flex flex-col items-center">
+                <div className={
+                  'w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ' +
+                  (done ? 'bg-brand-600 text-white' :
+                   active ? 'bg-brand-600 text-white ring-4 ring-brand-100' :
+                   'bg-accent text-muted-foreground')
+                }>
+                  {done ? '✓' : s.n}
+                </div>
+                <div className={
+                  'mt-1.5 text-xs whitespace-nowrap ' +
+                  (active ? 'text-foreground font-medium' : 'text-muted-foreground')
+                }>{t(s.titleKey)}</div>
               </div>
-              <div className={
-                'mt-1.5 text-xs whitespace-nowrap ' +
-                (active ? 'text-foreground font-medium' : 'text-muted-foreground')
-              }>{t(s.titleKey)}</div>
+              {idx < STEP_KEYS.length - 1 && (
+                <div className={'flex-1 h-0.5 mx-2 mb-5 ' + (done ? 'bg-brand-600' : 'bg-accent')} />
+              )}
             </div>
-            {idx < STEP_KEYS.length - 1 && (
-              <div className={'flex-1 h-0.5 mx-2 mb-5 ' + (done ? 'bg-brand-600' : 'bg-accent')} />
-            )}
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 

@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Search, ChevronRight, LogOut, Settings as SettingsIcon, User } from 'lucide-react';
+import { Search, ChevronRight, LogOut, Settings as SettingsIcon, User, Menu } from 'lucide-react';
 import { auth } from '@/lib/api';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -15,9 +15,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useTranslations } from '@/lib/i18n';
 
-interface Props { title?: string; subtitle?: string; actions?: React.ReactNode }
+interface Props { title?: string; subtitle?: string; actions?: React.ReactNode; onMobileMenu?: () => void }
 
-export function TopBar({ title, subtitle, actions }: Props) {
+export function TopBar({ title, subtitle, actions, onMobileMenu }: Props) {
   const pathname = usePathname() || '';
   const router = useRouter();
   const [email, setEmail] = useState<string>('');
@@ -60,12 +60,22 @@ export function TopBar({ title, subtitle, actions }: Props) {
   }
 
   return (
-    <header className="h-14 px-6 border-b border-border bg-card flex items-center justify-between gap-4 sticky top-0 z-30">
-      <div className="flex items-center gap-3 min-w-0">
-        <nav className="flex items-center text-sm text-muted-foreground">
-          <Link href="/admin" className="hover:text-foreground transition-colors">{tAdmin('console')}</Link>
-          <ChevronRight className="h-3.5 w-3.5 mx-1 opacity-60" />
-          <span className="text-foreground font-medium">{resolvedTitle}</span>
+    <header className="h-14 px-4 md:px-6 border-b border-border bg-card flex items-center justify-between gap-2 md:gap-4 sticky top-0 z-30">
+      <div className="flex items-center gap-2 md:gap-3 min-w-0">
+        {onMobileMenu && (
+          <button
+            type="button"
+            onClick={onMobileMenu}
+            aria-label={t('open_menu')}
+            className="md:hidden -ml-1 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        )}
+        <nav className="flex items-center text-sm text-muted-foreground min-w-0">
+          <Link href="/admin" className="hover:text-foreground transition-colors hidden sm:inline">{tAdmin('console')}</Link>
+          <ChevronRight className="h-3.5 w-3.5 mx-1 opacity-60 hidden sm:inline" />
+          <span className="text-foreground font-medium truncate">{resolvedTitle}</span>
         </nav>
         {subtitle && (
           <span className="text-xs text-muted-foreground border-l border-border pl-3 ml-1 hidden sm:inline">

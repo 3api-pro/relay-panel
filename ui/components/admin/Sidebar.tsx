@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, BarChart3, Package, ShoppingCart, Users,
   Plug, Wallet, Palette, CreditCard, Settings, SlidersHorizontal,
-  ChevronDown, ChevronLeft, ChevronRight, Share2, Webhook,
+  ChevronDown, ChevronLeft, ChevronRight, Share2, Webhook, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -61,7 +61,12 @@ const TOUR_ANCHORS: Record<string, string> = {
   '/admin/branding':  'sidebar-branding',
 };
 
-export function Sidebar() {
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}) {
   const pathname = usePathname() || '';
   const [collapsed, setCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
@@ -102,14 +107,28 @@ export function Sidebar() {
   }
 
   return (
-    <aside
-      className={cn(
-        'shrink-0 bg-card border-r border-border min-h-screen flex flex-col transition-[width] duration-200',
-        collapsed ? 'w-16' : 'w-60',
+    <>
+      {/* Mobile backdrop — appears only when drawer is open on <md screens */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+          onClick={onMobileClose}
+          aria-hidden="true"
+        />
       )}
-      data-collapsed={collapsed ? 'true' : 'false'}
-    >
-      <div className="h-14 px-4 border-b border-border flex items-center">
+      <aside
+        className={cn(
+          'bg-card border-r border-border min-h-screen flex flex-col transition-[width,transform] duration-200',
+          // Desktop: always in-flow shrink-0; width depends on collapsed.
+          'md:shrink-0 md:translate-x-0',
+          collapsed ? 'md:w-16' : 'md:w-60',
+          // Mobile: fixed off-canvas drawer at fixed width 240px, slides in.
+          'fixed inset-y-0 left-0 z-40 w-60',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+        )}
+        data-collapsed={collapsed ? 'true' : 'false'}
+      >
+      <div className="h-14 px-4 border-b border-border flex items-center justify-between gap-2">
         <Link href="/admin" className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm shrink-0">3</div>
           {!collapsed && (
@@ -119,6 +138,15 @@ export function Sidebar() {
             </div>
           )}
         </Link>
+        {/* Mobile close button — drawer only, hidden on md+ */}
+        <button
+          type="button"
+          onClick={onMobileClose}
+          aria-label={t('collapse')}
+          className="md:hidden p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-2">
@@ -163,7 +191,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-border p-2">
+      <div className="border-t border-border p-2 hidden md:block">
         <Button
           variant="ghost"
           size="sm"
@@ -175,6 +203,7 @@ export function Sidebar() {
           {!collapsed && <span className="ml-2 text-xs">{t('collapse_short')}</span>}
         </Button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

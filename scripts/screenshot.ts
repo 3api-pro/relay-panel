@@ -30,7 +30,15 @@ const ROOT_HOST = process.env.SCREENSHOT_ROOT_HOST || '3api.pro';
 const TENANT_HOST = process.env.SCREENSHOT_TENANT_HOST || 'demo.3api.pro';
 const ADMIN_JWT = process.env.DEMO_ADMIN_JWT || '';
 const ENDUSER_JWT = process.env.DEMO_ENDUSER_JWT || '';
-const VIEWPORT = { width: 1280, height: 800 };
+const VIEWPORT = {
+  width: parseInt(process.env.SCREENSHOT_VIEWPORT_WIDTH || '1280', 10),
+  height: parseInt(process.env.SCREENSHOT_VIEWPORT_HEIGHT || '800', 10),
+};
+const IS_MOBILE = process.env.SCREENSHOT_IS_MOBILE === '1';
+const DEVICE_SCALE = parseFloat(process.env.SCREENSHOT_DEVICE_SCALE || (IS_MOBILE ? '2' : '1'));
+const CONTEXT_EXTRA: Record<string, any> = IS_MOBILE
+  ? { isMobile: true, deviceScaleFactor: DEVICE_SCALE, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' }
+  : { deviceScaleFactor: DEVICE_SCALE };
 const LOCALES = (process.env.SCREENSHOT_LOCALES || 'zh,en').split(',').map(x => x.trim()).filter(Boolean);
 const RENDER_WAIT_MS = 2000;
 
@@ -129,7 +137,7 @@ async function main(): Promise<void> {
     // Frame 1: Marketing landing (root domain SSR)
     // ─────────────────────────────────────────────────────────────
     {
-      const ctx = await browser.newContext({ viewport: VIEWPORT });
+      const ctx = await browser.newContext({ viewport: VIEWPORT, ...CONTEXT_EXTRA });
       await ctx.addCookies([
         { name: '3api_locale', value: __locale, domain: ROOT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
         { name: '3api_locale', value: __locale, domain: TENANT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
@@ -144,7 +152,7 @@ async function main(): Promise<void> {
     // is the public state and doesn't need cookies.
     // ─────────────────────────────────────────────────────────────
     {
-      const ctx = await browser.newContext({ viewport: VIEWPORT });
+      const ctx = await browser.newContext({ viewport: VIEWPORT, ...CONTEXT_EXTRA });
       await ctx.addCookies([
         { name: '3api_locale', value: __locale, domain: ROOT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
         { name: '3api_locale', value: __locale, domain: TENANT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
@@ -162,7 +170,7 @@ async function main(): Promise<void> {
     // every request the browser makes.
     // ─────────────────────────────────────────────────────────────
     if (ADMIN_JWT) {
-      const ctx = await browser.newContext({ viewport: VIEWPORT });
+      const ctx = await browser.newContext({ viewport: VIEWPORT, ...CONTEXT_EXTRA });
       await ctx.addCookies([
         { name: '3api_locale', value: __locale, domain: ROOT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
         { name: '3api_locale', value: __locale, domain: TENANT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
@@ -199,7 +207,7 @@ async function main(): Promise<void> {
     // Frame 5: End-user dashboard
     // ─────────────────────────────────────────────────────────────
     if (ENDUSER_JWT) {
-      const ctx = await browser.newContext({ viewport: VIEWPORT });
+      const ctx = await browser.newContext({ viewport: VIEWPORT, ...CONTEXT_EXTRA });
       await ctx.addCookies([
         { name: '3api_locale', value: __locale, domain: ROOT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
         { name: '3api_locale', value: __locale, domain: TENANT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },

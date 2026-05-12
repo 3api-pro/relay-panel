@@ -144,7 +144,7 @@ export DEMO_ADMIN_JWT DEMO_ENDUSER_JWT
 export SCREENSHOT_BASE_URL="${PANEL_URL}"
 export SCREENSHOT_ROOT_HOST="${ROOT_HOST}"
 export SCREENSHOT_TENANT_HOST="${TENANT_HOST}"
-export SCREENSHOT_OUT_DIR="$(pwd)/docs/assets"
+export SCREENSHOT_OUT_DIR="${SCREENSHOT_OUT_DIR:-$(pwd)/docs/assets}"
 
 # Playwright launches a local chromium binary — no proxy needed at runtime.
 unset HTTPS_PROXY HTTP_PROXY https_proxy http_proxy 2>/dev/null || true

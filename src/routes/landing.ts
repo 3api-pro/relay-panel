@@ -25,17 +25,40 @@ const HTML = `<!doctype html>
   a { color: inherit; text-decoration: none; }
   .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
   header { background: #fff; border-bottom: 1px solid var(--line); }
-  header .row { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; }
+  header .row { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; position: relative; }
   header .brand { font-weight: 600; font-size: 18px; letter-spacing: -0.01em; }
   header .brand .dot { display: inline-block; width: 8px; height: 8px; background: var(--accent); border-radius: 50%; margin-right: 8px; vertical-align: middle; }
   header nav a { margin-left: 20px; font-size: 14px; color: var(--mute); }
   header nav a:hover { color: var(--ink); }
   header nav .cta { background: var(--accent); color: #fff; padding: 8px 14px; border-radius: 6px; }
   header nav .cta:hover { background: var(--accent2); color: #fff; }
+  /* Mobile nav — CSS-only hamburger via checkbox-hack (no JS). */
+  .nav-toggle { display: none; }
+  .nav-burger { display: none; flex-direction: column; gap: 4px; cursor: pointer; padding: 8px; margin: -8px; border-radius: 6px; }
+  .nav-burger:hover { background: var(--bg); }
+  .nav-burger span { width: 22px; height: 2px; background: var(--ink); border-radius: 1px; transition: transform .15s, opacity .15s; }
+  @media (max-width: 720px) {
+    .nav-burger { display: flex; }
+    header nav { display: none; position: absolute; top: 56px; right: 0; left: 0; flex-direction: column; padding: 8px 24px 16px; background: #fff; border-bottom: 1px solid var(--line); box-shadow: 0 6px 12px -8px rgba(15,23,42,0.18); z-index: 20; }
+    header nav a { margin: 0; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+    header nav a:last-child { border-bottom: 0; }
+    header nav .cta { display: inline-block; align-self: flex-start; margin-top: 8px; padding: 10px 18px; }
+    .nav-toggle:checked ~ nav { display: flex; }
+    .nav-toggle:checked ~ .nav-burger span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+    .nav-toggle:checked ~ .nav-burger span:nth-child(2) { opacity: 0; }
+    .nav-toggle:checked ~ .nav-burger span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+  }
 
   .hero { padding: 80px 0 60px; text-align: center; }
   .hero h1 { font-size: 44px; font-weight: 700; letter-spacing: -0.02em; margin: 0 auto; max-width: 800px; line-height: 1.15; }
   .hero p { color: var(--mute); font-size: 18px; max-width: 640px; margin: 24px auto 0; line-height: 1.6; }
+  @media (max-width: 720px) {
+    .hero { padding: 48px 0 40px; }
+    .hero h1 { font-size: 30px; line-height: 1.2; }
+    .hero p { font-size: 15px; margin-top: 18px; padding: 0 4px; }
+    .hero .ctas { margin-top: 24px; }
+    .btn { padding: 11px 18px; font-size: 14px; }
+  }
   .hero .ctas { margin-top: 36px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
   .btn { padding: 12px 22px; border-radius: 8px; font-size: 15px; font-weight: 500; }
   .btn.primary { background: var(--accent); color: #fff; }
@@ -102,7 +125,11 @@ const HTML = `<!doctype html>
 <header>
   <div class="wrap row">
     <div class="brand"><span class="dot"></span>3API Panel</div>
-    <nav>
+    <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-hidden="true">
+    <label for="nav-toggle" class="nav-burger" role="button" aria-label="菜单" aria-controls="primary-nav">
+      <span></span><span></span><span></span>
+    </label>
+    <nav id="primary-nav">
       <a href="https://github.com/3api-pro/relay-panel">GitHub</a>
       <a href="/pricing">看演示</a>
       <a href="https://github.com/3api-pro/relay-panel#readme">Docs</a>
