@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/api';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
+import { useTranslations } from '@/lib/i18n';
 
 interface Props {
   title?: string;
@@ -19,6 +20,7 @@ interface Props {
  * Use on every /admin/* page (except /admin/login).
  */
 export function AdminShell({ title, subtitle, actions, children }: Props) {
+  const t = useTranslations('admin.shell');
   const router = useRouter();
   const [ready, setReady] = useState(false);
 
@@ -33,7 +35,7 @@ export function AdminShell({ title, subtitle, actions, children }: Props) {
   if (!ready) {
     return (
       <main className="min-h-screen flex items-center justify-center text-muted-foreground text-sm bg-background">
-        加载中…
+        {t('loading')}
       </main>
     );
   }

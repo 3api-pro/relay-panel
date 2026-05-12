@@ -4,6 +4,7 @@ import { store, fmtDate } from '@/lib/store-api';
 import { AuthGuard } from '@/components/store/AuthGuard';
 import { DashboardNav } from '@/components/store/DashboardNav';
 import { Card, Button, Input, Alert, Modal, Badge, Spinner } from '@/components/store/ui';
+import { useTranslations } from '@/lib/i18n';
 
 interface Key {
   id: number | string;
@@ -23,10 +24,11 @@ function mask(s: string | undefined): string {
 }
 
 export default function KeysPage() {
+  const t = useTranslations('storefront.keys');
   return (
     <AuthGuard>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <h1 className="text-2xl font-semibold text-foreground mb-6">控制台</h1>
+        <h1 className="text-2xl font-semibold text-foreground mb-6">{t('title')}</h1>
         <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6">
           <DashboardNav />
           <KeysInner />
@@ -37,6 +39,8 @@ export default function KeysPage() {
 }
 
 function KeysInner() {
+  const t = useTranslations('storefront.keys');
+  const tCommon = useTranslations('common');
   const [keys, setKeys] = useState<Key[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [openCreate, setOpenCreate] = useState(false);
@@ -52,7 +56,7 @@ function KeysInner() {
       setErr(null);
     } catch (e: any) {
       if (e?.status === 404) setKeys([]);
-      else setErr(e?.message || '加载失败');
+      else setErr(e?.message || t('load_failed'));
     }
   }
   useEffect(() => { refresh(); }, []);
@@ -67,7 +71,7 @@ function KeysInner() {
       setNewName('My Key');
       await refresh();
     } catch (e: any) {
-      setErr(e?.message || '创建失败');
+      setErr(e?.message || t('create_failed'));
     } finally {
       setBusy(false);
     }
@@ -81,7 +85,7 @@ function KeysInner() {
       setRevokeId(null);
       await refresh();
     } catch (e: any) {
-      setErr(e?.message || '撤销失败');
+      setErr(e?.message || t('revoke_failed'));
     } finally {
       setBusy(false);
     }
@@ -91,38 +95,38 @@ function KeysInner() {
     <div className="space-y-4">
       {issued && (
         <Alert kind="warn">
-          <div className="font-medium">新 Key 已生成 (仅显示一次, 请复制保存)</div>
+          <div className="font-medium">{t('issued_title')}</div>
           <div className="mt-2 flex items-center gap-2">
             <code className="flex-1 break-all bg-card border border-amber-300 px-2 py-1.5 rounded text-xs">{issued}</code>
             <Button size="sm" variant="ghost" onClick={() => {
               if (navigator?.clipboard) navigator.clipboard.writeText(issued).catch(() => {});
-            }}>复制</Button>
-            <Button size="sm" variant="subtle" onClick={() => setIssued(null)}>关闭</Button>
+            }}>{t('copy')}</Button>
+            <Button size="sm" variant="subtle" onClick={() => setIssued(null)}>{t('close')}</Button>
           </div>
         </Alert>
       )}
 
       {err && <Alert kind="error">{err}</Alert>}
 
-      <Card title="API Keys"
-        action={<Button onClick={() => setOpenCreate(true)} size="sm">+ 新建 Key</Button>}>
+      <Card title={t('card_title')}
+        action={<Button onClick={() => setOpenCreate(true)} size="sm">{t('new_btn')}</Button>}>
         {keys === null ? (
           <div className="flex items-center justify-center py-8 text-muted-foreground">
-            <Spinner /> <span className="ml-2 text-sm">加载中…</span>
+            <Spinner /> <span className="ml-2 text-sm">{t('loading_inline')}</span>
           </div>
         ) : keys.length === 0 ? (
-          <div className="py-8 text-center text-muted-foreground text-sm">还没有 API Key — 点击右上角生成第一个。</div>
+          <div className="py-8 text-center text-muted-foreground text-sm">{t('empty_hint')}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-left text-muted-foreground border-b border-border">
                 <tr>
-                  <th className="py-2 pr-3 font-medium">名称</th>
-                  <th className="pr-3 font-medium">Key</th>
-                  <th className="pr-3 font-medium">状态</th>
-                  <th className="pr-3 font-medium">最近使用</th>
-                  <th className="pr-3 font-medium">创建</th>
-                  <th className="font-medium">操作</th>
+                  <th className="py-2 pr-3 font-medium">{t('th_name')}</th>
+                  <th className="pr-3 font-medium">{t('th_key')}</th>
+                  <th className="pr-3 font-medium">{t('th_status')}</th>
+                  <th className="pr-3 font-medium">{t('th_last_used')}</th>
+                  <th className="pr-3 font-medium">{t('th_created')}</th>
+                  <th className="font-medium">{t('th_actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -134,14 +138,14 @@ function KeysInner() {
                     </td>
                     <td className="pr-3">
                       <Badge tone={k.status === 'active' || !k.status ? 'success' : 'neutral'}>
-                        {k.status || 'active'}
+                        {k.status || t('active_default')}
                       </Badge>
                     </td>
                     <td className="pr-3 text-muted-foreground">{fmtDate(k.last_used_at)}</td>
                     <td className="pr-3 text-muted-foreground">{fmtDate(k.created_at)}</td>
                     <td>
                       <button onClick={() => setRevokeId(k)}
-                        className="text-red-600 hover:underline text-xs">撤销</button>
+                        className="text-red-600 hover:underline text-xs">{t('revoke_btn')}</button>
                     </td>
                   </tr>
                 ))}
@@ -151,35 +155,35 @@ function KeysInner() {
         )}
       </Card>
 
-      <Card title="如何使用">
+      <Card title={t('card_howto')}>
         <div className="text-sm text-foreground space-y-2">
-          <p>把客户端的 baseUrl 指向本站, 用上面的 Key 作为 Authorization 头:</p>
+          <p>{t('howto_p1')}</p>
           <pre className="bg-foreground text-slate-100 text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap break-all">{`curl -X POST {your-domain}/v1/messages \\
   -H "Authorization: Bearer sk-xxxx" \\
   -H "anthropic-version: 2023-06-01" \\
   -H "Content-Type: application/json" \\
   -d '{"model":"claude-sonnet-4-20250514","max_tokens":256,"messages":[{"role":"user","content":"hi"}]}'`}</pre>
-          <p>详见 <a href="/docs" className="underline" style={{ color: 'var(--brand-primary, #0e9486)' }}>API 文档</a>。</p>
+          <p>{t('howto_docs_pre')}<a href="/docs" className="underline" style={{ color: 'var(--brand-primary, #0e9486)' }}>{t('howto_docs_link')}</a>{t('howto_docs_post')}</p>
         </div>
       </Card>
 
       <Modal open={openCreate} onClose={() => !busy && setOpenCreate(false)}
-        title="新建 API Key"
+        title={t('modal_new_title')}
         footer={<>
-          <Button variant="ghost" onClick={() => !busy && setOpenCreate(false)}>取消</Button>
-          <Button onClick={createKey} disabled={busy}>{busy ? '创建中…' : '生成'}</Button>
+          <Button variant="ghost" onClick={() => !busy && setOpenCreate(false)}>{tCommon('cancel')}</Button>
+          <Button onClick={createKey} disabled={busy}>{busy ? t('submit_create_busy') : t('submit_create')}</Button>
         </>}>
-        <Input label="名称" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="My Project" />
-        <p className="text-xs text-muted-foreground mt-2">名称只是给你自己看的便签; 模型权限会继承当前订阅的套餐。</p>
+        <Input label={t('field_name')} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t('ph_name')} />
+        <p className="text-xs text-muted-foreground mt-2">{t('name_hint')}</p>
       </Modal>
 
       <Modal open={!!revokeId} onClose={() => !busy && setRevokeId(null)}
-        title={`确认撤销 "${revokeId?.name}"?`}
+        title={`${t('modal_revoke_title_pre')}${revokeId?.name ?? ''}${t('modal_revoke_title_suffix')}`}
         footer={<>
-          <Button variant="ghost" onClick={() => !busy && setRevokeId(null)}>取消</Button>
-          <Button variant="danger" onClick={doRevoke} disabled={busy}>{busy ? '撤销中…' : '确认撤销'}</Button>
+          <Button variant="ghost" onClick={() => !busy && setRevokeId(null)}>{tCommon('cancel')}</Button>
+          <Button variant="danger" onClick={doRevoke} disabled={busy}>{busy ? t('submit_revoke_busy') : t('submit_revoke')}</Button>
         </>}>
-        <p className="text-sm text-muted-foreground">撤销后该 Key 立即失效, 已发出的请求不受影响。此操作不可恢复。</p>
+        <p className="text-sm text-muted-foreground">{t('revoke_body')}</p>
       </Modal>
     </div>
   );

@@ -1,5 +1,6 @@
 'use client';
 import { ReactNode, useEffect } from 'react';
+import { useTranslations } from '@/lib/i18n';
 
 interface Props {
   open: boolean;
@@ -13,6 +14,7 @@ interface Props {
 const WIDTHS = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl' };
 
 export function Modal({ open, onClose, title, children, footer, width = 'md' }: Props) {
+  const t = useTranslations('admin.modal');
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -30,7 +32,7 @@ export function Modal({ open, onClose, title, children, footer, width = 'md' }: 
           <button
             onClick={onClose}
             className="text-muted-foreground hover:text-muted-foreground text-lg leading-none"
-            aria-label="关闭"
+            aria-label={t('close')}
           >
             ×
           </button>

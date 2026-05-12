@@ -3,14 +3,16 @@
  * Minimal SVG line chart — no chart library dependency to keep bundle small.
  * `data` is [{date, tokens}] for the time range; missing days render as 0.
  */
+import { useTranslations } from '@/lib/i18n';
 
 export interface UsagePoint { date: string; tokens: number; requests?: number; }
 
 export function UsageChart({ data, height = 180 }: { data: UsagePoint[]; height?: number }) {
+  const t = useTranslations('storefront.usage_chart');
   if (!data || data.length === 0) {
     return (
       <div className="flex items-center justify-center text-muted-foreground text-sm" style={{ height }}>
-        暂无数据
+        {t('no_data')}
       </div>
     );
   }

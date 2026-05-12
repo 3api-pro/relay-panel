@@ -2,10 +2,12 @@
 import { AdminShell } from '@/components/admin/AdminShell';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { BarChart3 } from 'lucide-react';
+import { useTranslations } from '@/lib/i18n';
 
 export default function StatsPage() {
+  const t = useTranslations('admin.stats');
   return (
-    <AdminShell title="数据" subtitle="深度业务分析（v0.2 W3 上线）">
+    <AdminShell title={t('title')} subtitle={t('subtitle')}>
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -13,13 +15,13 @@ export default function StatsPage() {
               <BarChart3 className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle>数据看板筹备中</CardTitle>
-              <CardDescription>计划：留存 cohort · 套餐转化漏斗 · 上游单价毛利 · 关键流失指标</CardDescription>
+              <CardTitle>{t('card_title')}</CardTitle>
+              <CardDescription>{t('card_desc')}</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          v0.2 W3 sprint 将上线第一批分析报表。当前可在「总览」查看实时核心指标。
+          {t('card_body')}
         </CardContent>
       </Card>
     </AdminShell>

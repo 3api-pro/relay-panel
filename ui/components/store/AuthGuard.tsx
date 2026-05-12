@@ -8,8 +8,10 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { hasToken } from '@/lib/store-api';
 import { Spinner } from './ui';
+import { useTranslations } from '@/lib/i18n';
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
+  const t = useTranslations('storefront.auth_guard');
   const router = useRouter();
   const pathname = usePathname() || '/';
   const [ok, setOk] = useState(false);
@@ -25,7 +27,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   if (!ok) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center text-muted-foreground">
-        <Spinner /> <span className="ml-2 text-sm">加载中…</span>
+        <Spinner /> <span className="ml-2 text-sm">{t('loading')}</span>
       </div>
     );
   }

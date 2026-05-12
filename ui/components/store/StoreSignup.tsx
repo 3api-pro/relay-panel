@@ -10,8 +10,10 @@ import { store } from '@/lib/store-api';
 import { BrandProvider, useBrand } from './BrandContext';
 import { Header } from './Header';
 import { Footer } from './Footer';
+import { useTranslations } from '@/lib/i18n';
 
 function Form() {
+  const t = useTranslations('storefront.store_signup');
   const router = useRouter();
   const brand = useBrand();
   const [email, setEmail] = useState('');
@@ -27,7 +29,7 @@ function Form() {
       await store.signup(email, password);
       router.push('/dashboard/keys');
     } catch (e: any) {
-      setErr(e?.message || '注册失败');
+      setErr(e?.message || t('fail'));
     } finally {
       setBusy(false);
     }
@@ -37,13 +39,13 @@ function Form() {
   return (
     <main className="flex-1 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md bg-card rounded-lg shadow-sm border border-border p-8">
-        <h1 className="text-2xl font-semibold mb-1" data-store-signup>注册 {brand.store_name || ''}</h1>
+        <h1 className="text-2xl font-semibold mb-1" data-store-signup>{t('title_prefix')}{brand.store_name || ''}</h1>
         <p className="text-sm text-muted-foreground mb-6">
-          已有账号? <Link href="/login" className="hover:underline" style={{ color: primary }}>登录</Link>
+          {t('have_account_prefix')}<Link href="/login" className="hover:underline" style={{ color: primary }}>{t('login_link')}</Link>
         </p>
         <form onSubmit={onSubmit} className="space-y-4">
           <label className="block">
-            <div className="text-sm font-medium text-foreground mb-1">邮箱</div>
+            <div className="text-sm font-medium text-foreground mb-1">{t('email_label')}</div>
             <input
               type="email"
               required
@@ -53,7 +55,7 @@ function Form() {
             />
           </label>
           <label className="block">
-            <div className="text-sm font-medium text-foreground mb-1">密码 (≥6 位)</div>
+            <div className="text-sm font-medium text-foreground mb-1">{t('password_label')}</div>
             <input
               type="password"
               required
@@ -70,7 +72,7 @@ function Form() {
             className="w-full py-2.5 rounded-md text-white disabled:opacity-50 hover:opacity-90"
             style={{ background: primary }}
           >
-            {busy ? '注册中…' : '注册'}
+            {busy ? t('submit_busy') : t('submit')}
           </button>
         </form>
       </div>

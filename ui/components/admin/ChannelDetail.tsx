@@ -11,25 +11,31 @@ import { Modal } from '@/components/admin/Modal';
 import { ChannelKeyRow, ChannelKey } from '@/components/admin/ChannelKeyRow';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
 
 // Provider type taxonomy mirrors src/services/upstream.ts. Adapter status
 // reflects v0.3 scope: anthropic / llmapi-wholesale / openai work; custom
-// passes through; the rest are stubs that ship in v0.4.
+// passes through; the rest are stubs that ship in v0.4. The `label` /
+// `doc` fields fall back to the i18n table; the legacy literals here are
+// kept as a defensive fallback for any consumer that doesn't have the
+// translations loaded yet.
 export const PROVIDER_TYPES: Array<{
   v: string;
   label: string;
   status: 'live' | 'stub' | 'passthrough';
   doc: string;
+  labelKey?: string;
+  docKey?: string;
 }> = [
-  { v: 'llmapi-wholesale', label: 'llmapi.pro Wholesale  (推荐)', status: 'live', doc: 'Anthropic 兼容协议，我方批发' },
-  { v: 'anthropic',        label: 'Anthropic 直连',                status: 'live', doc: '官方 /v1/messages 兼容' },
-  { v: 'openai',           label: 'OpenAI 兼容',                   status: 'live', doc: '/v1/chat/completions; 非流式自动适配' },
-  { v: 'custom',           label: '自定义 (Passthrough)',          status: 'passthrough', doc: '原样转发到 base_url + custom_headers' },
-  { v: 'gemini',           label: 'Google Gemini',                 status: 'stub', doc: 'v0.4 上线' },
-  { v: 'moonshot',         label: 'Moonshot Kimi',                 status: 'stub', doc: 'v0.4 上线' },
-  { v: 'deepseek',         label: 'DeepSeek',                      status: 'stub', doc: 'v0.4 上线' },
-  { v: 'minimax',          label: 'MiniMax',                       status: 'stub', doc: 'v0.4 上线' },
-  { v: 'qwen',             label: 'Qwen / Tongyi',                 status: 'stub', doc: 'v0.4 上线' },
+  { v: 'llmapi-wholesale', label: 'llmapi.pro Wholesale  (推荐)', status: 'live', doc: 'Anthropic 兼容协议，我方批发', labelKey: 'provider_label_llmapi_wholesale', docKey: 'provider_doc_llmapi_wholesale' },
+  { v: 'anthropic',        label: 'Anthropic 直连',                status: 'live', doc: '官方 /v1/messages 兼容', labelKey: 'provider_label_anthropic', docKey: 'provider_doc_anthropic' },
+  { v: 'openai',           label: 'OpenAI 兼容',                   status: 'live', doc: '/v1/chat/completions; 非流式自动适配', labelKey: 'provider_label_openai', docKey: 'provider_doc_openai' },
+  { v: 'custom',           label: '自定义 (Passthrough)',          status: 'passthrough', doc: '原样转发到 base_url + custom_headers', labelKey: 'provider_label_custom', docKey: 'provider_doc_custom' },
+  { v: 'gemini',           label: 'Google Gemini',                 status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04' },
+  { v: 'moonshot',         label: 'Moonshot Kimi',                 status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04' },
+  { v: 'deepseek',         label: 'DeepSeek',                      status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04' },
+  { v: 'minimax',          label: 'MiniMax',                       status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04' },
+  { v: 'qwen',             label: 'Qwen / Tongyi',                 status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04' },
 ];
 
 export interface ChannelFull {
@@ -66,7 +72,9 @@ interface Props {
 }
 
 export function ChannelDetail({ channel, onChange, onClose }: Props) {
-  // Local edit buffer — only flushed to the server on "保存".
+  const t = useTranslations('admin.channel.detail');
+  const tCommon = useTranslations('common');
+  // Local edit buffer — only flushed to the server on save.
   const [form, setForm] = useState({
     name: channel.name,
     base_url: channel.base_url,
@@ -140,7 +148,7 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
           custom_headers: pairsToObject(headerPairs),
         }),
       });
-      setMsg('已保存');
+      setMsg(t('saved_ok'));
       await onChange();
     } catch (e: any) {
       setErr(e.message);
@@ -154,7 +162,7 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
     setMsg('');
     try {
       await api(`/admin/channels/${channel.id}/set-default`, { method: 'POST' });
-      setMsg('已设为默认');
+      setMsg(t('set_default_ok'));
       await onChange();
     } catch (e: any) {
       setErr(e.message);
@@ -168,9 +176,10 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
     try {
       const r = await api<any>(`/admin/channels/${channel.id}/test`, { method: 'POST' });
       if (r.ok) {
-        setMsg(`连接 OK · ${r.latency_ms ?? '-'}ms${r.status ? ` (HTTP ${r.status})` : ''}`);
+        const httpSuffix = r.status ? t('test_http_suffix', { status: r.status }) : '';
+        setMsg(`${t('test_ok_prefix')}${r.latency_ms ?? '-'}ms${httpSuffix}`);
       } else {
-        setErr(`连接失败: ${r.error || r.category || '未知'}`);
+        setErr(`${t('test_fail_prefix')}${r.error || r.category || t('test_unknown')}`);
       }
       await onChange();
     } catch (e: any) {
@@ -182,10 +191,10 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
 
   async function remove() {
     if (channel.is_default) {
-      setErr('不能删除默认 channel — 先把别的设为默认');
+      setErr(t('delete_default_blocked'));
       return;
     }
-    if (!confirm(`确定删除 channel #${channel.id} (${channel.name})？此操作不可恢复。`)) return;
+    if (!confirm(`${t('delete_confirm_pre')}${channel.id}${t('delete_confirm_mid')}${channel.name}${t('delete_confirm_post')}`)) return;
     try {
       await api(`/admin/channels/${channel.id}`, { method: 'DELETE' });
       await onChange();
@@ -197,7 +206,7 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
 
   async function addKey() {
     if (!newKey || newKey.length < 8) {
-      setErr('key 至少 8 个字符');
+      setErr(t('key_too_short'));
       return;
     }
     try {
@@ -207,7 +216,7 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
       });
       setNewKey('');
       setAddKeyOpen(false);
-      setMsg('已添加 key');
+      setMsg(t('key_added_ok'));
       await onChange();
     } catch (e: any) {
       setErr(e.message);
@@ -215,7 +224,7 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
   }
 
   async function deleteKey(idx: number) {
-    if (!confirm(`删除 channel #${channel.id} 的第 ${idx} 个 key？`)) return;
+    if (!confirm(`${t('key_delete_confirm_pre')}${idx}${t('key_delete_confirm_mid')}${channel.id}${t('key_delete_confirm_suffix')}`)) return;
     try {
       await api(`/admin/channels/${channel.id}/keys/${idx}`, { method: 'DELETE' });
       await onChange();
@@ -236,10 +245,10 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
               <span className="truncate">{channel.name}</span>
               {channel.is_recommended && (
                 <Badge variant="default" className="h-5 text-[10px] bg-brand-600 text-white">
-                  推荐
+                  {t('badge_recommended')}
                 </Badge>
               )}
-              {channel.is_default && <Badge variant="outline" className="h-5 text-[10px]">默认</Badge>}
+              {channel.is_default && <Badge variant="outline" className="h-5 text-[10px]">{t('badge_default')}</Badge>}
             </CardTitle>
             <CardDescription className="text-xs font-mono mt-1 truncate">
               #{channel.id} · {channel.base_url}
@@ -266,7 +275,7 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
         )}
 
         {/* Provider type */}
-        <Field label="Provider type" hint={provInfo?.doc}>
+        <Field label={t('field_provider_type')} hint={provInfo?.docKey ? t(provInfo.docKey) : provInfo?.doc}>
           <select
             value={form.provider_type}
             onChange={(e) => setForm({ ...form, provider_type: e.target.value })}
@@ -274,8 +283,8 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
           >
             {PROVIDER_TYPES.map((p) => (
               <option key={p.v} value={p.v}>
-                {p.label}
-                {p.status === 'stub' ? ' [v0.4]' : ''}
+                {p.labelKey ? t(p.labelKey) : p.label}
+                {p.status === 'stub' ? t('stub_v04_suffix') : ''}
               </option>
             ))}
           </select>
@@ -283,14 +292,14 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
 
         {/* Name + base_url */}
         <div className="grid grid-cols-2 gap-3">
-          <Field label="名称">
+          <Field label={t('field_name')}>
             <Input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="h-9"
             />
           </Field>
-          <Field label="Legacy type">
+          <Field label={t('field_legacy_type')}>
             <select
               value={form.type}
               onChange={(e) => setForm({ ...form, type: e.target.value })}
@@ -303,7 +312,7 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
             </select>
           </Field>
         </div>
-        <Field label="Base URL">
+        <Field label={t('field_base_url')}>
           <Input
             value={form.base_url}
             onChange={(e) => setForm({ ...form, base_url: e.target.value })}
@@ -313,7 +322,7 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
 
         {/* Weight + priority + enabled */}
         <div className="grid grid-cols-3 gap-3">
-          <Field label="Weight">
+          <Field label={t('field_weight')}>
             <Input
               type="number"
               value={form.weight}
@@ -321,7 +330,7 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
               className="h-9"
             />
           </Field>
-          <Field label="Priority">
+          <Field label={t('field_priority')}>
             <Input
               type="number"
               value={form.priority}
@@ -329,14 +338,14 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
               className="h-9"
             />
           </Field>
-          <Field label="Enabled">
+          <Field label={t('field_enabled')}>
             <div className="flex items-center gap-2 h-9">
               <Switch
                 checked={form.enabled}
                 onCheckedChange={(v) => setForm({ ...form, enabled: !!v })}
               />
               <span className="text-xs text-muted-foreground">
-                {form.enabled ? '路由' : '已关闭'}
+                {form.enabled ? t('enabled_on') : t('enabled_off')}
               </span>
             </div>
           </Field>
@@ -344,8 +353,8 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
 
         {/* Models allowlist */}
         <Field
-          label="Models allowlist"
-          hint="逗号分隔；为空 = 不限制。例: claude-sonnet-4-7,claude-opus-4-7"
+          label={t('field_models')}
+          hint={t('models_hint')}
         >
           <Input
             value={form.models}
@@ -357,29 +366,33 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
 
         {/* Model mapping editor */}
         <PairEditor
-          label="Model mapping"
-          hint="把客户请求的 model 改写成上游真实 model 名"
+          label={t('field_model_mapping')}
+          hint={t('model_mapping_hint')}
           pairs={mappingPairs}
           setPairs={setMappingPairs}
           placeholderKey="claude-sonnet-4-7"
           placeholderVal="claude-3-5-sonnet-20241022"
+          addLabel={t('pair_add')}
+          emptyLabel={t('pair_empty')}
         />
 
         {/* Custom headers editor */}
         <PairEditor
-          label="Custom headers"
-          hint="合并到出站请求的 HTTP header"
+          label={t('field_custom_headers')}
+          hint={t('custom_headers_hint')}
           pairs={headerPairs}
           setPairs={setHeaderPairs}
           placeholderKey="anthropic-beta"
           placeholderVal="prompt-caching-2024-07-31"
+          addLabel={t('pair_add')}
+          emptyLabel={t('pair_empty')}
         />
 
         {/* Keys management — embedded v0.2 multi-key UI */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Keys ({channel.keys_active ?? 0}/{channel.keys_total ?? 0})
+              {t('keys_label')} ({channel.keys_active ?? 0}/{channel.keys_total ?? 0})
             </Label>
             <Button
               size="sm"
@@ -388,7 +401,7 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
               onClick={() => setAddKeyOpen(true)}
             >
               <Plus className="w-3 h-3" />
-              添加 key
+              {t('key_add_btn')}
             </Button>
           </div>
           <div className="space-y-1.5">
@@ -404,7 +417,7 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
               ))
             ) : (
               <p className="text-xs text-muted-foreground italic px-3 py-2">
-                该 channel 还没有 key (legacy api_key={channel.key_preview ?? '—'})
+                {t('key_empty_prefix')}{channel.key_preview ?? '—'}{t('key_empty_suffix')}
               </p>
             )}
           </div>
@@ -419,9 +432,9 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
               ) : (
                 <XCircle className="w-3.5 h-3.5 text-rose-600" />
               )}
-              <span className="text-muted-foreground">最近一次测试:</span>
+              <span className="text-muted-foreground">{t('last_test_label')}</span>
               <span>
-                {channel.last_test_result.ok ? 'OK' : 'FAIL'}
+                {channel.last_test_result.ok ? t('last_test_ok') : t('last_test_fail')}
                 {channel.last_test_result.latency_ms != null && ` · ${channel.last_test_result.latency_ms}ms`}
                 {channel.last_test_result.status != null && ` · HTTP ${channel.last_test_result.status}`}
               </span>
@@ -440,15 +453,15 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
         {/* Action row */}
         <div className="flex items-center gap-2 pt-2 border-t border-border">
           <Button size="sm" onClick={save} disabled={busy}>
-            {busy ? '保存中…' : '保存'}
+            {busy ? t('save_busy') : t('save')}
           </Button>
           <Button size="sm" variant="outline" onClick={test} disabled={busy} className="gap-1.5">
             <RefreshCw className={cn('w-3.5 h-3.5', busy && 'animate-spin')} />
-            测试连接
+            {t('test_btn')}
           </Button>
           {!channel.is_default && (
             <Button size="sm" variant="outline" onClick={setDefault}>
-              设为默认
+              {t('set_default_btn')}
             </Button>
           )}
           <div className="flex-1" />
@@ -459,7 +472,7 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
             className="text-rose-600 hover:bg-rose-500/10 gap-1"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            删除
+            {t('delete_btn')}
           </Button>
         </div>
       </CardContent>
@@ -471,19 +484,19 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
           setAddKeyOpen(false);
           setNewKey('');
         }}
-        title={`为 ${channel.name} 添加新 key`}
+        title={`${t('key_addmodal_title_prefix')}${channel.name}${t('key_addmodal_title_suffix')}`}
         footer={
           <>
             <Button variant="outline" size="sm" onClick={() => setAddKeyOpen(false)}>
-              取消
+              {tCommon('cancel')}
             </Button>
             <Button size="sm" onClick={addKey} disabled={newKey.length < 8}>
-              添加
+              {t('key_addmodal_submit')}
             </Button>
           </>
         }
       >
-        <Label>新 key (≥8 字符)</Label>
+        <Label>{t('key_addmodal_label')}</Label>
         <Input
           type="password"
           value={newKey}
@@ -522,6 +535,8 @@ function PairEditor({
   setPairs,
   placeholderKey,
   placeholderVal,
+  addLabel,
+  emptyLabel,
 }: {
   label: string;
   hint?: string;
@@ -529,6 +544,8 @@ function PairEditor({
   setPairs: (p: Array<[string, string]>) => void;
   placeholderKey: string;
   placeholderVal: string;
+  addLabel?: string;
+  emptyLabel?: string;
 }) {
   function update(idx: number, k: string, v: string) {
     const next = pairs.slice();
@@ -549,11 +566,11 @@ function PairEditor({
         <Label className="text-xs">{label}</Label>
         <Button size="sm" variant="ghost" className="h-6 gap-1 text-xs" onClick={add}>
           <Plus className="w-3 h-3" />
-          添加
+          {addLabel ?? 'Add'}
         </Button>
       </div>
       {pairs.length === 0 ? (
-        <p className="text-[11px] text-muted-foreground italic">无</p>
+        <p className="text-[11px] text-muted-foreground italic">{emptyLabel ?? 'None'}</p>
       ) : (
         <div className="space-y-1.5">
           {pairs.map(([k, v], idx) => (

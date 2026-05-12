@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import { driver, type Driver } from "driver.js";
 import "driver.js/dist/driver.css";
+import { useTranslations } from "@/lib/i18n";
 
 const STORAGE_KEY = "3api_tour_done_v1";
 
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function OnboardingTour({ autoStart = false, force = false }: Props) {
+  const t = useTranslations("admin.tour");
   useEffect(() => {
     if (!autoStart) return;
     if (typeof window === "undefined") return;
@@ -21,61 +23,56 @@ export function OnboardingTour({ autoStart = false, force = false }: Props) {
     // Wait one tick so target elements are in the DOM after route transition.
     let cancelled = false;
     let d: Driver | null = null;
-    const t = window.setTimeout(() => {
+    const tt = window.setTimeout(() => {
       if (cancelled) return;
       d = driver({
         showProgress: true,
         allowClose: true,
-        nextBtnText: "下一步",
-        prevBtnText: "上一步",
-        doneBtnText: "完成",
-        progressText: "{{current}} / {{total}}",
+        nextBtnText: t("next"),
+        prevBtnText: t("prev"),
+        doneBtnText: t("done"),
+        progressText: t("progress"),
         steps: [
           {
             element: '[data-tour="sidebar-plans"]',
             popover: {
-              title: "套餐管理",
-              description:
-                "在这里创建和编辑卖给客户的套餐（Pro / Max5x 等）。我们已经默认 seed 了 4 个，你可以随时改价格或加新的。",
+              title: t("step_plans_title"),
+              description: t("step_plans_desc"),
             },
           },
           {
             element: '[data-tour="sidebar-channels"]',
             popover: {
-              title: "上游 Channel",
-              description:
-                "这里管理上游 LLM 服务。默认指向 llmapi.pro / wholesale（开箱即用），你也可以添加 BYOK 自己的 Anthropic 密钥。",
+              title: t("step_channels_title"),
+              description: t("step_channels_desc"),
             },
           },
           {
             element: '[data-tour="sidebar-wholesale"]',
             popover: {
-              title: "批发余额",
-              description:
-                "这是你向 3api 平台充值的余额。每卖出一单都会从这里扣除 face value。低于 ¥50 时我们会邮件提醒。",
+              title: t("step_wholesale_title"),
+              description: t("step_wholesale_desc"),
             },
           },
           {
             element: '[data-tour="sidebar-branding"]',
             popover: {
-              title: "品牌设置",
-              description:
-                "你的店铺 logo / 主色 / 公告 / 自定义域配置。终端客户看到的就是这些。",
+              title: t("step_branding_title"),
+              description: t("step_branding_desc"),
             },
           },
           {
             element: '[data-tour="topbar-cmdk"]',
             popover: {
-              title: "快速搜索",
-              description:
-                "随时按 Ctrl / Cmd + K 调起命令面板，可以跳到任何页面或快速执行常用操作。",
+              title: t("step_cmdk_title"),
+              description: t("step_cmdk_desc"),
             },
           },
           {
             element: '[data-tour="topbar-theme"]',
             popover: {
-              title: "主题切换",
-              description: "浅色 / 深色 / 跟随系统。设置会自动保存在你的浏览器。",
+              title: t("step_theme_title"),
+              description: t("step_theme_desc"),
             },
           },
         ],
@@ -91,11 +88,12 @@ export function OnboardingTour({ autoStart = false, force = false }: Props) {
 
     return () => {
       cancelled = true;
-      window.clearTimeout(t);
+      window.clearTimeout(tt);
       try {
         d?.destroy();
       } catch {}
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart, force]);
 
   return null;

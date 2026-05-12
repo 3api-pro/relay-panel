@@ -4,6 +4,7 @@ import { Trash2, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
 
 export type KeyStatus = 'active' | 'dead' | 'cooling';
 
@@ -30,7 +31,7 @@ function normaliseStatus(s: string | null | undefined): KeyStatus {
   return 'active';
 }
 
-function useCountdown(target: string | null | undefined): string | null {
+function useCountdown(target: string | null | undefined, restoredLabel: string): string | null {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!target) return;
@@ -41,7 +42,7 @@ function useCountdown(target: string | null | undefined): string | null {
   const ts = new Date(target).getTime();
   if (Number.isNaN(ts)) return null;
   const diff = ts - now;
-  if (diff <= 0) return '已恢复';
+  if (diff <= 0) return restoredLabel;
   const s = Math.floor(diff / 1000);
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
@@ -55,8 +56,9 @@ function useCountdown(target: string | null | undefined): string | null {
  * badge, cool-down countdown (if any), and a delete button with confirm.
  */
 export function ChannelKeyRow({ idx, current, k, onDelete, busy }: Props) {
+  const t = useTranslations('admin.channel.key_row');
   const status = normaliseStatus(k.status);
-  const cooldown = useCountdown(k.cooled_until);
+  const cooldown = useCountdown(k.cooled_until, t('cooldown_restored'));
 
   return (
     <div
@@ -74,7 +76,7 @@ export function ChannelKeyRow({ idx, current, k, onDelete, busy }: Props) {
       <span className="text-[10px] text-muted-foreground shrink-0">#{idx}</span>
       {current && (
         <Badge variant="secondary" className="h-5 text-[10px] shrink-0">
-          当前
+          {t('current')}
         </Badge>
       )}
       <div className="flex-1" />
@@ -110,8 +112,8 @@ export function ChannelKeyRow({ idx, current, k, onDelete, busy }: Props) {
         onClick={onDelete}
         disabled={busy}
         className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600"
-        aria-label="删除 key"
-        title="删除此 key"
+        aria-label={t('delete_aria')}
+        title={t('delete_title')}
       >
         <Trash2 className="h-3.5 w-3.5" />
       </Button>

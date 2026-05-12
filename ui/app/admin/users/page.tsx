@@ -6,6 +6,7 @@ import { DataTableV2 } from '@/components/admin/DataTable';
 import { Modal } from '@/components/admin/Modal';
 import { Button } from '@/components/ui/button';
 import { api, safe, fmtCNY, fmtDate } from '@/lib/api';
+import { useTranslations } from '@/lib/i18n';
 
 interface EndUser {
   id: number;
@@ -21,6 +22,8 @@ interface EndUser {
 const FETCH_LIMIT = 500;
 
 export default function UsersPage() {
+  const t = useTranslations('admin.users');
+  const tCommon = useTranslations('common');
   const [rows, setRows] = useState<EndUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<EndUser | null>(null);
@@ -41,7 +44,8 @@ export default function UsersPage() {
   }, []);
 
   async function setStatus(u: EndUser, status: 'active' | 'suspended') {
-    if (!confirm(`确定 ${status === 'suspended' ? '停用' : '启用'} ${u.email}？`)) return;
+    const verb = status === 'suspended' ? t('confirm_suspend_prefix') : t('confirm_activate_prefix');
+    if (!confirm(`${verb}${u.email}${t('confirm_suffix')}`)) return;
     setRows((cur) => cur.map((x) => (x.id === u.id ? { ...x, status } : x)));
     try {
       await api(
@@ -49,14 +53,14 @@ export default function UsersPage() {
         { method: 'POST' },
       );
     } catch (e: any) {
-      alert(`操作失败：${e.message}`);
+      alert(`${t('op_failed_prefix')}${e.message}`);
       refresh();
     }
   }
 
   async function bulkSetStatus(users: EndUser[], status: 'active' | 'suspended') {
-    const label = status === 'suspended' ? '停用' : '启用';
-    if (!confirm(`${label} 选中的 ${users.length} 个用户？`)) return;
+    const label = status === 'suspended' ? t('op_suspend') : t('op_activate');
+    if (!confirm(`${label}${t('bulk_confirm_pre')}${users.length}${t('bulk_confirm_mid')}`)) return;
     let ok = 0;
     let fail = 0;
     for (const u of users) {
@@ -70,7 +74,7 @@ export default function UsersPage() {
         fail++;
       }
     }
-    alert(`${label}完成：成功 ${ok}，失败 ${fail}`);
+    alert(`${label}${t('bulk_done_pre')}${ok}${t('bulk_done_mid')}${fail}`);
     refresh();
   }
 
@@ -91,7 +95,7 @@ export default function UsersPage() {
       setEditing(null);
       refresh();
     } catch (e: any) {
-      alert(`保存失败：${e.message}`);
+      alert(`${tCommon('save_failed')}：${e.message}`);
     } finally {
       setBusy(false);
     }
@@ -105,7 +109,7 @@ export default function UsersPage() {
         header: ({ table }) => (
           <input
             type="checkbox"
-            aria-label="全选当前页"
+            aria-label={t('select_aria_all')}
             checked={table.getIsAllPageRowsSelected()}
             ref={(el) => {
               if (el) el.indeterminate = !table.getIsAllPageRowsSelected() && table.getIsSomePageRowsSelected();
@@ -117,7 +121,7 @@ export default function UsersPage() {
         cell: ({ row }) => (
           <input
             type="checkbox"
-            aria-label="选中行"
+            aria-label={t('select_aria_row')}
             checked={row.getIsSelected()}
             onChange={(e) => row.toggleSelected(e.target.checked)}
             className="h-3.5 w-3.5 rounded border-input cursor-pointer"
@@ -134,7 +138,7 @@ export default function UsersPage() {
       },
       {
         accessorKey: 'email',
-        header: '邮箱',
+        header: t('col_email'),
         cell: ({ row }) => {
           const u = row.original;
           return (
@@ -149,35 +153,35 @@ export default function UsersPage() {
       },
       {
         accessorKey: 'group_name',
-        header: '分组',
+        header: t('col_group'),
         cell: ({ row }) => (
           <span className="text-xs text-muted-foreground">{row.original.group_name}</span>
         ),
       },
       {
         accessorKey: 'created_at',
-        header: '注册时间',
+        header: t('col_created'),
         cell: ({ row }) => (
           <span className="text-xs text-muted-foreground">{fmtDate(row.original.created_at)}</span>
         ),
       },
       {
         id: 'balance',
-        header: '余额 / 已用',
+        header: t('col_balance'),
         accessorFn: (u) => u.quota_cents - u.used_quota_cents,
         cell: ({ row }) => {
           const u = row.original;
           return (
             <div className="text-xs">
-              <div>{fmtCNY(u.quota_cents - u.used_quota_cents)} 余</div>
-              <div className="text-muted-foreground">{fmtCNY(u.used_quota_cents)} 已用</div>
+              <div>{fmtCNY(u.quota_cents - u.used_quota_cents)} {t('balance_remain_suffix')}</div>
+              <div className="text-muted-foreground">{fmtCNY(u.used_quota_cents)} {t('balance_used_suffix')}</div>
             </div>
           );
         },
       },
       {
         accessorKey: 'status',
-        header: '状态',
+        header: t('col_status'),
         cell: ({ row }) => {
           const s = row.original.status;
           return (
@@ -198,7 +202,7 @@ export default function UsersPage() {
       },
       {
         id: 'ops',
-        header: '操作',
+        header: t('col_ops'),
         enableSorting: false,
         cell: ({ row }) => {
           const u = row.original;
@@ -208,21 +212,21 @@ export default function UsersPage() {
                 onClick={() => startEditQuota(u)}
                 className="text-primary hover:underline"
               >
-                额度
+                {t('op_quota')}
               </button>
               {u.status === 'active' ? (
                 <button
                   onClick={() => setStatus(u, 'suspended')}
                   className="text-rose-600 hover:underline"
                 >
-                  停用
+                  {t('op_suspend')}
                 </button>
               ) : (
                 <button
                   onClick={() => setStatus(u, 'active')}
                   className="text-emerald-700 hover:underline"
                 >
-                  启用
+                  {t('op_activate')}
                 </button>
               )}
             </div>
@@ -236,33 +240,33 @@ export default function UsersPage() {
 
   return (
     <AdminShell
-      title="终端用户"
-      subtitle={`你的店铺已注册用户（点列头排序，搜索 + 选中支持批量操作）`}
+      title={t('title')}
+      subtitle={t('subtitle')}
     >
       <DataTableV2<EndUser>
         columns={columns}
         data={rows}
         loading={loading}
         searchKey="email"
-        searchPlaceholder="按邮箱搜索…"
-        emptyMessage="暂无用户"
+        searchPlaceholder={t('search_placeholder')}
+        emptyMessage={t('empty_message')}
         bulkActions={[
-          { label: '批量停用', onClick: (sel) => bulkSetStatus(sel, 'suspended'), variant: 'outline' },
-          { label: '批量启用', onClick: (sel) => bulkSetStatus(sel, 'active'), variant: 'outline' },
+          { label: t('bulk_suspend'), onClick: (sel) => bulkSetStatus(sel, 'suspended'), variant: 'outline' },
+          { label: t('bulk_activate'), onClick: (sel) => bulkSetStatus(sel, 'active'), variant: 'outline' },
         ]}
       />
 
       <Modal
         open={editing != null}
         onClose={() => setEditing(null)}
-        title={editing ? `调整额度 — ${editing.email}` : ''}
+        title={editing ? `${t('modal_title_prefix')}${editing.email}` : ''}
         footer={
           <>
             <Button variant="outline" size="sm" onClick={() => setEditing(null)}>
-              取消
+              {tCommon('cancel')}
             </Button>
             <Button size="sm" onClick={saveQuota} disabled={busy}>
-              {busy ? '保存中…' : '保存'}
+              {busy ? tCommon('saving') : tCommon('save')}
             </Button>
           </>
         }
@@ -270,12 +274,12 @@ export default function UsersPage() {
         {editing && (
           <div className="space-y-3 text-sm">
             <div className="text-xs text-muted-foreground">
-              当前剩余 <b>{fmtCNY(editing.quota_cents - editing.used_quota_cents)}</b>，已用{' '}
-              {fmtCNY(editing.used_quota_cents)}。
+              {t('modal_remain_pre')}<b>{fmtCNY(editing.quota_cents - editing.used_quota_cents)}</b>{t('modal_used_pre')}
+              {fmtCNY(editing.used_quota_cents)}{t('modal_used_suffix')}
             </div>
             <div>
               <div className="text-xs font-medium text-muted-foreground mb-1">
-                设为新剩余额度（分）
+                {t('field_new_quota')}
               </div>
               <input
                 type="number"

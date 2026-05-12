@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, auth } from '@/lib/api';
+import { useTranslations } from '@/lib/i18n';
 
 interface EndUser {
   id: number; email: string; display_name: string | null; status: string;
@@ -9,6 +10,7 @@ interface EndUser {
 }
 
 export default function AdminDashboard() {
+  const t = useTranslations('admin.dashboard_legacy');
   const router = useRouter();
   const [users, setUsers] = useState<EndUser[]>([]);
   const [err, setErr] = useState('');
@@ -26,21 +28,21 @@ export default function AdminDashboard() {
     <main className="min-h-screen">
       <header className="bg-accent text-white">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="text-xl font-semibold">3API Admin</div>
+          <div className="text-xl font-semibold">{t('brand')}</div>
           <nav className="flex items-center gap-5 text-sm">
-            <a href="/admin/dashboard/" className="text-amber-400">客户</a>
-            <a href="/admin/channels/" className="hover:text-amber-400">上游 Channel</a>
-            <button onClick={logout} className="hover:text-amber-400">退出</button>
+            <a href="/admin/dashboard/" className="text-amber-400">{t('nav_customers')}</a>
+            <a href="/admin/channels/" className="hover:text-amber-400">{t('nav_channels')}</a>
+            <button onClick={logout} className="hover:text-amber-400">{t('nav_logout')}</button>
           </nav>
         </div>
       </header>
       <div className="max-w-6xl mx-auto px-6 py-8">
-        <h1 className="text-2xl font-semibold mb-6">客户管理</h1>
+        <h1 className="text-2xl font-semibold mb-6">{t('page_title')}</h1>
         {err && <div className="mb-4 text-sm text-red-600">{err}</div>}
         <div className="bg-card rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead className="text-left text-muted-foreground border-b">
-              <tr><th className="px-4 py-2">ID</th><th>邮箱</th><th>状态</th><th>余额</th><th>已用</th><th>注册时间</th></tr>
+              <tr><th className="px-4 py-2">{t('th_id')}</th><th>{t('th_email')}</th><th>{t('th_status')}</th><th>{t('th_balance')}</th><th>{t('th_used')}</th><th>{t('th_created')}</th></tr>
             </thead>
             <tbody>
               {users.map(u => (

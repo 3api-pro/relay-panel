@@ -6,6 +6,7 @@ import { DataTableV2 } from '@/components/admin/DataTable';
 import { Modal } from '@/components/admin/Modal';
 import { Button } from '@/components/ui/button';
 import { api, safe, fmtCNY, fmtDate } from '@/lib/api';
+import { useTranslations } from '@/lib/i18n';
 
 interface Order {
   id: number;
@@ -75,6 +76,8 @@ function downloadCsv(rows: Order[]) {
 }
 
 export default function OrdersPage() {
+  const t = useTranslations('admin.orders');
+  const tCommon = useTranslations('common');
   const [rows, setRows] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<StatusFilter>('');
@@ -107,7 +110,7 @@ export default function OrdersPage() {
       setReason('');
       refresh();
     } catch (e: any) {
-      alert(`退款失败：${e.message}`);
+      alert(`${t('refund_failed_prefix')}${e.message}`);
     } finally {
       setBusy(false);
     }
@@ -121,7 +124,7 @@ export default function OrdersPage() {
         header: ({ table }) => (
           <input
             type="checkbox"
-            aria-label="全选当前页"
+            aria-label={t('select_aria_all')}
             checked={table.getIsAllPageRowsSelected()}
             ref={(el) => {
               if (el) el.indeterminate = !table.getIsAllPageRowsSelected() && table.getIsSomePageRowsSelected();
@@ -133,7 +136,7 @@ export default function OrdersPage() {
         cell: ({ row }) => (
           <input
             type="checkbox"
-            aria-label="选中行"
+            aria-label={t('select_aria_row')}
             checked={row.getIsSelected()}
             onChange={(e) => row.toggleSelected(e.target.checked)}
             className="h-3.5 w-3.5 rounded border-input cursor-pointer"
@@ -150,7 +153,7 @@ export default function OrdersPage() {
       },
       {
         accessorKey: 'user_email',
-        header: '用户',
+        header: t('col_user'),
         cell: ({ row }) => {
           const o = row.original;
           return (
@@ -162,20 +165,20 @@ export default function OrdersPage() {
       },
       {
         accessorKey: 'plan_name',
-        header: '套餐',
+        header: t('col_plan'),
         cell: ({ row }) =>
           row.original.plan_name ?? <span className="text-muted-foreground">—</span>,
       },
       {
         accessorKey: 'amount_cents',
-        header: '金额',
+        header: t('col_amount'),
         cell: ({ row }) => (
           <span className="font-medium">{fmtCNY(row.original.amount_cents)}</span>
         ),
       },
       {
         accessorKey: 'pay_method',
-        header: '支付方式',
+        header: t('col_pay_method'),
         cell: ({ row }) => (
           <span className="text-xs text-muted-foreground">
             {row.original.pay_method ?? '—'}
@@ -184,19 +187,19 @@ export default function OrdersPage() {
       },
       {
         accessorKey: 'status',
-        header: '状态',
+        header: t('col_status'),
         cell: ({ row }) => <span className={statusClass(row.original.status)}>{row.original.status}</span>,
       },
       {
         accessorKey: 'created_at',
-        header: '时间',
+        header: t('col_time'),
         cell: ({ row }) => (
           <span className="text-xs text-muted-foreground">{fmtDate(row.original.created_at)}</span>
         ),
       },
       {
         id: 'ops',
-        header: '操作',
+        header: t('col_ops'),
         enableSorting: false,
         cell: ({ row }) => {
           const o = row.original;
@@ -205,7 +208,7 @@ export default function OrdersPage() {
               onClick={() => setRefunding(o)}
               className="text-xs text-rose-600 hover:underline"
             >
-              退款
+              {t('op_refund')}
             </button>
           ) : (
             <span className="text-xs text-muted-foreground">—</span>
@@ -213,6 +216,7 @@ export default function OrdersPage() {
         },
       },
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
@@ -229,7 +233,7 @@ export default function OrdersPage() {
           }}
           className="h-8 px-3 text-xs"
         >
-          {s || '全部'}
+          {s || t('filter_all')}
         </Button>
       ))}
     </div>
@@ -237,20 +241,20 @@ export default function OrdersPage() {
 
   return (
     <AdminShell
-      title="订单"
-      subtitle="终端用户下单 / 支付 / 退款记录（支持搜索 · 排序 · 批量导出）"
+      title={t('title')}
+      subtitle={t('subtitle')}
     >
       <DataTableV2<Order>
         columns={columns}
         data={rows}
         loading={loading}
         searchKey="user_email"
-        searchPlaceholder="按邮箱 / 订单号搜索…"
-        emptyMessage="暂无订单"
+        searchPlaceholder={t('search_placeholder')}
+        emptyMessage={t('empty_message')}
         toolbar={statusToolbar}
         bulkActions={[
           {
-            label: '导出 CSV',
+            label: t('bulk_export_csv'),
             onClick: (sel) => downloadCsv(sel),
             variant: 'outline',
           },
@@ -263,7 +267,7 @@ export default function OrdersPage() {
           setRefunding(null);
           setReason('');
         }}
-        title={refunding ? `退款 #${refunding.id}` : ''}
+        title={refunding ? `${t('modal_title_prefix')}${refunding.id}` : ''}
         footer={
           <>
             <Button
@@ -274,7 +278,7 @@ export default function OrdersPage() {
                 setReason('');
               }}
             >
-              取消
+              {tCommon('cancel')}
             </Button>
             <Button
               size="sm"
@@ -282,7 +286,7 @@ export default function OrdersPage() {
               disabled={busy}
               className="bg-rose-600 hover:bg-rose-700 text-white"
             >
-              {busy ? '处理中…' : '确认退款'}
+              {busy ? t('refund_busy') : t('confirm_refund')}
             </Button>
           </>
         }
@@ -290,21 +294,21 @@ export default function OrdersPage() {
         {refunding && (
           <div className="space-y-3 text-sm">
             <div className="text-foreground">
-              用户 <b>{refunding.user_email ?? '?'}</b>，金额{' '}
+              {t('modal_user_pre')}<b>{refunding.user_email ?? '?'}</b>{t('modal_amount_pre')}
               <b>{fmtCNY(refunding.amount_cents)}</b>
             </div>
             <div>
-              <div className="text-xs font-medium text-muted-foreground mb-1">退款原因</div>
+              <div className="text-xs font-medium text-muted-foreground mb-1">{t('field_reason')}</div>
               <textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={3}
-                placeholder="如：用户主动申请 / 服务异常 / 误下单 …"
+                placeholder={t('ph_reason')}
                 className="w-full px-3 py-2 rounded-md border border-input text-sm bg-background"
               />
             </div>
             <div className="text-xs text-rose-700 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded px-3 py-2">
-              退款会同时回退订阅状态，且不可逆。请确认已通过站外渠道与用户达成一致。
+              {t('warn_irreversible')}
             </div>
           </div>
         )}

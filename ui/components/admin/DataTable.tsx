@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
 
 // =========================================================================
 // LEGACY render-prop table (still used by /admin/finance). Kept verbatim so
@@ -60,6 +61,7 @@ export function DataTable<T>({
   total,
   onPage,
 }: LegacyProps<T>) {
+  const t = useTranslations('admin.data_table');
   return (
     <div className="bg-card rounded-lg border border-border overflow-hidden">
       <div className="overflow-x-auto">
@@ -87,7 +89,7 @@ export function DataTable<T>({
             ) : rows.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="px-4 py-12 text-center text-muted-foreground">
-                  {empty ?? '暂无数据'}
+                  {empty ?? t('empty')}
                 </td>
               </tr>
             ) : (
@@ -110,7 +112,7 @@ export function DataTable<T>({
       {onPage && pageSize && page != null && (
         <div className="px-4 py-2.5 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
           <div>
-            {total != null ? `共 ${total} 条 · 第 ${page + 1} 页` : `第 ${page + 1} 页`}
+            {total != null ? t('legacy_total_page', { total, page: page + 1 }) : t('legacy_page', { page: page + 1 })}
           </div>
           <div className="flex gap-1">
             <button
@@ -118,14 +120,14 @@ export function DataTable<T>({
               disabled={page === 0}
               className="px-2.5 py-1 rounded border border-input disabled:opacity-40 hover:bg-muted"
             >
-              上一页
+              {t('page_prev')}
             </button>
             <button
               onClick={() => onPage(page + 1)}
               disabled={total != null && (page + 1) * pageSize >= total}
               className="px-2.5 py-1 rounded border border-input disabled:opacity-40 hover:bg-muted"
             >
-              下一页
+              {t('page_next')}
             </button>
           </div>
         </div>
@@ -171,6 +173,7 @@ export function DataTableV2<T>({
   emptyMessage,
   toolbar,
 }: DataTableV2Props<T>) {
+  const t = useTranslations('admin.data_table');
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -208,7 +211,7 @@ export function DataTableV2<T>({
         <div className="flex items-center gap-3 flex-wrap">
           {searchKey && (
             <Input
-              placeholder={searchPlaceholder || `按 ${searchKey} 搜索…`}
+              placeholder={searchPlaceholder || `${t('search_placeholder_prefix')}${searchKey}${t('search_placeholder_suffix')}`}
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.target.value)}
               className="max-w-sm h-9"
@@ -218,7 +221,7 @@ export function DataTableV2<T>({
           <div className="flex-1" />
           {bulkActions && selected.length > 0 && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>已选 {selected.length} 行</span>
+              <span>{t('selected_count', { n: selected.length })}</span>
               {bulkActions.map((act, i) => (
                 <Button
                   key={i}
@@ -281,7 +284,7 @@ export function DataTableV2<T>({
                   colSpan={columns.length}
                   className="text-center py-12 text-muted-foreground text-sm"
                 >
-                  {emptyMessage ?? '暂无数据'}
+                  {emptyMessage ?? t('empty')}
                 </TableCell>
               </TableRow>
             ) : (
@@ -305,10 +308,10 @@ export function DataTableV2<T>({
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <div>
           {filteredTotal === 0
-            ? '0 条'
-            : `第 ${showingFrom}-${showingTo} 条 / 共 ${filteredTotal} 条`}
+            ? t('page_summary_none')
+            : t('page_summary', { from: showingFrom, to: showingTo, total: filteredTotal })}
           {globalFilter && data.length !== filteredTotal && (
-            <span className="ml-1">（已筛选自 {data.length}）</span>
+            <span className="ml-1">{t('filtered_from', { n: data.length })}</span>
           )}
         </div>
         <div className="flex gap-1.5">
@@ -319,7 +322,7 @@ export function DataTableV2<T>({
             disabled={!table.getCanPreviousPage()}
             className="h-7 px-2"
           >
-            首页
+            {t('page_first')}
           </Button>
           <Button
             variant="outline"
@@ -328,7 +331,7 @@ export function DataTableV2<T>({
             disabled={!table.getCanPreviousPage()}
             className="h-7 px-2"
           >
-            上一页
+            {t('page_prev')}
           </Button>
           <Button
             variant="outline"
@@ -337,7 +340,7 @@ export function DataTableV2<T>({
             disabled={!table.getCanNextPage()}
             className="h-7 px-2"
           >
-            下一页
+            {t('page_next')}
           </Button>
           <Button
             variant="outline"
@@ -346,7 +349,7 @@ export function DataTableV2<T>({
             disabled={!table.getCanNextPage()}
             className="h-7 px-2"
           >
-            末页
+            {t('page_last')}
           </Button>
         </div>
       </div>

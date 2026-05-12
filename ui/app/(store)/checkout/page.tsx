@@ -13,12 +13,20 @@ import Link from 'next/link';
 import { store, fmtCents, fmtDate, StoreApiError } from '@/lib/store-api';
 import { AuthGuard } from '@/components/store/AuthGuard';
 import { Card, Button, Alert, Badge, Spinner } from '@/components/store/ui';
+import { useTranslations } from '@/lib/i18n';
 
 type Provider = 'alipay' | 'usdt-trc20' | 'usdt-erc20';
 
+function CheckoutFallback() {
+  const t = useTranslations('storefront.checkout');
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center text-muted-foreground text-sm">{t('loading_inline')}</div>
+  );
+}
+
 export default function CheckoutPage() {
   return (
-    <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center text-muted-foreground text-sm">加载中…</div>}>
+    <Suspense fallback={<CheckoutFallback />}>
       <AuthGuard>
         <CheckoutInner />
       </AuthGuard>
@@ -27,6 +35,7 @@ export default function CheckoutPage() {
 }
 
 function CheckoutInner() {
+  const t = useTranslations('storefront.checkout');
   const router = useRouter();
   const sp = useSearchParams();
   const orderId = sp?.get('order') || sp?.get('orderId') || '';
@@ -61,7 +70,7 @@ function CheckoutInner() {
         setTimeout(() => router.push('/dashboard/billing'), 1500);
       }
     } catch (e: any) {
-      setErr(e?.message || '加载订单失败');
+      setErr(e?.message || t('load_order_failed'));
     }
   }
 
@@ -87,7 +96,7 @@ function CheckoutInner() {
       if (e instanceof StoreApiError && e.status === 404) {
         setProviderOffline(true);
       } else {
-        setErr(e?.message || '支付通道异常');
+        setErr(e?.message || t('channel_error'));
       }
     } finally {
       setBusy(false);
@@ -96,8 +105,8 @@ function CheckoutInner() {
 
   const expiresMs = useMemo(() => {
     if (!order?.expires_at) return null;
-    const t = new Date(order.expires_at).getTime();
-    return isNaN(t) ? null : t;
+    const ts = new Date(order.expires_at).getTime();
+    return isNaN(ts) ? null : ts;
   }, [order?.expires_at]);
   const remaining = expiresMs ? Math.max(0, expiresMs - now) : null;
   const remStr = remaining === null ? null : `${Math.floor(remaining / 60000)}:${String(Math.floor(remaining / 1000) % 60).padStart(2, '0')}`;
@@ -107,47 +116,47 @@ function CheckoutInner() {
   if (!orderId) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
-        <Alert kind="error">缺少订单参数。请从 <Link href="/dashboard/billing" className="underline">订单列表</Link> 进入。</Alert>
+        <Alert kind="error">{t('missing_order_pre')}<Link href="/dashboard/billing" className="underline">{t('missing_order_link')}</Link>{t('missing_order_post')}</Alert>
       </div>
     );
   }
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
-      <h1 className="text-2xl font-semibold text-foreground mb-6">结账</h1>
+      <h1 className="text-2xl font-semibold text-foreground mb-6">{t('title')}</h1>
 
       {err && <Alert kind="error">{err}</Alert>}
 
       {!order && !err && (
         <div className="flex items-center justify-center py-12 text-muted-foreground">
-          <Spinner /> <span className="ml-2 text-sm">加载订单…</span>
+          <Spinner /> <span className="ml-2 text-sm">{t('loading_order')}</span>
         </div>
       )}
 
       {order && (
         <>
-          <Card title="订单详情">
+          <Card title={t('card_order_detail')}>
             <dl className="text-sm space-y-2">
               <div className="flex justify-between">
-                <dt className="text-muted-foreground">订单号</dt>
+                <dt className="text-muted-foreground">{t('row_order_id')}</dt>
                 <dd className="font-mono text-xs">{order.id}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-muted-foreground">套餐</dt>
+                <dt className="text-muted-foreground">{t('row_plan')}</dt>
                 <dd>{order.plan_name || order.plan_slug || `#${order.plan_id}`}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-muted-foreground">金额</dt>
+                <dt className="text-muted-foreground">{t('row_amount')}</dt>
                 <dd className="text-lg font-semibold">{fmtCents(order.amount_cents)}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-muted-foreground">状态</dt>
-                <dd><Badge tone={paid ? 'success' : expired ? 'danger' : 'warn'}>{paid ? '已支付' : expired ? '已过期' : order.status || '待支付'}</Badge></dd>
+                <dt className="text-muted-foreground">{t('row_status')}</dt>
+                <dd><Badge tone={paid ? 'success' : expired ? 'danger' : 'warn'}>{paid ? t('status_paid') : expired ? t('status_expired') : order.status || t('status_pending')}</Badge></dd>
               </div>
               {order.expires_at && !paid && (
                 <div className="flex justify-between">
-                  <dt className="text-muted-foreground">截止</dt>
-                  <dd className="text-foreground">{fmtDate(order.expires_at)} {remStr && !expired && <span className="ml-2 text-amber-600">剩余 {remStr}</span>}</dd>
+                  <dt className="text-muted-foreground">{t('row_expires')}</dt>
+                  <dd className="text-foreground">{fmtDate(order.expires_at)} {remStr && !expired && <span className="ml-2 text-amber-600">{t('remaining_prefix')}{remStr}</span>}</dd>
                 </div>
               )}
             </dl>
@@ -156,24 +165,24 @@ function CheckoutInner() {
           {paid && (
             <div className="mt-4">
               <Alert kind="success">
-                <div className="font-medium">支付成功!</div>
-                <div className="text-sm mt-1">即将跳转账单页…</div>
+                <div className="font-medium">{t('alert_paid_title')}</div>
+                <div className="text-sm mt-1">{t('alert_paid_body')}</div>
               </Alert>
             </div>
           )}
 
           {!paid && !expired && (
-            <Card title="选择支付方式" className="mt-4">
+            <Card title={t('card_method_title')} className="mt-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {(['alipay', 'usdt-trc20', 'usdt-erc20'] as Provider[]).map((p) => (
                   <button key={p} disabled={busy}
                     onClick={() => selectProvider(p)}
                     className={`text-left rounded-lg border p-4 hover:bg-background disabled:opacity-50 ${provider === p ? 'border-slate-900' : 'border-border'}`}>
                     <div className="font-medium text-foreground">
-                      {p === 'alipay' ? '支付宝' : p === 'usdt-trc20' ? 'USDT (TRC20)' : 'USDT (ERC20)'}
+                      {p === 'alipay' ? t('method_alipay') : p === 'usdt-trc20' ? t('method_usdt_trc20') : t('method_usdt_erc20')}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      {p === 'alipay' ? '扫码即时到账' : 'Tether USD, 链上转账'}
+                      {p === 'alipay' ? t('method_alipay_desc') : t('method_usdt_desc')}
                     </div>
                   </button>
                 ))}
@@ -181,44 +190,43 @@ function CheckoutInner() {
 
               {busy && (
                 <div className="mt-4 flex items-center text-muted-foreground text-sm">
-                  <Spinner /> <span className="ml-2">生成支付凭证…</span>
+                  <Spinner /> <span className="ml-2">{t('generating')}</span>
                 </div>
               )}
 
               {providerOffline && (
                 <div className="mt-4">
                   <Alert kind="warn">
-                    支付通道开通中, 暂时无法在线支付。订单已为你保留, 可联系客服线下支付,
-                    或稍后回到 <Link href="/dashboard/billing" className="underline">订单列表</Link> 重试。
+                    {t('provider_offline_pre')}<Link href="/dashboard/billing" className="underline">{t('provider_offline_link')}</Link>{t('provider_offline_post')}
                   </Alert>
                 </div>
               )}
 
               {payInfo?.kind === 'alipay' && payInfo.qr_code_url && (
                 <div className="mt-4">
-                  <Alert kind="info">使用支付宝扫码完成支付。本页面会自动检测到账状态。</Alert>
+                  <Alert kind="info">{t('alipay_alert')}</Alert>
                   <div className="mt-3 flex justify-center">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={payInfo.qr_code_url} alt="支付二维码" className="w-56 h-56 border border-border rounded-md" />
+                    <img src={payInfo.qr_code_url} alt={t('alipay_qr_alt')} className="w-56 h-56 border border-border rounded-md" />
                   </div>
                 </div>
               )}
 
               {payInfo?.kind === 'usdt' && (
                 <div className="mt-4 space-y-2">
-                  <Alert kind="info">向以下地址转账 USDT, 转账完成后页面会自动确认。</Alert>
+                  <Alert kind="info">{t('usdt_alert')}</Alert>
                   <div className="bg-background border border-border rounded p-3 text-sm space-y-1">
-                    <div><span className="text-muted-foreground">网络:</span> {String(payInfo.network).toUpperCase()}</div>
+                    <div><span className="text-muted-foreground">{t('row_network')}</span> {String(payInfo.network).toUpperCase()}</div>
                     <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">地址:</span>
+                      <span className="text-muted-foreground">{t('row_address')}</span>
                       <code className="text-xs break-all flex-1">{payInfo.address}</code>
                       <Button size="sm" variant="ghost"
                         onClick={() => { if (navigator?.clipboard && payInfo.address) navigator.clipboard.writeText(payInfo.address).catch(() => {}); }}>
-                        复制
+                        {t('copy')}
                       </Button>
                     </div>
-                    <div><span className="text-muted-foreground">金额:</span> {payInfo.amount} USDT</div>
-                    {payInfo.expires_at && <div><span className="text-muted-foreground">到期:</span> {fmtDate(payInfo.expires_at)}</div>}
+                    <div><span className="text-muted-foreground">{t('row_usdt_amount')}</span> {payInfo.amount} USDT</div>
+                    {payInfo.expires_at && <div><span className="text-muted-foreground">{t('row_usdt_expires')}</span> {fmtDate(payInfo.expires_at)}</div>}
                   </div>
                 </div>
               )}
@@ -228,9 +236,9 @@ function CheckoutInner() {
           {expired && !paid && (
             <div className="mt-4">
               <Alert kind="error">
-                <div className="font-medium">订单已过期</div>
+                <div className="font-medium">{t('expired_title')}</div>
                 <div className="text-sm mt-1">
-                  请 <Link href="/pricing" className="underline">重新下单</Link>。
+                  {t('expired_pre')}<Link href="/pricing" className="underline">{t('expired_link')}</Link>{t('expired_post')}
                 </div>
               </Alert>
             </div>

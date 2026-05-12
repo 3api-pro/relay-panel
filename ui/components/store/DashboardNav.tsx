@@ -1,15 +1,16 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-
-const items = [
-  { href: '/dashboard/keys',     label: 'API Keys' },
-  { href: '/dashboard/usage',    label: '使用统计' },
-  { href: '/dashboard/billing',  label: '订单 & 续费' },
-  { href: '/dashboard/settings', label: '账号设置' },
-];
+import { useTranslations } from '@/lib/i18n';
 
 export function DashboardNav() {
+  const t = useTranslations('storefront.dashboard_nav');
+  const items = [
+    { href: '/dashboard/keys',     label: t('keys') },
+    { href: '/dashboard/usage',    label: t('usage') },
+    { href: '/dashboard/billing',  label: t('billing') },
+    { href: '/dashboard/settings', label: t('settings') },
+  ];
   const path = usePathname() || '';
   return (
     <nav className="bg-card border border-border rounded-lg overflow-hidden">

@@ -6,13 +6,15 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminShell } from '@/components/admin/AdminShell';
+import { useTranslations } from '@/lib/i18n';
 
 export default function WholesalePage() {
+  const t = useTranslations('admin.wholesale_redirect');
   const router = useRouter();
   useEffect(() => { router.replace('/admin/finance#wholesale'); }, [router]);
   return (
-    <AdminShell title="批发余额" subtitle="跳转到财务页…">
-      <div className="text-sm text-muted-foreground">正在跳转 /admin/finance#wholesale …</div>
+    <AdminShell title={t('title')} subtitle={t('subtitle')}>
+      <div className="text-sm text-muted-foreground">{t('body')}</div>
     </AdminShell>
   );
 }

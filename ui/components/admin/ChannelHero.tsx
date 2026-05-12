@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { api, safe } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
 
 /**
  * "Use Recommended" hero card on the channels page.
@@ -48,6 +49,7 @@ function fmtCents(c: number): string {
 }
 
 export function ChannelHero({ channels, onTest }: Props) {
+  const t = useTranslations('admin.channel.hero');
   const [ws, setWs] = useState<WholesaleSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState<number | null>(null);
@@ -102,47 +104,46 @@ export function ChannelHero({ channels, onTest }: Props) {
           <div className="flex-1 min-w-[260px]">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-lg font-semibold text-foreground">
-                推荐 — llmapi.pro Wholesale 上游
+                {t('title')}
               </h2>
               <Badge
                 variant="default"
                 className="h-5 text-[10px] bg-brand-600 hover:bg-brand-700 text-white"
               >
-                零库存
+                {t('badge_zero_inv')}
               </Badge>
               <Badge variant="outline" className="h-5 text-[10px] gap-1">
                 <Zap className="w-3 h-3" />
-                一键接入
+                {t('badge_oneclick')}
               </Badge>
             </div>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              你的店铺已默认使用 <b className="text-foreground">{c.name}</b>，无需自己谈 Anthropic / OpenAI 的 API key。
-              我们已经把 Claude / GPT 等主流模型的批发价 baked 进上游 —
-              <b className="text-foreground"> 每卖一单从你的批发余额扣 face value</b>，剩下的就是你和客户之间的事。
+              {t('body_pre')}<b className="text-foreground">{c.name}</b>{t('body_mid')}
+              <b className="text-foreground">{t('body_strong')}</b>{t('body_post')}
             </p>
             <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Metric label="Provider" value={c.provider_type} />
-              <Metric label="Keys" value={`${c.keys_active ?? 0}/${c.keys_total ?? 0} 活`} />
+              <Metric label={t('metric_provider')} value={c.provider_type} />
+              <Metric label={t('metric_keys')} value={`${c.keys_active ?? 0}/${c.keys_total ?? 0}${t('metric_keys_active_suffix')}`} />
               <Metric
-                label="批发余额"
-                value={loading ? '加载中…' : fmtCents(balance)}
+                label={t('metric_balance')}
+                value={loading ? t('metric_balance_loading') : fmtCents(balance)}
                 warn={lowBalance}
               />
               <Metric
-                label="连通性"
+                label={t('metric_health')}
                 value={
                   testOk ? (
                     <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
                       <CheckCircle2 className="w-3 h-3" />
-                      {lastTest?.latency_ms ? `${lastTest.latency_ms}ms` : '在线'}
+                      {lastTest?.latency_ms ? `${lastTest.latency_ms}ms` : t('metric_health_online')}
                     </span>
                   ) : testBad ? (
                     <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-400">
                       <XCircle className="w-3 h-3" />
-                      {lastTest?.error || '不可达'}
+                      {lastTest?.error || t('metric_health_unreachable')}
                     </span>
                   ) : (
-                    <span className="text-muted-foreground">未测试</span>
+                    <span className="text-muted-foreground">{t('metric_health_untested')}</span>
                   )
                 }
               />
@@ -153,11 +154,11 @@ export function ChannelHero({ channels, onTest }: Props) {
                 data-tour="channel-hero-low-balance"
               >
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                批发余额不足 ¥50 — 客户购买套餐会扣余额；建议先去
+                {t('low_balance_pre')}
                 <Link href="/admin/wholesale" className="underline font-medium">
-                  充值
+                  {t('low_balance_link')}
                 </Link>
-                以免阻断订单。
+                {t('low_balance_post')}
               </div>
             )}
           </div>
@@ -165,7 +166,7 @@ export function ChannelHero({ channels, onTest }: Props) {
             <Button asChild size="sm" className="gap-1.5">
               <Link href="/admin/wholesale">
                 <Wallet className="w-4 h-4" />
-                去充值批发余额
+                {t('cta_topup')}
               </Link>
             </Button>
             <Button
@@ -174,7 +175,7 @@ export function ChannelHero({ channels, onTest }: Props) {
               onClick={handleTest}
               disabled={!onTest || testing === c.id}
             >
-              {testing === c.id ? '测试中…' : '测试连接'}
+              {testing === c.id ? t('cta_test_busy') : t('cta_test')}
             </Button>
           </div>
         </div>
