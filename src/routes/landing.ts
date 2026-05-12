@@ -69,7 +69,7 @@ const HTML = `<!doctype html>
   .badges .grid { gap: 18px; }
   .badge { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 22px; text-align: center; transition: border-color .15s, transform .15s; }
   .badge:hover { border-color: var(--accent); transform: translateY(-2px); }
-  .badge .icon { font-size: 32px; line-height: 1; margin-bottom: 10px; }
+  .badge .icon { display: inline-flex; align-items: center; justify-content: center; height: 40px; width: 40px; color: var(--accent); margin-bottom: 12px; }
   .badge h3 { margin: 0 0 6px; font-size: 17px; color: var(--ink); }
   .badge .sub { color: var(--mute); font-size: 13px; line-height: 1.5; }
   .badge .sub strong { color: var(--accent2); }
@@ -130,17 +130,17 @@ const HTML = `<!doctype html>
   <div class="wrap">
     <div class="grid">
       <div class="badge">
-        <div class="icon">🚀</div>
+        <div class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg></div>
         <h3>一键部署</h3>
         <div class="sub"><strong>docker compose up</strong><br>10 秒起站, 也可托管 SaaS 注册即用</div>
       </div>
       <div class="badge">
-        <div class="icon">🔌</div>
+        <div class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg></div>
         <h3>一键接入</h3>
         <div class="sub"><strong>内置 llmapi 批发上游</strong><br>零库存 — 注册当天就能接客</div>
       </div>
       <div class="badge">
-        <div class="icon">💳</div>
+        <div class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg></div>
         <h3>一键支付</h3>
         <div class="sub"><strong>Alipay / USDT 配好即收款</strong><br>账款直接入站长账户, 平台不过手</div>
       </div>

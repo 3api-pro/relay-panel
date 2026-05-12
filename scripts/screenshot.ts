@@ -31,6 +31,7 @@ const TENANT_HOST = process.env.SCREENSHOT_TENANT_HOST || 'demo.3api.pro';
 const ADMIN_JWT = process.env.DEMO_ADMIN_JWT || '';
 const ENDUSER_JWT = process.env.DEMO_ENDUSER_JWT || '';
 const VIEWPORT = { width: 1280, height: 800 };
+const LOCALES = (process.env.SCREENSHOT_LOCALES || 'zh,en').split(',').map(x => x.trim()).filter(Boolean);
 const RENDER_WAIT_MS = 2000;
 
 // Chromium will resolve ROOT_HOST and TENANT_HOST itself if we pass
@@ -126,8 +127,14 @@ async function main(): Promise<void> {
     // ─────────────────────────────────────────────────────────────
     {
       const ctx = await browser.newContext({ viewport: VIEWPORT });
-      const page = await ctx.newPage();
-      await navigateAndShot(page, `${ROOT_BASE_URL}/`, 'screenshot-landing.png');
+      for (const __locale of LOCALES) {
+  const localeSuffix = __locale === 'zh' ? '' : `-${__locale}`;
+  // Set the i18n locale cookie on every domain we'll visit.
+  for (const host of [ROOT_HOST, TENANT_HOST]) {
+    await ctx.addCookies([{ name: '3api_locale', value: __locale, domain: host, path: '/', expires: Math.floor(Date.now()/1000) + 3600 }]);
+  }
+  const page = await ctx.newPage();
+      await navigateAndShot(page, `${ROOT_BASE_URL}/`, `screenshot-landing${localeSuffix}.png`);
       await ctx.close();
     }
 
@@ -138,7 +145,7 @@ async function main(): Promise<void> {
     {
       const ctx = await browser.newContext({ viewport: VIEWPORT });
       const page = await ctx.newPage();
-      await navigateAndShot(page, `${TENANT_BASE_URL}/`, 'screenshot-storefront.png');
+      await navigateAndShot(page, `${TENANT_BASE_URL}/`, `screenshot-storefront${localeSuffix}.png`);
       await ctx.close();
     }
 
@@ -165,13 +172,13 @@ async function main(): Promise<void> {
       await navigateAndShot(
         page,
         `${TENANT_BASE_URL}/admin/onboarding/1/`,
-        'screenshot-onboarding.png',
+        `screenshot-onboarding${localeSuffix}.png`,
         { waitFor: 'main', extraWaitMs: 2500 },
       );
       await navigateAndShot(
         page,
         `${TENANT_BASE_URL}/admin/`,
-        'screenshot-admin.png',
+        `screenshot-admin${localeSuffix}.png`,
         { waitFor: 'main', extraWaitMs: 2500 },
       );
       await ctx.close();
@@ -189,7 +196,7 @@ async function main(): Promise<void> {
       await navigateAndShot(
         page,
         `${TENANT_BASE_URL}/dashboard/`,
-        'screenshot-user.png',
+        `screenshot-user${localeSuffix}.png`,
         { waitFor: 'main', extraWaitMs: 2500 },
       );
       await ctx.close();
@@ -197,7 +204,8 @@ async function main(): Promise<void> {
       console.log('  ⚠ DEMO_ENDUSER_JWT empty — skipping end-user frame');
     }
   } finally {
-    await browser.close();
+    }
+  await browser.close();
   }
 
   console.log(`[screenshot] done → ${OUT}`);
