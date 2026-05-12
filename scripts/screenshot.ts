@@ -122,18 +122,19 @@ async function main(): Promise<void> {
   });
 
   try {
+    for (const __locale of LOCALES) {
+      const localeSuffix = __locale === 'zh' ? '' : `-${__locale}`;
+      console.log(`[screenshot] locale=${__locale} (suffix='${localeSuffix}')`);
     // ─────────────────────────────────────────────────────────────
     // Frame 1: Marketing landing (root domain SSR)
     // ─────────────────────────────────────────────────────────────
     {
       const ctx = await browser.newContext({ viewport: VIEWPORT });
-      for (const __locale of LOCALES) {
-  const localeSuffix = __locale === 'zh' ? '' : `-${__locale}`;
-  // Set the i18n locale cookie on every domain we'll visit.
-  for (const host of [ROOT_HOST, TENANT_HOST]) {
-    await ctx.addCookies([{ name: '3api_locale', value: __locale, domain: host, path: '/', expires: Math.floor(Date.now()/1000) + 3600 }]);
-  }
-  const page = await ctx.newPage();
+      await ctx.addCookies([
+        { name: '3api_locale', value: __locale, domain: ROOT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
+        { name: '3api_locale', value: __locale, domain: TENANT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
+      ]);
+      const page = await ctx.newPage();
       await navigateAndShot(page, `${ROOT_BASE_URL}/`, `screenshot-landing${localeSuffix}.png`);
       await ctx.close();
     }
@@ -144,6 +145,10 @@ async function main(): Promise<void> {
     // ─────────────────────────────────────────────────────────────
     {
       const ctx = await browser.newContext({ viewport: VIEWPORT });
+      await ctx.addCookies([
+        { name: '3api_locale', value: __locale, domain: ROOT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
+        { name: '3api_locale', value: __locale, domain: TENANT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
+      ]);
       const page = await ctx.newPage();
       await navigateAndShot(page, `${TENANT_BASE_URL}/`, `screenshot-storefront${localeSuffix}.png`);
       await ctx.close();
@@ -158,6 +163,10 @@ async function main(): Promise<void> {
     // ─────────────────────────────────────────────────────────────
     if (ADMIN_JWT) {
       const ctx = await browser.newContext({ viewport: VIEWPORT });
+      await ctx.addCookies([
+        { name: '3api_locale', value: __locale, domain: ROOT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
+        { name: '3api_locale', value: __locale, domain: TENANT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
+      ]);
       await ctx.addCookies([
         {
           name: '3api_admin_token',
@@ -191,6 +200,10 @@ async function main(): Promise<void> {
     // ─────────────────────────────────────────────────────────────
     if (ENDUSER_JWT) {
       const ctx = await browser.newContext({ viewport: VIEWPORT });
+      await ctx.addCookies([
+        { name: '3api_locale', value: __locale, domain: ROOT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
+        { name: '3api_locale', value: __locale, domain: TENANT_HOST, path: '/', expires: Math.floor(Date.now()/1000) + 3600 },
+      ]);
       await seedStorefrontLocalStorage(ctx, ENDUSER_JWT);
       const page = await ctx.newPage();
       await navigateAndShot(
@@ -203,9 +216,9 @@ async function main(): Promise<void> {
     } else {
       console.log('  ⚠ DEMO_ENDUSER_JWT empty — skipping end-user frame');
     }
-  } finally {
     }
-  await browser.close();
+  } finally {
+    await browser.close();
   }
 
   console.log(`[screenshot] done → ${OUT}`);
