@@ -19,14 +19,14 @@ export interface ApiEndpoint {
   summary: string;
   description?: string;
   tags: string[];
-  auth: 'none' | 'api_key' | 'bearer_admin' | 'bearer_customer';
+  auth: 'none' | 'api_key' | 'bearer_admin' | 'bearer_customer' | 'platform_token';
   requestBody?: { example?: any; required?: boolean };
   responses: Record<string, { description: string; example?: any }>;
 }
 
 export const OPENAPI_INFO = {
   title: '3API Relay Panel',
-  version: '0.5.0',
+  version: '0.5.1',
   description:
     'Anthropic-compatible LLM relay with multi-tenant storefront, ' +
     'reseller admin, plans / orders / subscriptions, webhook delivery, ' +
@@ -344,6 +344,70 @@ export const ENDPOINTS: ApiEndpoint[] = [
     tags: ['admin', 'webhooks'], auth: 'bearer_admin',
     responses: { '200': { description: 'Recent deliveries (most recent first)' } },
   },
+
+  // -------------------------------------------------------------------
+  // Platform — root-domain operator API (X-Platform-Token guarded)
+  // -------------------------------------------------------------------
+  {
+    method: 'GET', path: '/platform/tenants', summary: 'List all tenants',
+    tags: ['platform'], auth: 'platform_token',
+    responses: { '200': { description: 'Tenant list with id, slug, status, created_at' } },
+  },
+  {
+    method: 'POST', path: '/platform/tenants', summary: 'Create tenant + initial admin (atomic)',
+    description:
+      'Atomically creates a `tenant` row and its first `reseller_admin`. ' +
+      'Slug must be 1-32 chars `[a-z0-9-]` and not a reserved name (admin, api, www, ...).',
+    tags: ['platform'], auth: 'platform_token',
+    requestBody: {
+      example: {
+        slug: 'acme',
+        admin_email: 'owner@acme.com',
+        admin_password: 'min8chars',
+      },
+    },
+    responses: {
+      '201': { description: 'Created (returns tenant + admin)' },
+      '409': { description: 'Slug already taken' },
+    },
+  },
+  {
+    method: 'POST', path: '/platform/tenants/{id}/suspend', summary: 'Suspend a tenant',
+    description: 'Sets `status = suspended`. Cannot suspend tenant 1.',
+    tags: ['platform'], auth: 'platform_token',
+    responses: { '200': { description: 'Updated tenant row' } },
+  },
+  {
+    method: 'POST', path: '/platform/tenants/{id}/activate', summary: 'Activate a tenant',
+    description: 'Sets `status = active`. Cannot deactivate tenant 1.',
+    tags: ['platform'], auth: 'platform_token',
+    responses: { '200': { description: 'Updated tenant row' } },
+  },
+  {
+    method: 'POST', path: '/platform/tenants/{id}/upgrade-shadow',
+    summary: 'Mint a per-tenant shadow sk- against wholesale (phase 2)',
+    description:
+      'Phase-2 manual upgrade: spends platform `wholesale_balance` to mint a ' +
+      'per-tenant `sk-relay-*` via llmapi.pro `/v1/wholesale/purchase`, then ' +
+      'replaces the tenant recommended upstream channel api_key with it. ' +
+      'Use this for paying tenants who justify the spend (~¥29 for pro/monthly); ' +
+      'cheap / spam signups stay on the shared phase-1 key. Each call mints a ' +
+      'new purchase — callers are responsible for not double-spending.',
+    tags: ['platform'], auth: 'platform_token',
+    requestBody: {
+      required: false,
+      example: { plan: 'pro', cycle: 'monthly' },
+    },
+    responses: {
+      '200': { description: 'Channel api_key swapped; purchase summary returned' },
+      '404': { description: 'Tenant not found' },
+      '502': {
+        description:
+          'Upstream / balance failure (insufficient_balance, network, HTTP 402, etc.). ' +
+          'Structured `error.message` + `purchase` returned for the operator UI.',
+      },
+    },
+  },
 ];
 
 export const TAG_DESCRIPTIONS: Record<string, string> = {
@@ -351,4 +415,5 @@ export const TAG_DESCRIPTIONS: Record<string, string> = {
   storefront: 'End-user signup / login / orders / subscriptions',
   admin: 'Reseller admin (per-tenant CRUD)',
   webhooks: 'Outbound webhook subscriptions + delivery',
+  platform: 'Platform operator (root-domain only, X-Platform-Token guarded)',
 };

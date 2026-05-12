@@ -3,7 +3,7 @@
 openapi: "3.0.3"
 info:
   title: "3API Relay Panel"
-  version: "0.5.0"
+  version: "0.5.1"
   description: "Anthropic-compatible LLM relay with multi-tenant storefront, reseller admin, plans / orders / subscriptions, webhook delivery, and per-tenant BYOK upstream channels."
 servers:
   - url: "https://3api.pro"
@@ -21,6 +21,8 @@ tags:
     description: "Reseller admin (per-tenant CRUD)"
   - name: "webhooks"
     description: "Outbound webhook subscriptions + delivery"
+  - name: "platform"
+    description: "Platform operator (root-domain only, X-Platform-Token guarded)"
 components:
   securitySchemes:
     apiKey:
@@ -35,6 +37,10 @@ components:
       type: "http"
       scheme: "bearer"
       bearerFormat: "JWT"
+    platformToken:
+      type: "apiKey"
+      in: "header"
+      name: "X-Platform-Token"
 paths:
   /v1/messages:
     post:
@@ -661,3 +667,77 @@ paths:
           description: "Recent deliveries (most recent first)"
       security:
         - adminBearer: []
+  /platform/tenants:
+    get:
+      summary: "List all tenants"
+      tags:
+        - "platform"
+      responses:
+        "200":
+          description: "Tenant list with id, slug, status, created_at"
+      security:
+        - platformToken: []
+    post:
+      summary: "Create tenant + initial admin (atomic)"
+      tags:
+        - "platform"
+      responses:
+        "201":
+          description: "Created (returns tenant + admin)"
+        "409":
+          description: "Slug already taken"
+      description: "Atomically creates a `tenant` row and its first `reseller_admin`. Slug must be 1-32 chars `[a-z0-9-]` and not a reserved name (admin, api, www, ...)."
+      security:
+        - platformToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              slug: "acme"
+              admin_email: "owner@acme.com"
+              admin_password: "min8chars"
+  /platform/tenants/{id}/suspend:
+    post:
+      summary: "Suspend a tenant"
+      tags:
+        - "platform"
+      responses:
+        "200":
+          description: "Updated tenant row"
+      description: "Sets `status = suspended`. Cannot suspend tenant 1."
+      security:
+        - platformToken: []
+  /platform/tenants/{id}/activate:
+    post:
+      summary: "Activate a tenant"
+      tags:
+        - "platform"
+      responses:
+        "200":
+          description: "Updated tenant row"
+      description: "Sets `status = active`. Cannot deactivate tenant 1."
+      security:
+        - platformToken: []
+  /platform/tenants/{id}/upgrade-shadow:
+    post:
+      summary: "Mint a per-tenant shadow sk- against wholesale (phase 2)"
+      tags:
+        - "platform"
+      responses:
+        "200":
+          description: "Channel api_key swapped; purchase summary returned"
+        "404":
+          description: "Tenant not found"
+        "502":
+          description: "Upstream / balance failure (insufficient_balance, network, HTTP 402, etc.). Structured `error.message` + `purchase` returned for the operator UI."
+      description: "Phase-2 manual upgrade: spends platform `wholesale_balance` to mint a per-tenant `sk-relay-*` via llmapi.pro `/v1/wholesale/purchase`, then replaces the tenant recommended upstream channel api_key with it. Use this for paying tenants who justify the spend (~¥29 for pro/monthly); cheap / spam signups stay on the shared phase-1 key. Each call mints a new purchase — callers are responsible for not double-spending."
+      security:
+        - platformToken: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            example:
+              plan: "pro"
+              cycle: "monthly"

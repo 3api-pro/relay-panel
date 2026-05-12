@@ -99,7 +99,9 @@ function pathItem(eps: ApiEndpoint[]): Record<string, any> {
           ? 'apiKey'
           : ep.auth === 'bearer_admin'
           ? 'adminBearer'
-          : 'customerBearer';
+          : ep.auth === 'bearer_customer'
+          ? 'customerBearer'
+          : 'platformToken';
       op.security = [{ [scheme]: [] }];
     }
     if (ep.requestBody) {
@@ -153,6 +155,7 @@ function build(): string {
         apiKey: { type: 'http', scheme: 'bearer', bearerFormat: 'sk-...' },
         adminBearer: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
         customerBearer: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+        platformToken: { type: 'apiKey', in: 'header', name: 'X-Platform-Token' },
       },
     },
     paths,
