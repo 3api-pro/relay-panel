@@ -1,7 +1,8 @@
 # Regenerating the README screenshots
 
-The five PNGs under `docs/assets/screenshot-*.png` are captured by
-`scripts/screenshot.ts` against a live panel container. They are
+Ten PNGs under `docs/assets/screenshot-*.png` are captured by
+`scripts/screenshot.ts` against a live panel container — five frames
+each in **zh** (default, no suffix) and **en** (`-en` suffix). They are
 **not** committed by hand. To refresh after a UI change:
 
 ```bash
@@ -22,11 +23,15 @@ sudo apt-get install -y libnss3 libnspr4 libasound2t64 libdbus-1-3 \
                         fonts-noto-cjk fonts-noto-color-emoji
 
 # 4. run the wrapper — it seeds a `demo` tenant and end-user (idempotent)
-#    then drives playwright through the five frames.
+#    then drives playwright through 5 frames × N locales (zh + en by default).
 npm run screenshots
 # (equivalent to: bash scripts/run-screenshots.sh)
 
-# 5. commit the PNGs
+# To capture only one locale:
+SCREENSHOT_LOCALES=zh npm run screenshots
+SCREENSHOT_LOCALES=en npm run screenshots
+
+# 5. commit the PNGs (the glob picks up both zh and en variants)
 git add docs/assets/screenshot-*.png
 git commit -m "docs: refresh screenshots"
 ```
@@ -54,15 +59,19 @@ The wrapper:
 panel's tenant-resolver and root-domain landing router dispatch correctly)
 while every request actually hits the local container.
 
-Five frames are captured:
+Five frames are captured **per locale**. For each locale in
+`SCREENSHOT_LOCALES` (default `zh,en`), playwright sets a `3api_locale`
+cookie on both the root host and the tenant host, then re-shoots all
+five frames. The `zh` locale writes the canonical filename; every other
+locale appends `-<locale>` before `.png`.
 
-| File | URL (after host-resolver rewrites) | Auth |
-|---|---|---|
-| `screenshot-landing.png` | `http://3api.pro:3199/` | none |
-| `screenshot-storefront.png` | `http://demo.3api.pro:3199/` | none |
-| `screenshot-onboarding.png` | `http://demo.3api.pro:3199/admin/onboarding/1/` | admin cookie + localStorage `token` |
-| `screenshot-admin.png` | `http://demo.3api.pro:3199/admin/` | admin cookie + localStorage `token` |
-| `screenshot-user.png` | `http://demo.3api.pro:3199/dashboard/` | localStorage `sf_token` |
+| Frame | URL (after host-resolver rewrites) | Auth | `zh` filename | `en` filename |
+|---|---|---|---|---|
+| Landing | `http://3api.pro:3199/` | none | `screenshot-landing.png` | `screenshot-landing-en.png` |
+| Storefront | `http://demo.3api.pro:3199/` | none | `screenshot-storefront.png` | `screenshot-storefront-en.png` |
+| Onboarding | `http://demo.3api.pro:3199/admin/onboarding/1/` | admin cookie + localStorage `token` | `screenshot-onboarding.png` | `screenshot-onboarding-en.png` |
+| Admin | `http://demo.3api.pro:3199/admin/` | admin cookie + localStorage `token` | `screenshot-admin.png` | `screenshot-admin-en.png` |
+| User | `http://demo.3api.pro:3199/dashboard/` | localStorage `sf_token` | `screenshot-user.png` | `screenshot-user-en.png` |
 
 ## Tweakable knobs
 
@@ -75,6 +84,10 @@ All of these are env vars (see `scripts/run-screenshots.sh` for defaults):
 - `DEMO_ENDUSER_EMAIL` / `DEMO_ENDUSER_PASSWORD`
 - `POSTGRES_CONTAINER` / `POSTGRES_DB` / `POSTGRES_USER`
 - `SCREENSHOT_OUT_DIR` — defaults to `docs/assets`
+- `SCREENSHOT_LOCALES` — comma-separated, default `zh,en`. The first
+  locale that happens to be `zh` writes the canonical filename; every
+  other locale appends `-<locale>` (so adding `ja` would emit a third
+  set under `screenshot-*-ja.png`).
 
 ## Troubleshooting
 
