@@ -119,12 +119,13 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps = {}
       <aside
         className={cn(
           'bg-card border-r border-border min-h-screen flex flex-col transition-[width,transform] duration-200',
-          // Desktop: always in-flow shrink-0; width depends on collapsed.
-          'md:shrink-0 md:translate-x-0',
-          collapsed ? 'md:w-16' : 'md:w-60',
-          // Mobile: fixed off-canvas drawer at fixed width 240px, slides in.
+          // Mobile baseline: fixed off-canvas drawer at 240px wide.
           'fixed inset-y-0 left-0 z-40 w-60',
-          mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
+          // Desktop (md+): drop fixed so the aside re-enters the flex flow,
+          // shrinks to its own width, and pushes main content to the right.
+          'md:static md:z-auto md:translate-x-0 md:shrink-0 md:inset-auto',
+          collapsed ? 'md:w-16' : 'md:w-60',
         )}
         data-collapsed={collapsed ? 'true' : 'false'}
       >
