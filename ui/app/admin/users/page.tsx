@@ -1,8 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { AdminShell } from '@/components/admin/AdminShell';
-import { DataTable, Column } from '@/components/admin/DataTable';
+import { DataTableV2 } from '@/components/admin/DataTable';
 import { Modal } from '@/components/admin/Modal';
+import { Button } from '@/components/ui/button';
 import { api, safe, fmtCNY, fmtDate } from '@/lib/api';
 
 interface EndUser {
@@ -16,33 +18,27 @@ interface EndUser {
   created_at: string;
 }
 
-const PAGE_SIZE = 20;
+const FETCH_LIMIT = 500;
 
 export default function UsersPage() {
   const [rows, setRows] = useState<EndUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
-  const [q, setQ] = useState('');
   const [editing, setEditing] = useState<EndUser | null>(null);
   const [quotaInput, setQuotaInput] = useState('');
   const [busy, setBusy] = useState(false);
 
-  async function refresh(p: number = page, query: string = q) {
+  async function refresh() {
     setLoading(true);
     const r = await safe(
-      api<{ data: EndUser[] }>(`/admin/end-users?limit=${PAGE_SIZE}&offset=${p * PAGE_SIZE}&q=${encodeURIComponent(query)}`),
+      api<{ data: EndUser[] }>(`/admin/end-users?limit=${FETCH_LIMIT}&offset=0`),
       { data: [] },
     );
     setRows(r.data || []);
     setLoading(false);
   }
-  useEffect(() => { refresh(0, ''); /* eslint-disable-next-line */ }, []);
-
-  function search(e: React.FormEvent) {
-    e.preventDefault();
-    setPage(0);
-    refresh(0, q);
-  }
+  useEffect(() => {
+    refresh();
+  }, []);
 
   async function setStatus(u: EndUser, status: 'active' | 'suspended') {
     if (!confirm(`确定 ${status === 'suspended' ? '停用' : '启用'} ${u.email}？`)) return;
@@ -56,6 +52,26 @@ export default function UsersPage() {
       alert(`操作失败：${e.message}`);
       refresh();
     }
+  }
+
+  async function bulkSetStatus(users: EndUser[], status: 'active' | 'suspended') {
+    const label = status === 'suspended' ? '停用' : '启用';
+    if (!confirm(`${label} 选中的 ${users.length} 个用户？`)) return;
+    let ok = 0;
+    let fail = 0;
+    for (const u of users) {
+      try {
+        await api(
+          `/admin/end-users/${u.id}/${status === 'suspended' ? 'suspend' : 'activate'}`,
+          { method: 'POST' },
+        );
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    alert(`${label}完成：成功 ${ok}，失败 ${fail}`);
+    refresh();
   }
 
   function startEditQuota(u: EndUser) {
@@ -81,64 +97,159 @@ export default function UsersPage() {
     }
   }
 
-  const columns: Column<EndUser>[] = [
-    { key: 'id', header: 'ID', render: (u) => <span className="font-mono text-xs text-muted-foreground">#{u.id}</span> },
-    { key: 'email', header: '邮箱', render: (u) => (
-      <div>
-        <div className="text-foreground">{u.email}</div>
-        {u.display_name && <div className="text-xs text-muted-foreground">{u.display_name}</div>}
-      </div>
-    ) },
-    { key: 'group', header: '分组', render: (u) => <span className="text-xs text-muted-foreground">{u.group_name}</span> },
-    { key: 'created', header: '注册时间', render: (u) => <span className="text-xs text-muted-foreground">{fmtDate(u.created_at)}</span> },
-    { key: 'balance', header: '余额 / 已用', render: (u) => (
-      <div className="text-xs">
-        <div>{fmtCNY(u.quota_cents - u.used_quota_cents)} 余</div>
-        <div className="text-muted-foreground">{fmtCNY(u.used_quota_cents)} 已用</div>
-      </div>
-    ) },
-    { key: 'status', header: '状态', render: (u) => (
-      <span className={
-        'text-xs px-2 py-0.5 rounded ' +
-        (u.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
-         u.status === 'suspended' ? 'bg-rose-100 text-rose-700' :
-         'bg-muted text-muted-foreground')
-      }>{u.status}</span>
-    ) },
-    { key: 'ops', header: '操作', render: (u) => (
-      <div className="flex gap-2 text-xs">
-        <button onClick={() => startEditQuota(u)} className="text-brand-700 hover:underline">额度</button>
-        {u.status === 'active' ? (
-          <button onClick={() => setStatus(u, 'suspended')} className="text-rose-600 hover:underline">停用</button>
-        ) : (
-          <button onClick={() => setStatus(u, 'active')} className="text-emerald-700 hover:underline">启用</button>
-        )}
-      </div>
-    ) },
-  ];
+  const columns = useMemo<ColumnDef<EndUser, any>[]>(
+    () => [
+      {
+        id: 'select',
+        enableSorting: false,
+        header: ({ table }) => (
+          <input
+            type="checkbox"
+            aria-label="全选当前页"
+            checked={table.getIsAllPageRowsSelected()}
+            ref={(el) => {
+              if (el) el.indeterminate = !table.getIsAllPageRowsSelected() && table.getIsSomePageRowsSelected();
+            }}
+            onChange={(e) => table.toggleAllPageRowsSelected(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-input cursor-pointer"
+          />
+        ),
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            aria-label="选中行"
+            checked={row.getIsSelected()}
+            onChange={(e) => row.toggleSelected(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-input cursor-pointer"
+          />
+        ),
+        size: 32,
+      },
+      {
+        accessorKey: 'id',
+        header: 'ID',
+        cell: ({ row }) => (
+          <span className="font-mono text-xs text-muted-foreground">#{row.original.id}</span>
+        ),
+      },
+      {
+        accessorKey: 'email',
+        header: '邮箱',
+        cell: ({ row }) => {
+          const u = row.original;
+          return (
+            <div>
+              <div className="text-foreground">{u.email}</div>
+              {u.display_name && (
+                <div className="text-xs text-muted-foreground">{u.display_name}</div>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: 'group_name',
+        header: '分组',
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground">{row.original.group_name}</span>
+        ),
+      },
+      {
+        accessorKey: 'created_at',
+        header: '注册时间',
+        cell: ({ row }) => (
+          <span className="text-xs text-muted-foreground">{fmtDate(row.original.created_at)}</span>
+        ),
+      },
+      {
+        id: 'balance',
+        header: '余额 / 已用',
+        accessorFn: (u) => u.quota_cents - u.used_quota_cents,
+        cell: ({ row }) => {
+          const u = row.original;
+          return (
+            <div className="text-xs">
+              <div>{fmtCNY(u.quota_cents - u.used_quota_cents)} 余</div>
+              <div className="text-muted-foreground">{fmtCNY(u.used_quota_cents)} 已用</div>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: 'status',
+        header: '状态',
+        cell: ({ row }) => {
+          const s = row.original.status;
+          return (
+            <span
+              className={
+                'text-xs px-2 py-0.5 rounded ' +
+                (s === 'active'
+                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                  : s === 'suspended'
+                  ? 'bg-rose-500/10 text-rose-700 dark:text-rose-400'
+                  : 'bg-muted text-muted-foreground')
+              }
+            >
+              {s}
+            </span>
+          );
+        },
+      },
+      {
+        id: 'ops',
+        header: '操作',
+        enableSorting: false,
+        cell: ({ row }) => {
+          const u = row.original;
+          return (
+            <div className="flex gap-2 text-xs">
+              <button
+                onClick={() => startEditQuota(u)}
+                className="text-primary hover:underline"
+              >
+                额度
+              </button>
+              {u.status === 'active' ? (
+                <button
+                  onClick={() => setStatus(u, 'suspended')}
+                  className="text-rose-600 hover:underline"
+                >
+                  停用
+                </button>
+              ) : (
+                <button
+                  onClick={() => setStatus(u, 'active')}
+                  className="text-emerald-700 hover:underline"
+                >
+                  启用
+                </button>
+              )}
+            </div>
+          );
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   return (
     <AdminShell
       title="终端用户"
-      subtitle={`你的店铺已注册用户（每页 ${PAGE_SIZE} 条）`}
-      actions={
-        <form onSubmit={search} className="flex gap-2">
-          <input
-            placeholder="按邮箱搜索…" value={q} onChange={(e) => setQ(e.target.value)}
-            className="px-3 py-1.5 rounded-md border border-input text-sm w-56" />
-          <button className="px-3 py-1.5 rounded-md bg-accent text-white text-sm hover:bg-foreground">搜索</button>
-        </form>
-      }
+      subtitle={`你的店铺已注册用户（点列头排序，搜索 + 选中支持批量操作）`}
     >
-      <DataTable
-        rows={rows}
+      <DataTableV2<EndUser>
         columns={columns}
-        keyFn={(u) => u.id}
+        data={rows}
         loading={loading}
-        empty={q ? `没有匹配 "${q}" 的用户` : '暂无用户'}
-        page={page}
-        pageSize={PAGE_SIZE}
-        onPage={(p) => { setPage(p); refresh(p, q); }}
+        searchKey="email"
+        searchPlaceholder="按邮箱搜索…"
+        emptyMessage="暂无用户"
+        bulkActions={[
+          { label: '批量停用', onClick: (sel) => bulkSetStatus(sel, 'suspended'), variant: 'outline' },
+          { label: '批量启用', onClick: (sel) => bulkSetStatus(sel, 'active'), variant: 'outline' },
+        ]}
       />
 
       <Modal
@@ -147,25 +258,34 @@ export default function UsersPage() {
         title={editing ? `调整额度 — ${editing.email}` : ''}
         footer={
           <>
-            <button onClick={() => setEditing(null)}
-              className="px-4 py-1.5 rounded-md border border-input text-sm">取消</button>
-            <button onClick={saveQuota} disabled={busy}
-              className="px-4 py-1.5 rounded-md bg-brand-600 text-white text-sm disabled:opacity-50">
+            <Button variant="outline" size="sm" onClick={() => setEditing(null)}>
+              取消
+            </Button>
+            <Button size="sm" onClick={saveQuota} disabled={busy}>
               {busy ? '保存中…' : '保存'}
-            </button>
+            </Button>
           </>
         }
       >
         {editing && (
           <div className="space-y-3 text-sm">
             <div className="text-xs text-muted-foreground">
-              当前剩余 <b>{fmtCNY(editing.quota_cents - editing.used_quota_cents)}</b>，已用 {fmtCNY(editing.used_quota_cents)}。
+              当前剩余 <b>{fmtCNY(editing.quota_cents - editing.used_quota_cents)}</b>，已用{' '}
+              {fmtCNY(editing.used_quota_cents)}。
             </div>
             <div>
-              <div className="text-xs font-medium text-muted-foreground mb-1">设为新剩余额度（分）</div>
-              <input type="number" value={quotaInput} onChange={(e) => setQuotaInput(e.target.value)}
-                className="w-full px-3 py-2 rounded-md border border-input" />
-              <div className="text-xs text-muted-foreground mt-0.5">= {fmtCNY(Number(quotaInput) || 0)}</div>
+              <div className="text-xs font-medium text-muted-foreground mb-1">
+                设为新剩余额度（分）
+              </div>
+              <input
+                type="number"
+                value={quotaInput}
+                onChange={(e) => setQuotaInput(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-input bg-background"
+              />
+              <div className="text-xs text-muted-foreground mt-0.5">
+                = {fmtCNY(Number(quotaInput) || 0)}
+              </div>
             </div>
           </div>
         )}

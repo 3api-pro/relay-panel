@@ -1,7 +1,18 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { AdminShell } from '@/components/admin/AdminShell';
+import { Modal } from '@/components/admin/Modal';
+import { ChannelKeyRow, ChannelKey } from '@/components/admin/ChannelKeyRow';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { api, auth } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 interface Channel {
   id: number;
@@ -15,6 +26,10 @@ interface Channel {
   models: string | null;
   group_access: string;
   key_preview: string | null;
+  keys: ChannelKey[];
+  keys_total: number;
+  keys_active: number;
+  current_key_idx: number;
   created_at: string;
 }
 
@@ -27,59 +42,92 @@ const DEFAULT_FORM = {
 };
 
 const TYPES = [
-  { v: 'byok-claude',         label: 'BYOK Claude (Anthropic 兼容)' },
-  { v: 'byok-openai-compat',  label: 'BYOK OpenAI 兼容' },
-  { v: 'byok-other',          label: 'BYOK 其他' },
-  { v: 'wholesale-3api',      label: '3API Wholesale (我方批发)' },
+  { v: 'byok-claude', label: 'BYOK Claude (Anthropic 兼容)' },
+  { v: 'byok-openai-compat', label: 'BYOK OpenAI 兼容' },
+  { v: 'byok-other', label: 'BYOK 其他' },
+  { v: 'wholesale-3api', label: '3API Wholesale (我方批发)' },
 ];
 
 export default function AdminChannelsPage() {
   const router = useRouter();
   const [list, setList] = useState<Channel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [form, setForm] = useState({ ...DEFAULT_FORM });
   const [editing, setEditing] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
+  // add-key modal
+  const [addKeyFor, setAddKeyFor] = useState<Channel | null>(null);
+  const [newKey, setNewKey] = useState('');
+  const [addBusy, setAddBusy] = useState(false);
+
+  // bulk replace modal
+  const [bulkFor, setBulkFor] = useState<Channel | null>(null);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+
   useEffect(() => {
-    if (!auth.hasToken()) { router.push('/admin/login'); return; }
+    if (!auth.hasToken()) {
+      router.push('/admin/login');
+      return;
+    }
     refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function refresh() {
     setErr('');
+    setLoading(true);
     try {
       const r = await api<{ data: Channel[] }>('/admin/channels');
       setList(r.data);
     } catch (e: any) {
       setErr(e.message);
-      if (e.message.includes('401')) { auth.clearToken(); router.push('/admin/login'); }
+      if (e.message.includes('401')) {
+        auth.clearToken();
+        router.push('/admin/login');
+      }
+    } finally {
+      setLoading(false);
     }
   }
 
   function clearForm() {
     setForm({ ...DEFAULT_FORM });
     setEditing(false);
-    setMsg(''); setErr('');
+    setFormOpen(false);
+    setMsg('');
+    setErr('');
+  }
+
+  function startNew() {
+    setForm({ ...DEFAULT_FORM });
+    setEditing(false);
+    setFormOpen(true);
+    setMsg('');
+    setErr('');
   }
 
   function startEdit(c: Channel) {
     setForm({ id: c.id, name: c.name, base_url: c.base_url, api_key: '', type: c.type });
     setEditing(true);
+    setFormOpen(true);
     setMsg(`正在编辑 #${c.id}; api_key 留空则不变`);
+    setErr('');
   }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true); setErr(''); setMsg('');
+    setBusy(true);
+    setErr('');
+    setMsg('');
     try {
       if (editing) {
-        const body: any = {
-          name: form.name,
-          base_url: form.base_url,
-          type: form.type,
-        };
+        const body: any = { name: form.name, base_url: form.base_url, type: form.type };
         if (form.api_key) body.api_key = form.api_key;
         await api(`/admin/channels/${form.id}`, {
           method: 'PATCH',
@@ -108,164 +156,433 @@ export default function AdminChannelsPage() {
   }
 
   async function setDefault(id: number) {
-    setErr(''); setMsg('');
+    setErr('');
+    setMsg('');
     try {
       await api(`/admin/channels/${id}/set-default`, { method: 'POST' });
       setMsg(`✓ 已设 #${id} 为默认`);
       refresh();
-    } catch (e: any) { setErr(e.message); }
+    } catch (e: any) {
+      setErr(e.message);
+    }
   }
 
   async function remove(id: number) {
     if (!confirm(`确定删除 channel #${id}? 不可恢复。`)) return;
-    setErr(''); setMsg('');
+    setErr('');
+    setMsg('');
     try {
       await api(`/admin/channels/${id}`, { method: 'DELETE' });
       setMsg(`✓ 已删除 #${id}`);
       refresh();
-    } catch (e: any) { setErr(e.message); }
+    } catch (e: any) {
+      setErr(e.message);
+    }
   }
 
-  function logout() { auth.clearToken(); router.push('/'); }
+  function toggleExpand(id: number) {
+    setExpanded((m) => ({ ...m, [id]: !m[id] }));
+  }
+
+  async function deleteKey(c: Channel, idx: number) {
+    if (!confirm(`删除 channel #${c.id} 的第 ${idx} 个 key? 不可恢复。`)) return;
+    try {
+      await api(`/admin/channels/${c.id}/keys/${idx}`, { method: 'DELETE' });
+      setMsg(`✓ 已删除 #${c.id} key #${idx}`);
+      refresh();
+    } catch (e: any) {
+      setErr(e.message);
+    }
+  }
+
+  async function submitAddKey() {
+    if (!addKeyFor || !newKey || newKey.length < 8) return;
+    setAddBusy(true);
+    setErr('');
+    try {
+      await api(`/admin/channels/${addKeyFor.id}/keys`, {
+        method: 'POST',
+        body: JSON.stringify({ key: newKey }),
+      });
+      setMsg(`✓ 已为 #${addKeyFor.id} 添加 key`);
+      setAddKeyFor(null);
+      setNewKey('');
+      refresh();
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setAddBusy(false);
+    }
+  }
+
+  async function submitBulkReplace() {
+    if (!bulkFor) return;
+    const keys = bulkText
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (keys.length === 0) {
+      if (!confirm('确定清空所有 key？(这会让该 channel 失效)')) return;
+    }
+    setBulkBusy(true);
+    setErr('');
+    try {
+      await api(`/admin/channels/${bulkFor.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ keys }),
+      });
+      setMsg(`✓ #${bulkFor.id} 已替换为 ${keys.length} 个 key`);
+      setBulkFor(null);
+      setBulkText('');
+      refresh();
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   return (
-    <main className="min-h-screen bg-muted">
-      <header className="bg-accent text-white">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="text-xl font-semibold">3API Admin</div>
-          <nav className="flex items-center gap-5 text-sm">
-            <a href="/admin/dashboard/" className="hover:text-amber-400">客户</a>
-            <a href="/admin/channels/" className="text-amber-400">上游 Channel</a>
-            <button onClick={logout} className="hover:text-amber-400">退出</button>
-          </nav>
+    <AdminShell
+      title="上游 Channel"
+      subtitle="配上游 sk-key + base_url；同一 channel 可挂多 key 轮询"
+      actions={
+        <Button size="sm" onClick={startNew} className="gap-1">
+          <Plus className="h-4 w-4" />
+          添加 channel
+        </Button>
+      }
+    >
+      {/* status / errors */}
+      {(msg || err) && (
+        <div
+          className={cn(
+            'mb-4 px-4 py-2 rounded-md border text-sm',
+            err
+              ? 'border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400'
+              : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+          )}
+        >
+          {err || msg}
         </div>
-      </header>
+      )}
 
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold">上游 Channel</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            配上游 sk-key + base_url, 默认 channel 用于客户调 /v1/messages 转发。
-            一个 tenant 可配多个, 切换默认即可换上游。
+      {/* edit/create modal */}
+      <Modal
+        open={formOpen}
+        onClose={clearForm}
+        title={editing ? `编辑 channel #${form.id}` : '添加 channel'}
+        width="lg"
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={clearForm}>
+              取消
+            </Button>
+            <Button
+              size="sm"
+              onClick={(e) => onSubmit(e as any)}
+              disabled={busy || !form.name || !form.base_url || (!editing && !form.api_key)}
+            >
+              {busy ? '提交中…' : editing ? '保存修改' : '+ 添加'}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={onSubmit} className="grid grid-cols-2 gap-4">
+          <div className="col-span-1 space-y-1.5">
+            <Label>名称</Label>
+            <Input
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="例: 主上游"
+            />
+          </div>
+          <div className="col-span-1 space-y-1.5">
+            <Label>类型</Label>
+            <select
+              value={form.type}
+              onChange={(e) => setForm({ ...form, type: e.target.value })}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {TYPES.map((t) => (
+                <option key={t.v} value={t.v}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label>Base URL</Label>
+            <Input
+              type="url"
+              required
+              value={form.base_url}
+              onChange={(e) => setForm({ ...form, base_url: e.target.value })}
+              placeholder="https://api.llmapi.pro/v1"
+              className="font-mono text-sm"
+            />
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label>
+              API Key{' '}
+              {editing && (
+                <span className="text-xs text-muted-foreground font-normal">
+                  (留空 = 不修改；新增更多 key 可在保存后在 channel 行展开添加)
+                </span>
+              )}
+            </Label>
+            <Input
+              type="password"
+              required={!editing}
+              value={form.api_key}
+              onChange={(e) => setForm({ ...form, api_key: e.target.value })}
+              placeholder="sk-..."
+              className="font-mono text-sm"
+              minLength={editing ? 0 : 8}
+            />
+          </div>
+          {/* hidden submit to enable Enter-key submit */}
+          <button type="submit" className="hidden" />
+        </form>
+      </Modal>
+
+      {/* channel list */}
+      {loading ? (
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-20 w-full" />
+          ))}
+        </div>
+      ) : list.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center text-sm text-muted-foreground">
+            暂无 channel。点右上 + 添加一个上游，客户的 /v1/messages 才能转发。
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {list.map((c) => {
+            const isOpen = expanded[c.id] || false;
+            return (
+              <Card key={c.id} className="overflow-hidden">
+                <CardHeader className="py-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button
+                      onClick={() => toggleExpand(c.id)}
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label={isOpen ? '收起' : '展开'}
+                    >
+                      {isOpen ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                    </button>
+                    <CardTitle className="text-base">{c.name}</CardTitle>
+                    {c.is_default && (
+                      <Badge variant="default" className="h-5 text-[10px]">
+                        默认
+                      </Badge>
+                    )}
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'h-5 text-[10px]',
+                        c.status === 'active'
+                          ? 'border-emerald-500/40 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10'
+                          : 'border-muted text-muted-foreground',
+                      )}
+                    >
+                      {c.status}
+                    </Badge>
+                    <Badge variant="secondary" className="h-5 text-[10px]">
+                      {c.type}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      key {c.keys_active}/{c.keys_total} · 当前 #
+                      {c.current_key_idx ?? 0}
+                    </span>
+                    <div className="flex-1" />
+                    <div className="flex items-center gap-1.5 text-xs">
+                      {!c.is_default && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2"
+                          onClick={() => setDefault(c.id)}
+                        >
+                          设为默认
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2"
+                        onClick={() => startEdit(c)}
+                      >
+                        编辑
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-rose-600 hover:bg-rose-500/10"
+                        onClick={() => remove(c.id)}
+                      >
+                        删除
+                      </Button>
+                    </div>
+                  </div>
+                  <CardDescription className="font-mono text-xs ml-7 pt-1">
+                    {c.base_url}
+                  </CardDescription>
+                </CardHeader>
+                {isOpen && (
+                  <CardContent className="pt-0 pb-4">
+                    <div className="ml-7 space-y-2.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          上游 keys ({c.keys?.length ?? 0})
+                        </span>
+                        <div className="flex-1" />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 gap-1"
+                          onClick={() => {
+                            setAddKeyFor(c);
+                            setNewKey('');
+                          }}
+                        >
+                          <Plus className="h-3 w-3" />
+                          添加 key
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2"
+                          onClick={() => {
+                            setBulkFor(c);
+                            setBulkText('');
+                          }}
+                        >
+                          批量替换
+                        </Button>
+                      </div>
+                      {(!c.keys || c.keys.length === 0) && (
+                        <div className="text-xs text-muted-foreground italic px-3 py-2">
+                          该 channel 没有 key（仅遗留 api_key 字段{' '}
+                          {c.key_preview ?? '—'}，建议添加新 key）
+                        </div>
+                      )}
+                      <div className="space-y-1.5">
+                        {c.keys?.map((k, idx) => (
+                          <ChannelKeyRow
+                            key={idx}
+                            idx={idx}
+                            current={idx === (c.current_key_idx ?? 0)}
+                            k={k}
+                            onDelete={() => deleteKey(c, idx)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add-key modal */}
+      <Modal
+        open={addKeyFor != null}
+        onClose={() => {
+          setAddKeyFor(null);
+          setNewKey('');
+        }}
+        title={addKeyFor ? `为 ${addKeyFor.name} 添加新 key` : ''}
+        footer={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setAddKeyFor(null);
+                setNewKey('');
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              size="sm"
+              onClick={submitAddKey}
+              disabled={addBusy || newKey.length < 8}
+            >
+              {addBusy ? '提交中…' : '+ 添加'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-2">
+          <Label>新 key (≥8 字符)</Label>
+          <Input
+            type="password"
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
+            placeholder="sk-..."
+            className="font-mono"
+            autoFocus
+          />
+          <p className="text-xs text-muted-foreground">
+            添加后立即生效，加入轮询池。状态默认 active。
           </p>
         </div>
+      </Modal>
 
-        <section className="bg-card rounded-lg border border-border p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold">{editing ? `编辑 channel #${form.id}` : '添加 channel'}</h2>
-            {editing && (
-              <button onClick={clearForm} className="text-sm text-muted-foreground hover:text-foreground">
-                取消编辑
-              </button>
-            )}
-          </div>
-          <form onSubmit={onSubmit} className="grid grid-cols-2 gap-4">
-            <label className="block col-span-1">
-              <div className="text-sm font-medium text-foreground mb-1">名称</div>
-              <input
-                type="text" required value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="例: 主上游"
-                className="w-full px-3 py-2 rounded-md border border-input focus:border-brand-500 focus:outline-none"
-              />
-            </label>
-            <label className="block col-span-1">
-              <div className="text-sm font-medium text-foreground mb-1">类型</div>
-              <select
-                value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value })}
-                className="w-full px-3 py-2 rounded-md border border-input focus:border-brand-500 focus:outline-none"
-              >
-                {TYPES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}
-              </select>
-            </label>
-            <label className="block col-span-2">
-              <div className="text-sm font-medium text-foreground mb-1">Base URL</div>
-              <input
-                type="url" required value={form.base_url}
-                onChange={(e) => setForm({ ...form, base_url: e.target.value })}
-                placeholder="https://api.llmapi.pro/v1"
-                className="w-full px-3 py-2 rounded-md border border-input focus:border-brand-500 focus:outline-none font-mono text-sm"
-              />
-            </label>
-            <label className="block col-span-2">
-              <div className="text-sm font-medium text-foreground mb-1">
-                API Key {editing && <span className="text-xs text-muted-foreground">(留空 = 不修改)</span>}
-              </div>
-              <input
-                type="password" required={!editing} value={form.api_key}
-                onChange={(e) => setForm({ ...form, api_key: e.target.value })}
-                placeholder="sk-..."
-                className="w-full px-3 py-2 rounded-md border border-input focus:border-brand-500 focus:outline-none font-mono text-sm"
-                minLength={editing ? 0 : 8}
-              />
-            </label>
-            <div className="col-span-2 flex items-center justify-between">
-              <div className="text-sm">
-                {msg && <span className="text-emerald-600">{msg}</span>}
-                {err && <span className="text-red-600">{err}</span>}
-              </div>
-              <button
-                type="submit" disabled={busy}
-                className="px-5 py-2 rounded-md bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
-              >
-                {busy ? '提交中…' : editing ? '保存修改' : '+ 添加 channel'}
-              </button>
-            </div>
-          </form>
-        </section>
-
-        <section className="bg-card rounded-lg border border-border">
-          <div className="px-6 py-4 border-b border-border">
-            <h2 className="font-semibold">已配置 ({list.length})</h2>
-          </div>
-          {list.length === 0 ? (
-            <div className="px-6 py-12 text-center text-muted-foreground text-sm">
-              暂无 channel。添加一个上游, 客户的 /v1/messages 才能转发。
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="text-left text-muted-foreground border-b border-border">
-                <tr>
-                  <th className="px-4 py-2">默认</th>
-                  <th>名称</th>
-                  <th>类型</th>
-                  <th>Base URL</th>
-                  <th>Key</th>
-                  <th>状态</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((c) => (
-                  <tr key={c.id} className="border-b border-border/50">
-                    <td className="px-4 py-3">
-                      {c.is_default ? (
-                        <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">默认</span>
-                      ) : (
-                        <button onClick={() => setDefault(c.id)} className="text-xs text-brand-600 hover:underline">设为默认</button>
-                      )}
-                    </td>
-                    <td className="font-medium">{c.name}</td>
-                    <td className="text-muted-foreground">{c.type}</td>
-                    <td className="font-mono text-xs text-muted-foreground">{c.base_url}</td>
-                    <td className="font-mono text-xs text-muted-foreground">{c.key_preview ?? '—'}</td>
-                    <td>
-                      <span className={`text-xs px-2 py-0.5 rounded ${c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
-                        {c.status}
-                      </span>
-                    </td>
-                    <td className="space-x-2 whitespace-nowrap">
-                      <button onClick={() => startEdit(c)} className="text-brand-600 hover:underline text-xs">编辑</button>
-                      <button onClick={() => remove(c.id)} className="text-red-600 hover:underline text-xs">删除</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-      </div>
-    </main>
+      {/* Bulk-replace modal */}
+      <Modal
+        open={bulkFor != null}
+        onClose={() => {
+          setBulkFor(null);
+          setBulkText('');
+        }}
+        title={bulkFor ? `批量替换 ${bulkFor.name} 的 keys` : ''}
+        width="lg"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setBulkFor(null);
+                setBulkText('');
+              }}
+            >
+              取消
+            </Button>
+            <Button size="sm" onClick={submitBulkReplace} disabled={bulkBusy}>
+              {bulkBusy ? '替换中…' : '替换'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-2">
+          <Label>一行一个 key（空行忽略）</Label>
+          <textarea
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            rows={10}
+            placeholder={'sk-key1...\nsk-key2...\nsk-key3...'}
+            className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm font-mono"
+          />
+          <p className="text-xs text-rose-700 dark:text-rose-400">
+            ⚠ 此操作会清空现有 keys[] 并替换为上面的列表（按顺序）。current_key_idx
+            会重置为 0。
+          </p>
+        </div>
+      </Modal>
+    </AdminShell>
   );
 }

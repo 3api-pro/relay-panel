@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, BarChart3, Package, ShoppingCart, Users,
-  Plug, Wallet, Palette, CreditCard, Settings,
+  Plug, Wallet, Palette, CreditCard, Settings, SlidersHorizontal,
   ChevronDown, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -39,7 +39,8 @@ const GROUPS: NavGroup[] = [
   {
     id: 'settings', title: '设置',
     items: [
-      { href: '/admin/branding',       label: '品牌',     Icon: Palette },
+      { href: '/admin/branding',       label: '品牌',         Icon: Palette },
+      { href: '/admin/system-setting', label: '系统设置',      Icon: SlidersHorizontal },
       { href: '/admin/payment-config', label: '收款配置', Icon: CreditCard },
       { href: '/admin/settings',       label: '账号设置', Icon: Settings },
     ],
@@ -48,6 +49,14 @@ const GROUPS: NavGroup[] = [
 
 const COLLAPSE_KEY  = '3api_admin_sidebar_collapsed';
 const GROUP_KEY     = '3api_admin_sidebar_groups';
+
+/** Map nav hrefs → driver.js tour anchor names. */
+const TOUR_ANCHORS: Record<string, string> = {
+  '/admin/plans':     'sidebar-plans',
+  '/admin/channels':  'sidebar-channels',
+  '/admin/wholesale': 'sidebar-wholesale',
+  '/admin/branding':  'sidebar-branding',
+};
 
 export function Sidebar() {
   const pathname = usePathname() || '';
@@ -127,6 +136,7 @@ export function Sidebar() {
                       key={it.href}
                       href={it.href}
                       title={collapsed ? it.label : undefined}
+                      data-tour={TOUR_ANCHORS[it.href]}
                       className={cn(
                         'flex items-center gap-3 rounded-md text-sm transition-colors',
                         collapsed ? 'justify-center px-2 py-2' : 'px-3 py-2',
