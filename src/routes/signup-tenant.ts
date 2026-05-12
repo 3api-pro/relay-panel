@@ -5,6 +5,12 @@
  * tenant + reseller_admin. **slug is auto-generated** (market convention —
  * Vercel/Supabase/Netlify style); admins can rename it later from settings.
  *
+ * On success we **auto-sign an admin JWT and set the HttpOnly cookie**, so
+ * the browser is logged in immediately and can be redirected to /admin on
+ * the root domain. The response carries `redirect_to: '/admin'` and
+ * `store_url` (the customer-facing subdomain). No `login_url` — admin lives
+ * on the root domain; the subdomain is the storefront for end users.
+ *
  * Disabled by default. Set TENANT_SELF_SIGNUP=on to enable. When off the
  * route returns 503; operators on private deployments leave it that way.
  */
@@ -13,6 +19,8 @@ import { withTransaction, query } from '../services/database';
 import { createAdminForTenant } from '../services/auth';
 import { seedPlansForTenant, seedBrandConfigForTenant, ensureWholesaleBalance } from '../services/plans-seed';
 import { RateLimiter } from '../services/rate-limit';
+import { signSession } from '../services/jwt';
+import { setAdminCookie, ADMIN_TTL_SECONDS } from './auth-admin';
 import { config } from '../config';
 import { logger } from '../services/logger';
 
@@ -64,7 +72,6 @@ async function generateUniqueSlug(maxTries = 12): Promise<string> {
     );
     if (dup.length === 0) return candidate;
   }
-  // Fallback: pure-random 12-char base36
   return Math.random().toString(36).slice(2, 14);
 }
 
@@ -112,7 +119,6 @@ signupTenantRouter.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  // slug is optional; if provided, validate. Otherwise auto-generate.
   let slug: string;
   if (typeof maybeSlug === 'string' && maybeSlug.length > 0) {
     const normalized = maybeSlug.toLowerCase();
@@ -164,9 +170,16 @@ signupTenantRouter.post('/', async (req: Request, res: Response) => {
     const storeUrl = config.saasDomain
       ? `https://${result.tenant.slug}.${config.saasDomain}/`
       : `/`;
-    const loginUrl = config.saasDomain
-      ? `https://${result.tenant.slug}.${config.saasDomain}/admin/login/`
-      : `/admin/login/`;
+
+    // Auto-sign admin into the freshly created tenant — the browser walks
+    // straight into /admin without having to re-enter credentials.
+    const token = signSession({
+      type: 'admin',
+      adminId: result.adminId,
+      tenantId: result.tenant.id,
+      email: admin_email.toLowerCase(),
+    });
+    setAdminCookie(res, token);
 
     logger.info(
       { tenantId: result.tenant.id, slug: result.tenant.slug, adminId: result.adminId, ip, autoSlug: !maybeSlug },
@@ -177,7 +190,9 @@ signupTenantRouter.post('/', async (req: Request, res: Response) => {
       tenant: { id: result.tenant.id, slug: result.tenant.slug },
       admin: { id: result.adminId, email: admin_email.toLowerCase() },
       store_url: storeUrl,
-      login_url: loginUrl,
+      redirect_to: '/admin',
+      token,
+      expires_in_seconds: ADMIN_TTL_SECONDS,
       slug_was_auto: !maybeSlug,
     });
   } catch (err: any) {

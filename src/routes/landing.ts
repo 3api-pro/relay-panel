@@ -175,7 +175,7 @@ curl -fsSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/install.s
 const NOT_FOUND_HTML = `<!doctype html>
 <html lang="zh"><head><meta charset="utf-8"><title>404 — 3api.pro</title>
 <style>body{font-family:-apple-system,sans-serif;background:#f8fafc;color:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}.b{text-align:center;padding:32px}.t{font-size:64px;font-weight:700;color:#0d9488;margin:0}p{color:#475569;margin:12px 0 24px}a{color:#0f766e;text-decoration:none}</style>
-</head><body><div class="b"><div class="t">404</div><p>这是 3api.pro 根域。<br>分销面板要走子域 (例如 acme.3api.pro)。</p>
+</head><body><div class="b"><div class="t">404</div><p>这是 3api.pro 根域。<br>站长登录请走 /admin/login，店铺访客请直接访问店铺地址 (例如 acme.3api.pro)。</p>
 <p><a href="/">返回首页</a> · <a href="https://github.com/3api-pro/relay-panel">GitHub</a></p></div></body></html>`;
 
 /**
@@ -192,6 +192,9 @@ const NOT_FOUND_HTML = `<!doctype html>
 const ROOT_DOMAIN_ALLOW: Array<RegExp> = [
   /^\/health$/,
   /^\/create\/?$/,                      // tenant signup form (UI page)
+  /^\/login\/?$/,                       // reseller-admin login (UI page)
+  /^\/admin(\/.*)?$/,                   // reseller admin console (UI + API)
+  /^\/api\/admin(\/.*)?$/,              // admin API (login + authed routes)
   /^\/api\/signup-tenant(\/.*)?$/,      // public tenant signup API
   /^\/api\/health$/,                    // alias used by some monitors
   /^\/_next\//,                         // Next.js static assets

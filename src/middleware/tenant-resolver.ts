@@ -5,8 +5,17 @@ import { logger } from '../services/logger';
 
 /**
  * Resolve req.tenantId.
+ *
  * - single mode: always tenantId = 1
- * - multi mode: parse Host header, lookup by slug or custom_domain
+ * - multi mode: parse Host header, look up by slug or custom_domain
+ *
+ * **Root-domain admin path is allowed**: hosts that equal the SaaS apex
+ * (3api.pro / www.3api.pro) are the *reseller's own console* — the admin
+ * authenticates with email+password, and tenant_id is carried in the JWT.
+ * For these requests we leave req.tenantId = null and let the admin auth
+ * route (login) or middleware (authed routes) populate it. Storefront and
+ * /v1 routes that strictly need a tenant slug will still 404 via a
+ * downstream guard if req.tenantId is null.
  */
 export async function tenantResolver(
   req: Request,
@@ -29,8 +38,11 @@ export async function tenantResolver(
   let customDomain: string | null = null;
 
   if (saasDomain && (host === saasDomain || host === `www.${saasDomain}`)) {
-    res.status(404).json({ error: { type: 'not_found', message: 'No tenant for root domain' } });
-    return;
+    // Root-domain mode — admin console only. tenant_id comes from JWT for
+    // authed routes, or from email lookup for login. Downstream guards
+    // refuse storefront/v1 traffic without a tenant.
+    req.tenantId = null as any;
+    return next();
   }
 
   if (saasDomain && host.endsWith(`.${saasDomain}`)) {
@@ -62,4 +74,18 @@ export async function tenantResolver(
     logger.error({ err: err.message, host }, 'tenant-resolver:error');
     res.status(500).json({ error: { type: 'internal_error', message: 'Tenant resolution failed' } });
   }
+}
+
+/**
+ * Guard for routes that REQUIRE a tenant slug in the host (storefront, /v1).
+ * Returns 404 if tenant_id is null (root domain or unresolved).
+ */
+export function requireTenantHost(req: Request, res: Response, next: NextFunction): void {
+  if (!req.tenantId) {
+    res
+      .status(404)
+      .json({ error: { type: 'not_found', message: 'This endpoint requires a tenant subdomain' } });
+    return;
+  }
+  next();
 }

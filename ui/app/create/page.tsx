@@ -2,9 +2,15 @@
 /**
  * Public tenant self-signup page. Auto-generates a slug (market convention —
  * Vercel/Supabase/Netlify style). Operators can rename later from /admin/settings.
+ *
+ * On success the server has already minted an admin JWT (HttpOnly cookie) and
+ * we stash the token in localStorage for the Bearer-header path, then redirect
+ * straight into /admin on the root domain. No subdomain hop needed.
  */
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { auth } from '@/lib/api';
 
 interface Info {
   enabled: boolean;
@@ -15,10 +21,11 @@ interface Info {
 interface Done {
   tenant_slug: string;
   store_url: string;
-  login_url: string;
+  redirect_to: string;
 }
 
 export default function CreatePanelPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -43,16 +50,25 @@ export default function CreatePanelPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ admin_email: email, admin_password: password }),
+        credentials: 'same-origin',
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error?.message || `HTTP ${res.status}`);
       }
+      // Server set the HttpOnly cookie. We also stash the token in
+      // localStorage so the SDK-style Bearer path works for the
+      // dashboard's existing fetchers.
+      if (data.token) auth.setToken(data.token);
       setDone({
         tenant_slug: data.tenant.slug,
         store_url: data.store_url,
-        login_url: data.login_url,
+        redirect_to: data.redirect_to || '/admin',
       });
+      // Auto-redirect into /admin after a brief success peek.
+      setTimeout(() => {
+        router.push(data.redirect_to || '/admin');
+      }, 1500);
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -94,11 +110,11 @@ export default function CreatePanelPage() {
             </div>
             <h1 className="text-xl font-semibold">店铺创建成功</h1>
           </div>
-          <p className="text-sm text-slate-500 mb-6">你的专属子域已就绪，可以开始接客了。</p>
+          <p className="text-sm text-slate-500 mb-6">已自动登录，正在进入管理后台…</p>
 
           <div className="space-y-4">
             <div>
-              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">你的店铺地址</div>
+              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">客户访问地址（分享给你的客户）</div>
               <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 rounded-md border border-slate-200">
                 <code className="flex-1 text-sm font-mono text-slate-800 truncate">{done.store_url}</code>
                 <button onClick={() => copy(done.store_url)} className="text-xs text-teal-600 hover:text-teal-700 font-medium">
@@ -108,17 +124,17 @@ export default function CreatePanelPage() {
             </div>
 
             <div>
-              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">登录后台</div>
               <a
-                href={done.login_url}
+                href={done.redirect_to}
                 className="block w-full py-2.5 text-center rounded-md bg-teal-600 hover:bg-teal-700 text-white font-medium"
               >
-                进入管理后台 →
+                立即进入管理后台 →
               </a>
             </div>
 
             <div className="pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-1">
-              <p>· 子域名 <strong className="text-slate-700">{done.tenant_slug}</strong> 是系统自动分配，登录后可在「设置 → 店铺信息」修改</p>
+              <p>· 你管理后台在 <strong className="text-slate-700">3api.pro/admin</strong>（这个根域，就是现在）</p>
+              <p>· 客户在 <strong className="text-slate-700">{done.tenant_slug}.3api.pro</strong> 看到你的店铺；下次登录直接来 3api.pro/login</p>
               <p>· 想用自己的域名? 设置里可绑定 CNAME（v0.2 上线）</p>
             </div>
           </div>
@@ -132,7 +148,7 @@ export default function CreatePanelPage() {
       <div className="max-w-md w-full bg-white rounded-lg border border-slate-200 p-8">
         <h1 className="text-2xl font-semibold mb-1">免费开店</h1>
         <p className="text-sm text-slate-500 mb-6">
-          已有账号? <Link href="/admin/login/" className="text-teal-600 hover:text-teal-700">登录</Link>
+          已有账号? <Link href="/login/" className="text-teal-600 hover:text-teal-700">登录</Link>
         </p>
 
         <form onSubmit={onSubmit} className="space-y-4">

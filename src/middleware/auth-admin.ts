@@ -2,10 +2,32 @@ import type { Request, Response, NextFunction } from 'express';
 import { verifySession } from '../services/jwt';
 import { query } from '../services/database';
 
+const ADMIN_COOKIE_NAME = '3api_admin_token';
+
 /**
- * Validate admin JWT in Authorization: Bearer <token>.
- * Sets req.resellerAdmin for downstream admin routes.
- * Tenant scope enforced — admin can only act on their own tenant.
+ * Pull a cookie value by name from the raw Cookie header. We don't use
+ * cookie-parser to keep deps tight; admin cookie is the only one we read.
+ */
+function readCookie(header: string | undefined, name: string): string | null {
+  if (!header) return null;
+  const parts = header.split(/;\s*/);
+  for (const p of parts) {
+    const eq = p.indexOf('=');
+    if (eq < 0) continue;
+    if (p.slice(0, eq) === name) return decodeURIComponent(p.slice(eq + 1));
+  }
+  return null;
+}
+
+/**
+ * Validate admin session. Token source order:
+ *   1. Authorization: Bearer <token>   (SDK / curl)
+ *   2. Cookie: 3api_admin_token=<token>  (browser)
+ *
+ * Sets req.resellerAdmin and req.tenantId (from JWT). If tenantResolver
+ * left req.tenantId null (root domain), the JWT tenantId is authoritative.
+ * If both are set, they must match — protects against admin from tenant A
+ * authenticating to a request that resolved tenant B from the subdomain.
  */
 export async function authAdmin(
   req: Request,
@@ -13,7 +35,12 @@ export async function authAdmin(
   next: NextFunction,
 ): Promise<void> {
   const auth = req.headers.authorization;
-  const token = auth && auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : null;
+  let token: string | null = null;
+  if (auth && auth.toLowerCase().startsWith('bearer ')) {
+    token = auth.slice(7);
+  } else {
+    token = readCookie(req.headers.cookie, ADMIN_COOKIE_NAME);
+  }
   if (!token) {
     res.status(401).json({ error: { type: 'authentication_error', message: 'Missing admin token' } });
     return;
@@ -25,13 +52,17 @@ export async function authAdmin(
     return;
   }
 
-  // Tenant guard: session tenant must match resolved tenant
+  // Tenant guard: if request resolved to a subdomain tenant, it must match
+  // the admin's tenant. Root-domain requests have req.tenantId == null and
+  // adopt the JWT's tenant.
   if (req.tenantId && req.tenantId !== session.tenantId) {
     res.status(403).json({ error: { type: 'permission_error', message: 'Tenant mismatch' } });
     return;
   }
+  if (!req.tenantId) {
+    req.tenantId = session.tenantId;
+  }
 
-  // Confirm admin still exists + active
   const rows = await query<any>(
     `SELECT id, tenant_id, email, display_name, status
        FROM reseller_admin

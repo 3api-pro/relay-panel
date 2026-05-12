@@ -9,7 +9,7 @@ import express, { Router } from 'express';
 import { initDatabase } from './services/database';
 import { config } from './config';
 import { logger } from './services/logger';
-import { tenantResolver } from './middleware/tenant-resolver';
+import { tenantResolver, requireTenantHost } from './middleware/tenant-resolver';
 import { authToken } from './middleware/auth-token';
 import { relayRouter } from './routes/relay';
 import { adminAuthRouter } from './routes/auth-admin';
@@ -81,14 +81,14 @@ async function main(): Promise<void> {
   function mountApi(router: express.Router): void {
     router.use('/admin', tenantResolver, adminAuthRouter);
     router.use('/admin', tenantResolver, authAdmin, adminRouter);
-    router.use('/customer', tenantResolver, customerAuthRouter);
-    router.use('/customer', tenantResolver, authCustomer, customerRouter);
-    router.use('/v1', tenantResolver, authToken, relayRouter);
+    router.use('/customer', tenantResolver, requireTenantHost, customerAuthRouter);
+    router.use('/customer', tenantResolver, requireTenantHost, authCustomer, customerRouter);
+    router.use('/v1', tenantResolver, requireTenantHost, authToken, relayRouter);
     router.use('/platform', platformRouter);
     router.use("/signup-tenant", signupTenantRouter);
-    router.use("/storefront", tenantResolver, storefrontRouter);
+    router.use("/storefront", tenantResolver, requireTenantHost, storefrontRouter);
     // Authed storefront payment endpoints (requires tenant + JWT).
-    router.use("/storefront/payments", tenantResolver, storefrontPaymentsRouter);
+    router.use("/storefront/payments", tenantResolver, requireTenantHost, storefrontPaymentsRouter);
     // Public payment webhooks (no tenant resolution; provider posts raw).
     router.use("/payments", paymentsRouter);
   }
