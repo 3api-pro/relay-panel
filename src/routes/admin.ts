@@ -12,6 +12,7 @@ import { adminPlansRouter } from "./admin/plans";
 import { adminWholesaleRouter } from "./admin/wholesale";
 import { adminExtrasRouter } from "./admin/extras";
 import { adminSystemSettingRouter } from "./admin/system-setting";
+import { adminAffiliateRouter } from "./admin/affiliate";
 
 export const adminRouter = Router();
 
@@ -21,6 +22,8 @@ adminRouter.use('/plans', adminPlansRouter);
 adminRouter.use('/wholesale', adminWholesaleRouter);
 // /admin/system-setting — per-tenant runtime switches (P1 #10)
 adminRouter.use('/system-setting', adminSystemSettingRouter);
+// /admin/affiliate — reseller-to-reseller referral (P2 #18, v0.4)
+adminRouter.use('/affiliate', adminAffiliateRouter);
 // Extras (me / brand / orders / refund / stats / change-password / payment-config).
 // Mounted BEFORE the legacy '/me' below so the richer payload wins.
 adminRouter.use('/', adminExtrasRouter);
