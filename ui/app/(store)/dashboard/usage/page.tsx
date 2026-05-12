@@ -10,7 +10,7 @@ export default function UsagePage() {
   return (
     <AuthGuard>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <h1 className="text-2xl font-semibold text-slate-900 mb-6">控制台</h1>
+        <h1 className="text-2xl font-semibold text-foreground mb-6">控制台</h1>
         <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6">
           <DashboardNav />
           <UsageInner />
@@ -56,11 +56,11 @@ function UsageInner() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-sm">
-        <span className="text-slate-500">区间:</span>
+        <span className="text-muted-foreground">区间:</span>
         {(['7d', '30d'] as const).map((p) => (
           <button key={p}
             onClick={() => setPeriod(p)}
-            className={`px-3 py-1.5 rounded-md border ${period === p ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+            className={`px-3 py-1.5 rounded-md border ${period === p ? 'bg-foreground text-white border-slate-900' : 'bg-card border-input text-muted-foreground hover:bg-background'}`}>
             {p === '7d' ? '近 7 天' : '近 30 天'}
           </button>
         ))}
@@ -69,7 +69,7 @@ function UsageInner() {
       {err && <Alert kind="error">{err}</Alert>}
 
       {data === null && !err && (
-        <div className="flex items-center justify-center py-8 text-slate-400">
+        <div className="flex items-center justify-center py-8 text-muted-foreground">
           <Spinner /> <span className="ml-2 text-sm">加载中…</span>
         </div>
       )}
@@ -88,11 +88,11 @@ function UsageInner() {
 
           <Card title="最近请求">
             {recent.length === 0 ? (
-              <div className="py-6 text-center text-slate-500 text-sm">暂无请求记录。</div>
+              <div className="py-6 text-center text-muted-foreground text-sm">暂无请求记录。</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="text-left text-slate-500 border-b border-slate-200">
+                  <thead className="text-left text-muted-foreground border-b border-border">
                     <tr>
                       <th className="py-2 pr-3 font-medium">时间</th>
                       <th className="pr-3 font-medium">模型</th>
@@ -103,13 +103,13 @@ function UsageInner() {
                   </thead>
                   <tbody>
                     {recent.slice(0, 50).map((r: any, i: number) => (
-                      <tr key={r.id || i} className="border-b border-slate-100">
-                        <td className="py-2 pr-3 text-slate-500">{fmtDate(r.ts || r.created_at)}</td>
-                        <td className="pr-3 text-slate-700">{r.model || '—'}</td>
+                      <tr key={r.id || i} className="border-b border-border/50">
+                        <td className="py-2 pr-3 text-muted-foreground">{fmtDate(r.ts || r.created_at)}</td>
+                        <td className="pr-3 text-foreground">{r.model || '—'}</td>
                         <td className="pr-3">{Number(r.tokens || r.total_tokens || 0).toLocaleString()}</td>
                         <td className="pr-3">{fmtCents(r.cost_cents)}</td>
                         <td>
-                          <span className={`text-xs px-2 py-0.5 rounded ${r.status === 'ok' || r.status === 200 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                          <span className={`text-xs px-2 py-0.5 rounded ${r.status === 'ok' || r.status === 200 ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'}`}>
                             {r.status || '—'}
                           </span>
                         </td>

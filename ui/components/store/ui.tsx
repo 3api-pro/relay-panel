@@ -27,11 +27,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   if (variant === 'primary') {
     cls += ' text-white hover:opacity-90 shadow-sm';
   } else if (variant === 'ghost') {
-    cls += ' border border-slate-300 bg-white text-slate-700 hover:bg-slate-50';
+    cls += ' border border-input bg-card text-foreground hover:bg-background';
   } else if (variant === 'danger') {
     cls += ' bg-red-600 text-white hover:bg-red-700';
   } else if (variant === 'subtle') {
-    cls += ' bg-slate-100 text-slate-700 hover:bg-slate-200';
+    cls += ' bg-muted text-foreground hover:bg-accent';
   }
   const style = variant === 'primary'
     ? { background: 'var(--brand-primary, #0e9486)' }
@@ -50,11 +50,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
 ) {
   return (
     <label className="block">
-      {label && <div className="text-sm font-medium text-slate-700 mb-1">{label}</div>}
+      {label && <div className="text-sm font-medium text-foreground mb-1">{label}</div>}
       <input ref={ref}
-        className={`w-full px-3 py-2 rounded-md border border-slate-300 focus:border-slate-500 focus:ring-1 focus:ring-slate-400 focus:outline-none text-sm ${error ? 'border-red-400' : ''} ${className}`}
+        className={`w-full px-3 py-2 rounded-md border border-input focus:border-ring focus:ring-1 focus:ring-ring focus:outline-none text-sm ${error ? 'border-red-400' : ''} ${className}`}
         {...rest} />
-      {hint && !error && <div className="text-xs text-slate-500 mt-1">{hint}</div>}
+      {hint && !error && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
       {error && <div className="text-xs text-red-600 mt-1">{error}</div>}
     </label>
   );
@@ -64,10 +64,10 @@ export function Card({ children, className = '', title, action }: {
   children: React.ReactNode; className?: string; title?: string; action?: React.ReactNode;
 }) {
   return (
-    <section className={`bg-white rounded-lg border border-slate-200 ${className}`}>
+    <section className={`bg-card rounded-lg border border-border ${className}`}>
       {(title || action) && (
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          {title && <h2 className="font-semibold text-slate-900">{title}</h2>}
+        <div className="px-5 py-4 border-b border-border/50 flex items-center justify-between">
+          {title && <h2 className="font-semibold text-foreground">{title}</h2>}
           {action && <div>{action}</div>}
         </div>
       )}
@@ -78,10 +78,10 @@ export function Card({ children, className = '', title, action }: {
 
 export function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-4">
-      <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="text-2xl font-semibold mt-1 text-slate-900">{value}</div>
-      {sub && <div className="text-xs text-slate-500 mt-1">{sub}</div>}
+    <div className="bg-card rounded-lg border border-border p-4">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-2xl font-semibold mt-1 text-foreground">{value}</div>
+      {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
     </div>
   );
 }
@@ -91,7 +91,7 @@ export function Alert({ kind = 'info', children }: {
   children: React.ReactNode;
 }) {
   const m: Record<string, string> = {
-    info: 'bg-slate-50 border-slate-200 text-slate-700',
+    info: 'bg-background border-border text-foreground',
     success: 'bg-emerald-50 border-emerald-200 text-emerald-800',
     warn: 'bg-amber-50 border-amber-200 text-amber-800',
     error: 'bg-red-50 border-red-200 text-red-800',
@@ -106,7 +106,7 @@ export function Badge({ children, tone = 'neutral' }: {
   tone?: 'neutral' | 'success' | 'warn' | 'danger' | 'brand';
 }) {
   const m: Record<string, string> = {
-    neutral: 'bg-slate-100 text-slate-700',
+    neutral: 'bg-muted text-foreground',
     success: 'bg-emerald-100 text-emerald-700',
     warn:    'bg-amber-100 text-amber-700',
     danger:  'bg-red-100 text-red-700',
@@ -122,7 +122,7 @@ export function Badge({ children, tone = 'neutral' }: {
 
 export function Spinner({ className = '' }: { className?: string }) {
   return (
-    <div className={`inline-block animate-spin rounded-full border-2 border-slate-300 border-t-slate-700 h-4 w-4 ${className}`} />
+    <div className={`inline-block animate-spin rounded-full border-2 border-input border-t-slate-700 h-4 w-4 ${className}`} />
   );
 }
 
@@ -139,16 +139,16 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
          onClick={onClose}>
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-md"
+      <div className="bg-card rounded-lg shadow-lg w-full max-w-md"
            onClick={(e) => e.stopPropagation()}>
         {title && (
-          <div className="px-5 py-4 border-b border-slate-100">
-            <h3 className="font-semibold text-slate-900">{title}</h3>
+          <div className="px-5 py-4 border-b border-border/50">
+            <h3 className="font-semibold text-foreground">{title}</h3>
           </div>
         )}
         <div className="p-5">{children}</div>
         {footer && (
-          <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 rounded-b-lg flex justify-end gap-2">
+          <div className="px-5 py-3 border-t border-border/50 bg-background rounded-b-lg flex justify-end gap-2">
             {footer}
           </div>
         )}

@@ -19,12 +19,12 @@ function Hero() {
     <section className="flex-1 flex items-center">
       <div className="max-w-4xl mx-auto px-6 py-16 sm:py-24 text-center">
         <h1
-          className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900"
+          className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground"
           data-store-landing
         >
           欢迎来到 {storeName}
         </h1>
-        <p className="mt-5 text-lg sm:text-xl text-slate-600">
+        <p className="mt-5 text-lg sm:text-xl text-muted-foreground">
           Claude / GPT 兼容 API, 包月套餐任选。Claude Code、Cursor、Cline 等开箱即用。
         </p>
         <div className="mt-10 flex justify-center gap-4 flex-wrap">
@@ -37,7 +37,7 @@ function Hero() {
           </Link>
           <Link
             href="/pricing"
-            className="px-6 py-3 rounded-md border border-slate-300 text-slate-700 text-lg hover:bg-slate-50"
+            className="px-6 py-3 rounded-md border border-input text-foreground text-lg hover:bg-background"
           >
             查看价格
           </Link>
@@ -50,7 +50,7 @@ function Hero() {
 export function StoreLanding() {
   return (
     <BrandProvider>
-      <div className="min-h-screen flex flex-col bg-slate-50">
+      <div className="min-h-screen flex flex-col bg-background">
         <AnnouncementBar />
         <Header />
         <Hero />

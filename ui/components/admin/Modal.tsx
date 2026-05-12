@@ -23,20 +23,20 @@ export function Modal({ open, onClose, title, children, footer, width = 'md' }: 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
-      <div className={`bg-white rounded-lg shadow-xl w-full ${WIDTHS[width]}`}>
-        <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="font-semibold text-slate-900">{title}</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 px-4">
+      <div className={`bg-card rounded-lg shadow-xl w-full ${WIDTHS[width]}`}>
+        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+          <h2 className="font-semibold text-foreground">{title}</h2>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+            className="text-muted-foreground hover:text-muted-foreground text-lg leading-none"
             aria-label="关闭"
           >
             ×
           </button>
         </div>
         <div className="px-5 py-4">{children}</div>
-        {footer && <div className="px-5 py-3 border-t border-slate-200 flex justify-end gap-2">{footer}</div>}
+        {footer && <div className="px-5 py-3 border-t border-border flex justify-end gap-2">{footer}</div>}
       </div>
     </div>
   );

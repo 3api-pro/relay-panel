@@ -25,9 +25,9 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-sm border border-slate-200 p-8">
-        <h1 className="text-2xl font-semibold mb-1 text-slate-900">忘记密码</h1>
-        <p className="text-sm text-slate-500 mb-6">
+      <div className="w-full max-w-md bg-card rounded-lg shadow-sm border border-border p-8">
+        <h1 className="text-2xl font-semibold mb-1 text-foreground">忘记密码</h1>
+        <p className="text-sm text-muted-foreground mb-6">
           想起来了? <Link href="/login" className="hover:underline" style={{ color: 'var(--brand-primary, #0e9486)' }}>返回登录</Link>
         </p>
         {done ? (

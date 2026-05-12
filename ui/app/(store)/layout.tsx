@@ -18,7 +18,7 @@ import { AnnouncementBar } from '@/components/store/AnnouncementBar';
 export default function StoreLayout({ children }: { children: React.ReactNode }) {
   return (
     <BrandProvider>
-      <div className="min-h-screen flex flex-col bg-slate-50">
+      <div className="min-h-screen flex flex-col bg-background">
         <AnnouncementBar />
         <Header />
         <main className="flex-1">{children}</main>

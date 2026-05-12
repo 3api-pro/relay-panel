@@ -9,7 +9,7 @@ export interface UsagePoint { date: string; tokens: number; requests?: number; }
 export function UsageChart({ data, height = 180 }: { data: UsagePoint[]; height?: number }) {
   if (!data || data.length === 0) {
     return (
-      <div className="flex items-center justify-center text-slate-400 text-sm" style={{ height }}>
+      <div className="flex items-center justify-center text-muted-foreground text-sm" style={{ height }}>
         暂无数据
       </div>
     );

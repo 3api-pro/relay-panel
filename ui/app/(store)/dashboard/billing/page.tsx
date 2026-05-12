@@ -10,7 +10,7 @@ export default function BillingPage() {
   return (
     <AuthGuard>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <h1 className="text-2xl font-semibold text-slate-900 mb-6">控制台</h1>
+        <h1 className="text-2xl font-semibold text-foreground mb-6">控制台</h1>
         <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6">
           <DashboardNav />
           <BillingInner />
@@ -56,25 +56,25 @@ function BillingInner() {
       <Card title="当前订阅"
         action={<Link href="/pricing"><Button size="sm">升级 / 续费</Button></Link>}>
         {!active ? (
-          <div className="text-sm text-slate-500">
+          <div className="text-sm text-muted-foreground">
             尚未订阅任何套餐 — <Link href="/pricing" className="underline" style={{ color: 'var(--brand-primary, #0e9486)' }}>查看套餐</Link>
           </div>
         ) : (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-lg font-semibold text-slate-900">{planName || '订阅中'}</div>
-                <div className="text-xs text-slate-500">到期: {fmtDateShort(renew)}</div>
+                <div className="text-lg font-semibold text-foreground">{planName || '订阅中'}</div>
+                <div className="text-xs text-muted-foreground">到期: {fmtDateShort(renew)}</div>
               </div>
               <Badge tone={active.status === 'active' ? 'success' : 'neutral'}>{active.status || 'active'}</Badge>
             </div>
             {quotaTotal > 0 && (
               <div>
-                <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                   <span>已用 {fmtTokens(quotaUsed)} / {fmtTokens(quotaTotal)} tokens</span>
                   <span>{usePct}%</span>
                 </div>
-                <div className="h-2 bg-slate-100 rounded overflow-hidden">
+                <div className="h-2 bg-muted rounded overflow-hidden">
                   <div className="h-full rounded"
                     style={{ width: `${usePct}%`, background: 'var(--brand-primary, #0e9486)' }} />
                 </div>
@@ -86,15 +86,15 @@ function BillingInner() {
 
       <Card title="订单历史">
         {orders === null ? (
-          <div className="flex items-center justify-center py-8 text-slate-400">
+          <div className="flex items-center justify-center py-8 text-muted-foreground">
             <Spinner /> <span className="ml-2 text-sm">加载中…</span>
           </div>
         ) : orders.length === 0 ? (
-          <div className="py-6 text-center text-slate-500 text-sm">还没有订单。</div>
+          <div className="py-6 text-center text-muted-foreground text-sm">还没有订单。</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-left text-slate-500 border-b border-slate-200">
+              <thead className="text-left text-muted-foreground border-b border-border">
                 <tr>
                   <th className="py-2 pr-3 font-medium">订单号</th>
                   <th className="pr-3 font-medium">套餐</th>
@@ -106,7 +106,7 @@ function BillingInner() {
               </thead>
               <tbody>
                 {orders.map((o) => (
-                  <tr key={o.id} className="border-b border-slate-100">
+                  <tr key={o.id} className="border-b border-border/50">
                     <td className="py-2 pr-3 font-mono text-xs">{String(o.id).slice(0, 12)}…</td>
                     <td className="pr-3">{o.plan_name || o.plan_slug || `#${o.plan_id}`}</td>
                     <td className="pr-3">{fmtCents(o.amount_cents)}</td>
@@ -115,12 +115,12 @@ function BillingInner() {
                         {o.status || '—'}
                       </Badge>
                     </td>
-                    <td className="pr-3 text-slate-500">{fmtDate(o.created_at)}</td>
+                    <td className="pr-3 text-muted-foreground">{fmtDate(o.created_at)}</td>
                     <td>
                       {o.status === 'pending' ? (
                         <Link href={`/checkout/${o.id}`} className="hover:underline text-xs" style={{ color: 'var(--brand-primary, #0e9486)' }}>去支付</Link>
                       ) : (
-                        <span className="text-slate-300 text-xs">—</span>
+                        <span className="text-muted-foreground text-xs">—</span>
                       )}
                     </td>
                   </tr>
@@ -132,7 +132,7 @@ function BillingInner() {
       </Card>
 
       <Card title="充值 Token Pack">
-        <div className="text-sm text-slate-500">
+        <div className="text-sm text-muted-foreground">
           额外 token 包即将上线。当前请通过续费或升级套餐补充额度。
         </div>
       </Card>

@@ -9,7 +9,7 @@ import { Button, Input, Alert } from '@/components/store/ui';
 // requirement when calling useSearchParams(). Carry-over for storefront agent.
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center text-slate-400 text-sm">加载中…</div>}>
+    <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center text-muted-foreground text-sm">加载中…</div>}>
       <ResetPasswordInner />
     </Suspense>
   );
@@ -48,9 +48,9 @@ function ResetPasswordInner() {
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-sm border border-slate-200 p-8">
-        <h1 className="text-2xl font-semibold mb-1 text-slate-900">设置新密码</h1>
-        <p className="text-sm text-slate-500 mb-6">
+      <div className="w-full max-w-md bg-card rounded-lg shadow-sm border border-border p-8">
+        <h1 className="text-2xl font-semibold mb-1 text-foreground">设置新密码</h1>
+        <p className="text-sm text-muted-foreground mb-6">
           没收到链接? <Link href="/forgot-password" className="hover:underline" style={{ color: 'var(--brand-primary, #0e9486)' }}>重新发送</Link>
         </p>
         {ok ? (

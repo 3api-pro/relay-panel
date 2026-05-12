@@ -86,11 +86,11 @@ export default function CreatePanelPage() {
 
   if (info && !info.enabled) {
     return (
-      <main className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
-        <div className="max-w-md w-full bg-white rounded-lg border border-slate-200 p-8 text-center">
+      <main className="min-h-screen flex items-center justify-center px-4 bg-background">
+        <div className="max-w-md w-full bg-card rounded-lg border border-border p-8 text-center">
           <h1 className="text-xl font-semibold mb-2">注册暂未开放</h1>
-          <p className="text-sm text-slate-500">
-            当前 panel 运行在私有模式。操作员可设置 <code className="px-1.5 py-0.5 bg-slate-100 rounded">TENANT_SELF_SIGNUP=on</code> 开启公开注册。
+          <p className="text-sm text-muted-foreground">
+            当前 panel 运行在私有模式。操作员可设置 <code className="px-1.5 py-0.5 bg-muted rounded">TENANT_SELF_SIGNUP=on</code> 开启公开注册。
           </p>
           <Link href="/" className="inline-block mt-6 text-sm text-teal-600 hover:text-teal-700">← 返回首页</Link>
         </div>
@@ -100,8 +100,8 @@ export default function CreatePanelPage() {
 
   if (done) {
     return (
-      <main className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
-        <div className="max-w-lg w-full bg-white rounded-lg border border-slate-200 p-8">
+      <main className="min-h-screen flex items-center justify-center px-4 bg-background">
+        <div className="max-w-lg w-full bg-card rounded-lg border border-border p-8">
           <div className="flex items-center gap-2 mb-1">
             <div className="w-6 h-6 rounded-full bg-teal-100 flex items-center justify-center">
               <svg className="w-4 h-4 text-teal-600" viewBox="0 0 20 20" fill="currentColor">
@@ -110,13 +110,13 @@ export default function CreatePanelPage() {
             </div>
             <h1 className="text-xl font-semibold">店铺创建成功</h1>
           </div>
-          <p className="text-sm text-slate-500 mb-6">已自动登录，正在进入管理后台…</p>
+          <p className="text-sm text-muted-foreground mb-6">已自动登录，正在进入管理后台…</p>
 
           <div className="space-y-4">
             <div>
-              <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">客户访问地址（分享给你的客户）</div>
-              <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 rounded-md border border-slate-200">
-                <code className="flex-1 text-sm font-mono text-slate-800 truncate">{done.store_url}</code>
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">客户访问地址（分享给你的客户）</div>
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-background rounded-md border border-border">
+                <code className="flex-1 text-sm font-mono text-foreground truncate">{done.store_url}</code>
                 <button onClick={() => copy(done.store_url)} className="text-xs text-teal-600 hover:text-teal-700 font-medium">
                   {copied ? '已复制' : '复制'}
                 </button>
@@ -132,9 +132,9 @@ export default function CreatePanelPage() {
               </a>
             </div>
 
-            <div className="pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-1">
-              <p>· 你管理后台在 <strong className="text-slate-700">3api.pro/admin</strong>（这个根域，就是现在）</p>
-              <p>· 客户在 <strong className="text-slate-700">{done.tenant_slug}.3api.pro</strong> 看到你的店铺；下次登录直接来 3api.pro/login</p>
+            <div className="pt-4 border-t border-border/50 text-xs text-muted-foreground space-y-1">
+              <p>· 你管理后台在 <strong className="text-foreground">3api.pro/admin</strong>（这个根域，就是现在）</p>
+              <p>· 客户在 <strong className="text-foreground">{done.tenant_slug}.3api.pro</strong> 看到你的店铺；下次登录直接来 3api.pro/login</p>
               <p>· 想用自己的域名? 设置里可绑定 CNAME（v0.2 上线）</p>
             </div>
           </div>
@@ -144,29 +144,29 @@ export default function CreatePanelPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
-      <div className="max-w-md w-full bg-white rounded-lg border border-slate-200 p-8">
+    <main className="min-h-screen flex items-center justify-center px-4 bg-background">
+      <div className="max-w-md w-full bg-card rounded-lg border border-border p-8">
         <h1 className="text-2xl font-semibold mb-1">免费开店</h1>
-        <p className="text-sm text-slate-500 mb-6">
+        <p className="text-sm text-muted-foreground mb-6">
           已有账号? <Link href="/login/" className="text-teal-600 hover:text-teal-700">登录</Link>
         </p>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <label className="block">
-            <div className="text-sm font-medium text-slate-700 mb-1.5">邮箱</div>
+            <div className="text-sm font-medium text-foreground mb-1.5">邮箱</div>
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
-              className="w-full px-3 py-2 rounded-md border border-slate-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
+              className="w-full px-3 py-2 rounded-md border border-input focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
               placeholder="you@example.com"
             />
           </label>
 
           <label className="block">
-            <div className="text-sm font-medium text-slate-700 mb-1.5">密码 <span className="text-slate-400 font-normal">(≥ 8 位)</span></div>
+            <div className="text-sm font-medium text-foreground mb-1.5">密码 <span className="text-muted-foreground font-normal">(≥ 8 位)</span></div>
             <input
               type="password"
               required
@@ -174,12 +174,12 @@ export default function CreatePanelPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
-              className="w-full px-3 py-2 rounded-md border border-slate-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
+              className="w-full px-3 py-2 rounded-md border border-input focus:border-teal-500 focus:ring-1 focus:ring-teal-500 focus:outline-none"
             />
           </label>
 
-          <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-md px-3 py-2.5 leading-relaxed">
-            <div className="font-medium text-slate-700 mb-0.5">系统将自动为你分配子域名</div>
+          <div className="text-xs text-muted-foreground bg-background border border-border rounded-md px-3 py-2.5 leading-relaxed">
+            <div className="font-medium text-foreground mb-0.5">系统将自动为你分配子域名</div>
             注册后可在后台修改，或绑定自己的域名（CNAME）。
           </div>
 
@@ -198,7 +198,7 @@ export default function CreatePanelPage() {
           </button>
         </form>
 
-        <p className="text-xs text-slate-400 mt-6 text-center">
+        <p className="text-xs text-muted-foreground mt-6 text-center">
           点击「创建店铺」即表示同意我们的 <Link href="/" className="underline">服务条款</Link>
         </p>
       </div>

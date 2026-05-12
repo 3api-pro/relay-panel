@@ -3,17 +3,20 @@ import { useEffect, useState, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/api';
 import { Sidebar } from './Sidebar';
+import { TopBar } from './TopBar';
 
 interface Props {
-  title: string;
+  title?: string;
   subtitle?: string;
   actions?: ReactNode;
   children: ReactNode;
 }
 
 /**
- * Layout wrapper: gates on token, renders sidebar + top bar.
- * Use on every /admin/* page (except /admin/login which has no sidebar).
+ * Layout wrapper: gates on token, renders new sidebar + topbar shell.
+ * - Sidebar: 4 workspace groups (概览/销售/上游/设置), collapsible
+ * - TopBar: breadcrumb + Cmd-K search placeholder + theme toggle + avatar dropdown
+ * Use on every /admin/* page (except /admin/login).
  */
 export function AdminShell({ title, subtitle, actions, children }: Props) {
   const router = useRouter();
@@ -29,25 +32,27 @@ export function AdminShell({ title, subtitle, actions, children }: Props) {
 
   if (!ready) {
     return (
-      <main className="min-h-screen flex items-center justify-center text-slate-500 text-sm">
+      <main className="min-h-screen flex items-center justify-center text-muted-foreground text-sm bg-background">
         加载中…
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen bg-background flex">
       <Sidebar />
-      <div className="flex-1 min-w-0">
-        <header className="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-            {subtitle && <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>}
-          </div>
-          {actions && <div className="flex items-center gap-2">{actions}</div>}
-        </header>
-        <div className="px-8 py-6">{children}</div>
+      <div className="flex-1 min-w-0 flex flex-col">
+        <TopBar title={title} subtitle={subtitle} actions={actions} />
+        <main className="flex-1 px-6 py-6">
+          {(title || subtitle) && (
+            <div className="mb-5">
+              {title && <h1 className="text-2xl font-semibold text-foreground tracking-tight">{title}</h1>}
+              {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
+            </div>
+          )}
+          {children}
+        </main>
       </div>
-    </main>
+    </div>
   );
 }

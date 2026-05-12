@@ -59,16 +59,16 @@ export default function SettingsPage() {
         <Section title="修改密码">
           <form onSubmit={changePassword} className="space-y-3 text-sm">
             <input type="password" required placeholder="当前密码" value={oldPw} onChange={(e) => setOldPw(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-slate-300" />
+              className="w-full px-3 py-2 rounded-md border border-input" />
             <input type="password" required minLength={6} placeholder="新密码（≥6 位）" value={newPw} onChange={(e) => setNewPw(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-slate-300" />
+              className="w-full px-3 py-2 rounded-md border border-input" />
             <div className="flex items-center justify-between">
               <div className="text-xs">
                 {pwMsg && <span className="text-emerald-600">{pwMsg}</span>}
                 {pwErr && <span className="text-amber-700">{pwErr}</span>}
               </div>
               <button disabled={pwBusy}
-                className="px-4 py-1.5 rounded-md bg-slate-800 text-white text-sm hover:bg-slate-900 disabled:opacity-50">
+                className="px-4 py-1.5 rounded-md bg-accent text-white text-sm hover:bg-foreground disabled:opacity-50">
                 {pwBusy ? '修改中…' : '保存新密码'}
               </button>
             </div>
@@ -76,7 +76,7 @@ export default function SettingsPage() {
         </Section>
 
         <Section title="二步验证（占位）">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             2FA 将在 v0.2 接入。当前请确保使用强密码 + 邮箱安全。
           </p>
         </Section>
@@ -86,7 +86,7 @@ export default function SettingsPage() {
             <a href="/api/openapi" target="_blank" rel="noreferrer" className="text-brand-700 hover:underline">
               查看 OpenAPI 描述
             </a>
-            <div className="text-xs text-slate-500">
+            <div className="text-xs text-muted-foreground">
               Webhook 用于把订单 / 用户事件推到你的服务（v0.2 提供）。
             </div>
           </div>
@@ -109,10 +109,10 @@ export default function SettingsPage() {
 function Section({ title, children, danger }: { title: string; children: React.ReactNode; danger?: boolean }) {
   return (
     <section className={
-      'bg-white rounded-lg border p-5 ' +
-      (danger ? 'border-rose-200' : 'border-slate-200')
+      'bg-card rounded-lg border p-5 ' +
+      (danger ? 'border-rose-200' : 'border-border')
     }>
-      <h2 className={'font-semibold mb-3 ' + (danger ? 'text-rose-700' : 'text-slate-900')}>{title}</h2>
+      <h2 className={'font-semibold mb-3 ' + (danger ? 'text-rose-700' : 'text-foreground')}>{title}</h2>
       {children}
     </section>
   );
@@ -121,8 +121,8 @@ function Section({ title, children, danger }: { title: string; children: React.R
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-center py-1.5 text-sm">
-      <div className="w-28 text-slate-500">{label}</div>
-      <div className={mono ? 'font-mono text-slate-800' : 'text-slate-800'}>{value}</div>
+      <div className="w-28 text-muted-foreground">{label}</div>
+      <div className={mono ? 'font-mono text-foreground' : 'text-foreground'}>{value}</div>
     </div>
   );
 }

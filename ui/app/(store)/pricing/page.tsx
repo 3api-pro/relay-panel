@@ -17,8 +17,8 @@ export default function PricingPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
       <div className="text-center max-w-2xl mx-auto">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900">选择你的套餐</h1>
-        <p className="mt-3 text-slate-600">按月订阅, 无隐藏费用。可随时升级 / 取消。</p>
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">选择你的套餐</h1>
+        <p className="mt-3 text-muted-foreground">按月订阅, 无隐藏费用。可随时升级 / 取消。</p>
       </div>
 
       {err && (
@@ -28,7 +28,7 @@ export default function PricingPage() {
       )}
 
       {plans === null && !err && (
-        <div className="mt-12 flex items-center justify-center text-slate-400">
+        <div className="mt-12 flex items-center justify-center text-muted-foreground">
           <Spinner /> <span className="ml-2 text-sm">加载中…</span>
         </div>
       )}
@@ -48,11 +48,11 @@ export default function PricingPage() {
       )}
 
       <div className="mt-16 max-w-3xl mx-auto">
-        <h2 className="text-xl font-semibold text-slate-900 mb-4">常见问题</h2>
+        <h2 className="text-xl font-semibold text-foreground mb-4">常见问题</h2>
         <FAQ q="支持哪些客户端?">
           所有兼容 Anthropic Messages API 的工具 — Claude Code、Cursor、Cline、Continue、官方 SDK 等。
-          只需把 baseUrl 改为本站 <code className="px-1 py-0.5 bg-slate-100 rounded text-xs">/v1</code>，
-          API key 用本站签发的 <code className="px-1 py-0.5 bg-slate-100 rounded text-xs">sk-*</code>。
+          只需把 baseUrl 改为本站 <code className="px-1 py-0.5 bg-muted rounded text-xs">/v1</code>，
+          API key 用本站签发的 <code className="px-1 py-0.5 bg-muted rounded text-xs">sk-*</code>。
         </FAQ>
         <FAQ q="如何付款?">
           支持支付宝扫码、USDT-TRC20、USDT-ERC20。结账时选择即可。
@@ -70,11 +70,11 @@ export default function PricingPage() {
 
 function FAQ({ q, children }: { q: string; children: React.ReactNode }) {
   return (
-    <details className="border-b border-slate-200 py-3">
-      <summary className="cursor-pointer text-slate-900 font-medium list-none flex items-center justify-between">
-        {q} <span className="text-slate-400 ml-2">+</span>
+    <details className="border-b border-border py-3">
+      <summary className="cursor-pointer text-foreground font-medium list-none flex items-center justify-between">
+        {q} <span className="text-muted-foreground ml-2">+</span>
       </summary>
-      <div className="mt-2 text-sm text-slate-600">{children}</div>
+      <div className="mt-2 text-sm text-muted-foreground">{children}</div>
     </details>
   );
 }

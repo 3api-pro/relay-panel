@@ -10,7 +10,7 @@ export default function OnboardingRoot() {
     router.replace(`/admin/onboarding/${step}`);
   }, [router]);
   return (
-    <main className="min-h-screen flex items-center justify-center text-slate-500 text-sm">
+    <main className="min-h-screen flex items-center justify-center text-muted-foreground text-sm">
       正在跳转到向导…
     </main>
   );

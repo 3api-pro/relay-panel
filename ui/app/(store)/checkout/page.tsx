@@ -18,7 +18,7 @@ type Provider = 'alipay' | 'usdt-trc20' | 'usdt-erc20';
 
 export default function CheckoutPage() {
   return (
-    <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center text-slate-400 text-sm">加载中…</div>}>
+    <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center text-muted-foreground text-sm">加载中…</div>}>
       <AuthGuard>
         <CheckoutInner />
       </AuthGuard>
@@ -114,12 +114,12 @@ function CheckoutInner() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
-      <h1 className="text-2xl font-semibold text-slate-900 mb-6">结账</h1>
+      <h1 className="text-2xl font-semibold text-foreground mb-6">结账</h1>
 
       {err && <Alert kind="error">{err}</Alert>}
 
       {!order && !err && (
-        <div className="flex items-center justify-center py-12 text-slate-400">
+        <div className="flex items-center justify-center py-12 text-muted-foreground">
           <Spinner /> <span className="ml-2 text-sm">加载订单…</span>
         </div>
       )}
@@ -129,25 +129,25 @@ function CheckoutInner() {
           <Card title="订单详情">
             <dl className="text-sm space-y-2">
               <div className="flex justify-between">
-                <dt className="text-slate-500">订单号</dt>
+                <dt className="text-muted-foreground">订单号</dt>
                 <dd className="font-mono text-xs">{order.id}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-slate-500">套餐</dt>
+                <dt className="text-muted-foreground">套餐</dt>
                 <dd>{order.plan_name || order.plan_slug || `#${order.plan_id}`}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-slate-500">金额</dt>
+                <dt className="text-muted-foreground">金额</dt>
                 <dd className="text-lg font-semibold">{fmtCents(order.amount_cents)}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-slate-500">状态</dt>
+                <dt className="text-muted-foreground">状态</dt>
                 <dd><Badge tone={paid ? 'success' : expired ? 'danger' : 'warn'}>{paid ? '已支付' : expired ? '已过期' : order.status || '待支付'}</Badge></dd>
               </div>
               {order.expires_at && !paid && (
                 <div className="flex justify-between">
-                  <dt className="text-slate-500">截止</dt>
-                  <dd className="text-slate-700">{fmtDate(order.expires_at)} {remStr && !expired && <span className="ml-2 text-amber-600">剩余 {remStr}</span>}</dd>
+                  <dt className="text-muted-foreground">截止</dt>
+                  <dd className="text-foreground">{fmtDate(order.expires_at)} {remStr && !expired && <span className="ml-2 text-amber-600">剩余 {remStr}</span>}</dd>
                 </div>
               )}
             </dl>
@@ -168,11 +168,11 @@ function CheckoutInner() {
                 {(['alipay', 'usdt-trc20', 'usdt-erc20'] as Provider[]).map((p) => (
                   <button key={p} disabled={busy}
                     onClick={() => selectProvider(p)}
-                    className={`text-left rounded-lg border p-4 hover:bg-slate-50 disabled:opacity-50 ${provider === p ? 'border-slate-900' : 'border-slate-200'}`}>
-                    <div className="font-medium text-slate-900">
+                    className={`text-left rounded-lg border p-4 hover:bg-background disabled:opacity-50 ${provider === p ? 'border-slate-900' : 'border-border'}`}>
+                    <div className="font-medium text-foreground">
                       {p === 'alipay' ? '支付宝' : p === 'usdt-trc20' ? 'USDT (TRC20)' : 'USDT (ERC20)'}
                     </div>
-                    <div className="text-xs text-slate-500 mt-1">
+                    <div className="text-xs text-muted-foreground mt-1">
                       {p === 'alipay' ? '扫码即时到账' : 'Tether USD, 链上转账'}
                     </div>
                   </button>
@@ -180,7 +180,7 @@ function CheckoutInner() {
               </div>
 
               {busy && (
-                <div className="mt-4 flex items-center text-slate-400 text-sm">
+                <div className="mt-4 flex items-center text-muted-foreground text-sm">
                   <Spinner /> <span className="ml-2">生成支付凭证…</span>
                 </div>
               )}
@@ -199,7 +199,7 @@ function CheckoutInner() {
                   <Alert kind="info">使用支付宝扫码完成支付。本页面会自动检测到账状态。</Alert>
                   <div className="mt-3 flex justify-center">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={payInfo.qr_code_url} alt="支付二维码" className="w-56 h-56 border border-slate-200 rounded-md" />
+                    <img src={payInfo.qr_code_url} alt="支付二维码" className="w-56 h-56 border border-border rounded-md" />
                   </div>
                 </div>
               )}
@@ -207,18 +207,18 @@ function CheckoutInner() {
               {payInfo?.kind === 'usdt' && (
                 <div className="mt-4 space-y-2">
                   <Alert kind="info">向以下地址转账 USDT, 转账完成后页面会自动确认。</Alert>
-                  <div className="bg-slate-50 border border-slate-200 rounded p-3 text-sm space-y-1">
-                    <div><span className="text-slate-500">网络:</span> {String(payInfo.network).toUpperCase()}</div>
+                  <div className="bg-background border border-border rounded p-3 text-sm space-y-1">
+                    <div><span className="text-muted-foreground">网络:</span> {String(payInfo.network).toUpperCase()}</div>
                     <div className="flex items-center gap-2">
-                      <span className="text-slate-500">地址:</span>
+                      <span className="text-muted-foreground">地址:</span>
                       <code className="text-xs break-all flex-1">{payInfo.address}</code>
                       <Button size="sm" variant="ghost"
                         onClick={() => { if (navigator?.clipboard && payInfo.address) navigator.clipboard.writeText(payInfo.address).catch(() => {}); }}>
                         复制
                       </Button>
                     </div>
-                    <div><span className="text-slate-500">金额:</span> {payInfo.amount} USDT</div>
-                    {payInfo.expires_at && <div><span className="text-slate-500">到期:</span> {fmtDate(payInfo.expires_at)}</div>}
+                    <div><span className="text-muted-foreground">金额:</span> {payInfo.amount} USDT</div>
+                    {payInfo.expires_at && <div><span className="text-muted-foreground">到期:</span> {fmtDate(payInfo.expires_at)}</div>}
                   </div>
                 </div>
               )}

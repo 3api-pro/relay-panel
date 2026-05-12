@@ -26,7 +26,7 @@ export default function KeysPage() {
   return (
     <AuthGuard>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <h1 className="text-2xl font-semibold text-slate-900 mb-6">控制台</h1>
+        <h1 className="text-2xl font-semibold text-foreground mb-6">控制台</h1>
         <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6">
           <DashboardNav />
           <KeysInner />
@@ -93,7 +93,7 @@ function KeysInner() {
         <Alert kind="warn">
           <div className="font-medium">新 Key 已生成 (仅显示一次, 请复制保存)</div>
           <div className="mt-2 flex items-center gap-2">
-            <code className="flex-1 break-all bg-white border border-amber-300 px-2 py-1.5 rounded text-xs">{issued}</code>
+            <code className="flex-1 break-all bg-card border border-amber-300 px-2 py-1.5 rounded text-xs">{issued}</code>
             <Button size="sm" variant="ghost" onClick={() => {
               if (navigator?.clipboard) navigator.clipboard.writeText(issued).catch(() => {});
             }}>复制</Button>
@@ -107,15 +107,15 @@ function KeysInner() {
       <Card title="API Keys"
         action={<Button onClick={() => setOpenCreate(true)} size="sm">+ 新建 Key</Button>}>
         {keys === null ? (
-          <div className="flex items-center justify-center py-8 text-slate-400">
+          <div className="flex items-center justify-center py-8 text-muted-foreground">
             <Spinner /> <span className="ml-2 text-sm">加载中…</span>
           </div>
         ) : keys.length === 0 ? (
-          <div className="py-8 text-center text-slate-500 text-sm">还没有 API Key — 点击右上角生成第一个。</div>
+          <div className="py-8 text-center text-muted-foreground text-sm">还没有 API Key — 点击右上角生成第一个。</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-left text-slate-500 border-b border-slate-200">
+              <thead className="text-left text-muted-foreground border-b border-border">
                 <tr>
                   <th className="py-2 pr-3 font-medium">名称</th>
                   <th className="pr-3 font-medium">Key</th>
@@ -127,18 +127,18 @@ function KeysInner() {
               </thead>
               <tbody>
                 {keys.map((k) => (
-                  <tr key={k.id} className="border-b border-slate-100">
+                  <tr key={k.id} className="border-b border-border/50">
                     <td className="py-3 pr-3">{k.name}</td>
                     <td className="pr-3">
-                      <code className="text-xs text-slate-600">{k.key_masked || mask(k.key_prefix)}</code>
+                      <code className="text-xs text-muted-foreground">{k.key_masked || mask(k.key_prefix)}</code>
                     </td>
                     <td className="pr-3">
                       <Badge tone={k.status === 'active' || !k.status ? 'success' : 'neutral'}>
                         {k.status || 'active'}
                       </Badge>
                     </td>
-                    <td className="pr-3 text-slate-500">{fmtDate(k.last_used_at)}</td>
-                    <td className="pr-3 text-slate-500">{fmtDate(k.created_at)}</td>
+                    <td className="pr-3 text-muted-foreground">{fmtDate(k.last_used_at)}</td>
+                    <td className="pr-3 text-muted-foreground">{fmtDate(k.created_at)}</td>
                     <td>
                       <button onClick={() => setRevokeId(k)}
                         className="text-red-600 hover:underline text-xs">撤销</button>
@@ -152,9 +152,9 @@ function KeysInner() {
       </Card>
 
       <Card title="如何使用">
-        <div className="text-sm text-slate-700 space-y-2">
+        <div className="text-sm text-foreground space-y-2">
           <p>把客户端的 baseUrl 指向本站, 用上面的 Key 作为 Authorization 头:</p>
-          <pre className="bg-slate-900 text-slate-100 text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap break-all">{`curl -X POST {your-domain}/v1/messages \\
+          <pre className="bg-foreground text-slate-100 text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap break-all">{`curl -X POST {your-domain}/v1/messages \\
   -H "Authorization: Bearer sk-xxxx" \\
   -H "anthropic-version: 2023-06-01" \\
   -H "Content-Type: application/json" \\
@@ -170,7 +170,7 @@ function KeysInner() {
           <Button onClick={createKey} disabled={busy}>{busy ? '创建中…' : '生成'}</Button>
         </>}>
         <Input label="名称" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="My Project" />
-        <p className="text-xs text-slate-500 mt-2">名称只是给你自己看的便签; 模型权限会继承当前订阅的套餐。</p>
+        <p className="text-xs text-muted-foreground mt-2">名称只是给你自己看的便签; 模型权限会继承当前订阅的套餐。</p>
       </Modal>
 
       <Modal open={!!revokeId} onClose={() => !busy && setRevokeId(null)}
@@ -179,7 +179,7 @@ function KeysInner() {
           <Button variant="ghost" onClick={() => !busy && setRevokeId(null)}>取消</Button>
           <Button variant="danger" onClick={doRevoke} disabled={busy}>{busy ? '撤销中…' : '确认撤销'}</Button>
         </>}>
-        <p className="text-sm text-slate-600">撤销后该 Key 立即失效, 已发出的请求不受影响。此操作不可恢复。</p>
+        <p className="text-sm text-muted-foreground">撤销后该 Key 立即失效, 已发出的请求不受影响。此操作不可恢复。</p>
       </Modal>
     </div>
   );

@@ -24,7 +24,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!ok) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center text-slate-400">
+      <div className="min-h-[60vh] flex items-center justify-center text-muted-foreground">
         <Spinner /> <span className="ml-2 text-sm">加载中…</span>
       </div>
     );

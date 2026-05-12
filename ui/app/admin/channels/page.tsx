@@ -129,8 +129,8 @@ export default function AdminChannelsPage() {
   function logout() { auth.clearToken(); router.push('/'); }
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <header className="bg-slate-800 text-white">
+    <main className="min-h-screen bg-muted">
+      <header className="bg-accent text-white">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="text-xl font-semibold">3API Admin</div>
           <nav className="flex items-center gap-5 text-sm">
@@ -144,59 +144,59 @@ export default function AdminChannelsPage() {
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
         <div>
           <h1 className="text-2xl font-semibold">上游 Channel</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             配上游 sk-key + base_url, 默认 channel 用于客户调 /v1/messages 转发。
             一个 tenant 可配多个, 切换默认即可换上游。
           </p>
         </div>
 
-        <section className="bg-white rounded-lg border border-slate-200 p-6">
+        <section className="bg-card rounded-lg border border-border p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold">{editing ? `编辑 channel #${form.id}` : '添加 channel'}</h2>
             {editing && (
-              <button onClick={clearForm} className="text-sm text-slate-500 hover:text-slate-900">
+              <button onClick={clearForm} className="text-sm text-muted-foreground hover:text-foreground">
                 取消编辑
               </button>
             )}
           </div>
           <form onSubmit={onSubmit} className="grid grid-cols-2 gap-4">
             <label className="block col-span-1">
-              <div className="text-sm font-medium text-slate-700 mb-1">名称</div>
+              <div className="text-sm font-medium text-foreground mb-1">名称</div>
               <input
                 type="text" required value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="例: 主上游"
-                className="w-full px-3 py-2 rounded-md border border-slate-300 focus:border-brand-500 focus:outline-none"
+                className="w-full px-3 py-2 rounded-md border border-input focus:border-brand-500 focus:outline-none"
               />
             </label>
             <label className="block col-span-1">
-              <div className="text-sm font-medium text-slate-700 mb-1">类型</div>
+              <div className="text-sm font-medium text-foreground mb-1">类型</div>
               <select
                 value={form.type}
                 onChange={(e) => setForm({ ...form, type: e.target.value })}
-                className="w-full px-3 py-2 rounded-md border border-slate-300 focus:border-brand-500 focus:outline-none"
+                className="w-full px-3 py-2 rounded-md border border-input focus:border-brand-500 focus:outline-none"
               >
                 {TYPES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}
               </select>
             </label>
             <label className="block col-span-2">
-              <div className="text-sm font-medium text-slate-700 mb-1">Base URL</div>
+              <div className="text-sm font-medium text-foreground mb-1">Base URL</div>
               <input
                 type="url" required value={form.base_url}
                 onChange={(e) => setForm({ ...form, base_url: e.target.value })}
                 placeholder="https://api.llmapi.pro/v1"
-                className="w-full px-3 py-2 rounded-md border border-slate-300 focus:border-brand-500 focus:outline-none font-mono text-sm"
+                className="w-full px-3 py-2 rounded-md border border-input focus:border-brand-500 focus:outline-none font-mono text-sm"
               />
             </label>
             <label className="block col-span-2">
-              <div className="text-sm font-medium text-slate-700 mb-1">
-                API Key {editing && <span className="text-xs text-slate-500">(留空 = 不修改)</span>}
+              <div className="text-sm font-medium text-foreground mb-1">
+                API Key {editing && <span className="text-xs text-muted-foreground">(留空 = 不修改)</span>}
               </div>
               <input
                 type="password" required={!editing} value={form.api_key}
                 onChange={(e) => setForm({ ...form, api_key: e.target.value })}
                 placeholder="sk-..."
-                className="w-full px-3 py-2 rounded-md border border-slate-300 focus:border-brand-500 focus:outline-none font-mono text-sm"
+                className="w-full px-3 py-2 rounded-md border border-input focus:border-brand-500 focus:outline-none font-mono text-sm"
                 minLength={editing ? 0 : 8}
               />
             </label>
@@ -215,17 +215,17 @@ export default function AdminChannelsPage() {
           </form>
         </section>
 
-        <section className="bg-white rounded-lg border border-slate-200">
-          <div className="px-6 py-4 border-b border-slate-200">
+        <section className="bg-card rounded-lg border border-border">
+          <div className="px-6 py-4 border-b border-border">
             <h2 className="font-semibold">已配置 ({list.length})</h2>
           </div>
           {list.length === 0 ? (
-            <div className="px-6 py-12 text-center text-slate-500 text-sm">
+            <div className="px-6 py-12 text-center text-muted-foreground text-sm">
               暂无 channel。添加一个上游, 客户的 /v1/messages 才能转发。
             </div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-left text-slate-500 border-b border-slate-200">
+              <thead className="text-left text-muted-foreground border-b border-border">
                 <tr>
                   <th className="px-4 py-2">默认</th>
                   <th>名称</th>
@@ -238,7 +238,7 @@ export default function AdminChannelsPage() {
               </thead>
               <tbody>
                 {list.map((c) => (
-                  <tr key={c.id} className="border-b border-slate-100">
+                  <tr key={c.id} className="border-b border-border/50">
                     <td className="px-4 py-3">
                       {c.is_default ? (
                         <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">默认</span>
@@ -247,11 +247,11 @@ export default function AdminChannelsPage() {
                       )}
                     </td>
                     <td className="font-medium">{c.name}</td>
-                    <td className="text-slate-500">{c.type}</td>
-                    <td className="font-mono text-xs text-slate-600">{c.base_url}</td>
-                    <td className="font-mono text-xs text-slate-500">{c.key_preview ?? '—'}</td>
+                    <td className="text-muted-foreground">{c.type}</td>
+                    <td className="font-mono text-xs text-muted-foreground">{c.base_url}</td>
+                    <td className="font-mono text-xs text-muted-foreground">{c.key_preview ?? '—'}</td>
                     <td>
-                      <span className={`text-xs px-2 py-0.5 rounded ${c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded ${c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
                         {c.status}
                       </span>
                     </td>

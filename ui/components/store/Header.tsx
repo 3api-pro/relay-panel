@@ -22,7 +22,7 @@ export function Header() {
   const inDashboard = pathname?.startsWith('/dashboard');
 
   return (
-    <header className="border-b border-slate-200 bg-white sticky top-0 z-30">
+    <header className="border-b border-border bg-card sticky top-0 z-30">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 min-w-0">
           {brand.logo_url ? (
@@ -40,10 +40,10 @@ export function Header() {
         </Link>
 
         <nav className="flex items-center gap-1 sm:gap-3 text-sm">
-          <Link href="/pricing" className="px-2 py-1.5 text-slate-600 hover:text-slate-900 hidden sm:inline">
+          <Link href="/pricing" className="px-2 py-1.5 text-muted-foreground hover:text-foreground hidden sm:inline">
             价格
           </Link>
-          <Link href="/docs" className="px-2 py-1.5 text-slate-600 hover:text-slate-900 hidden sm:inline">
+          <Link href="/docs" className="px-2 py-1.5 text-muted-foreground hover:text-foreground hidden sm:inline">
             文档
           </Link>
           {authed ? (
@@ -56,13 +56,13 @@ export function Header() {
                 </Link>
               )}
               <button onClick={logout}
-                className="px-2 py-1.5 text-slate-500 hover:text-red-600">
+                className="px-2 py-1.5 text-muted-foreground hover:text-red-600">
                 退出
               </button>
             </>
           ) : (
             <>
-              <Link href="/login" className="px-3 py-1.5 text-slate-700 hover:text-slate-900">
+              <Link href="/login" className="px-3 py-1.5 text-foreground hover:text-foreground">
                 登录
               </Link>
               <Link href="/signup"

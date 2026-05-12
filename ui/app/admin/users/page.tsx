@@ -82,19 +82,19 @@ export default function UsersPage() {
   }
 
   const columns: Column<EndUser>[] = [
-    { key: 'id', header: 'ID', render: (u) => <span className="font-mono text-xs text-slate-500">#{u.id}</span> },
+    { key: 'id', header: 'ID', render: (u) => <span className="font-mono text-xs text-muted-foreground">#{u.id}</span> },
     { key: 'email', header: '邮箱', render: (u) => (
       <div>
-        <div className="text-slate-800">{u.email}</div>
-        {u.display_name && <div className="text-xs text-slate-500">{u.display_name}</div>}
+        <div className="text-foreground">{u.email}</div>
+        {u.display_name && <div className="text-xs text-muted-foreground">{u.display_name}</div>}
       </div>
     ) },
-    { key: 'group', header: '分组', render: (u) => <span className="text-xs text-slate-600">{u.group_name}</span> },
-    { key: 'created', header: '注册时间', render: (u) => <span className="text-xs text-slate-500">{fmtDate(u.created_at)}</span> },
+    { key: 'group', header: '分组', render: (u) => <span className="text-xs text-muted-foreground">{u.group_name}</span> },
+    { key: 'created', header: '注册时间', render: (u) => <span className="text-xs text-muted-foreground">{fmtDate(u.created_at)}</span> },
     { key: 'balance', header: '余额 / 已用', render: (u) => (
       <div className="text-xs">
         <div>{fmtCNY(u.quota_cents - u.used_quota_cents)} 余</div>
-        <div className="text-slate-500">{fmtCNY(u.used_quota_cents)} 已用</div>
+        <div className="text-muted-foreground">{fmtCNY(u.used_quota_cents)} 已用</div>
       </div>
     ) },
     { key: 'status', header: '状态', render: (u) => (
@@ -102,7 +102,7 @@ export default function UsersPage() {
         'text-xs px-2 py-0.5 rounded ' +
         (u.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
          u.status === 'suspended' ? 'bg-rose-100 text-rose-700' :
-         'bg-slate-100 text-slate-500')
+         'bg-muted text-muted-foreground')
       }>{u.status}</span>
     ) },
     { key: 'ops', header: '操作', render: (u) => (
@@ -125,8 +125,8 @@ export default function UsersPage() {
         <form onSubmit={search} className="flex gap-2">
           <input
             placeholder="按邮箱搜索…" value={q} onChange={(e) => setQ(e.target.value)}
-            className="px-3 py-1.5 rounded-md border border-slate-300 text-sm w-56" />
-          <button className="px-3 py-1.5 rounded-md bg-slate-800 text-white text-sm hover:bg-slate-900">搜索</button>
+            className="px-3 py-1.5 rounded-md border border-input text-sm w-56" />
+          <button className="px-3 py-1.5 rounded-md bg-accent text-white text-sm hover:bg-foreground">搜索</button>
         </form>
       }
     >
@@ -148,7 +148,7 @@ export default function UsersPage() {
         footer={
           <>
             <button onClick={() => setEditing(null)}
-              className="px-4 py-1.5 rounded-md border border-slate-300 text-sm">取消</button>
+              className="px-4 py-1.5 rounded-md border border-input text-sm">取消</button>
             <button onClick={saveQuota} disabled={busy}
               className="px-4 py-1.5 rounded-md bg-brand-600 text-white text-sm disabled:opacity-50">
               {busy ? '保存中…' : '保存'}
@@ -158,14 +158,14 @@ export default function UsersPage() {
       >
         {editing && (
           <div className="space-y-3 text-sm">
-            <div className="text-xs text-slate-500">
+            <div className="text-xs text-muted-foreground">
               当前剩余 <b>{fmtCNY(editing.quota_cents - editing.used_quota_cents)}</b>，已用 {fmtCNY(editing.used_quota_cents)}。
             </div>
             <div>
-              <div className="text-xs font-medium text-slate-600 mb-1">设为新剩余额度（分）</div>
+              <div className="text-xs font-medium text-muted-foreground mb-1">设为新剩余额度（分）</div>
               <input type="number" value={quotaInput} onChange={(e) => setQuotaInput(e.target.value)}
-                className="w-full px-3 py-2 rounded-md border border-slate-300" />
-              <div className="text-xs text-slate-500 mt-0.5">= {fmtCNY(Number(quotaInput) || 0)}</div>
+                className="w-full px-3 py-2 rounded-md border border-input" />
+              <div className="text-xs text-muted-foreground mt-0.5">= {fmtCNY(Number(quotaInput) || 0)}</div>
             </div>
           </div>
         )}

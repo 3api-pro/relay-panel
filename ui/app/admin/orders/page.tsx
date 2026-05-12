@@ -63,25 +63,25 @@ export default function OrdersPage() {
   }
 
   const columns: Column<Order>[] = [
-    { key: 'id', header: 'ID', render: (o) => <span className="font-mono text-xs text-slate-500">#{o.id}</span> },
-    { key: 'user', header: '用户', render: (o) => <span className="text-slate-800">{o.user_email ?? `user#${o.user_id ?? '?'}`}</span> },
-    { key: 'plan', header: '套餐', render: (o) => o.plan_name ?? <span className="text-slate-400">—</span> },
+    { key: 'id', header: 'ID', render: (o) => <span className="font-mono text-xs text-muted-foreground">#{o.id}</span> },
+    { key: 'user', header: '用户', render: (o) => <span className="text-foreground">{o.user_email ?? `user#${o.user_id ?? '?'}`}</span> },
+    { key: 'plan', header: '套餐', render: (o) => o.plan_name ?? <span className="text-muted-foreground">—</span> },
     { key: 'amount', header: '金额', render: (o) => <span className="font-medium">{fmtCNY(o.amount_cents)}</span> },
-    { key: 'method', header: '支付方式', render: (o) => <span className="text-xs text-slate-600">{o.pay_method ?? '—'}</span> },
+    { key: 'method', header: '支付方式', render: (o) => <span className="text-xs text-muted-foreground">{o.pay_method ?? '—'}</span> },
     { key: 'status', header: '状态', render: (o) => (
       <span className={
         'text-xs px-2 py-0.5 rounded ' +
         (o.status === 'paid' ? 'bg-emerald-100 text-emerald-700' :
          o.status === 'refunded' ? 'bg-amber-100 text-amber-700' :
          o.status === 'pending' ? 'bg-sky-100 text-sky-700' :
-         'bg-slate-100 text-slate-500')
+         'bg-muted text-muted-foreground')
       }>{o.status}</span>
     ) },
-    { key: 'time', header: '时间', render: (o) => <span className="text-xs text-slate-500">{fmtDate(o.created_at)}</span> },
+    { key: 'time', header: '时间', render: (o) => <span className="text-xs text-muted-foreground">{fmtDate(o.created_at)}</span> },
     { key: 'ops', header: '操作', render: (o) => (
       o.status === 'paid' ? (
         <button onClick={() => setRefunding(o)} className="text-xs text-rose-600 hover:underline">退款</button>
-      ) : <span className="text-xs text-slate-400">—</span>
+      ) : <span className="text-xs text-muted-foreground">—</span>
     ) },
   ];
 
@@ -95,7 +95,7 @@ export default function OrdersPage() {
             <button key={s || 'all'} onClick={() => { setStatus(s); setPage(0); refresh(0, s); }}
               className={
                 'px-3 py-1.5 rounded-md text-sm ' +
-                (status === s ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200')
+                (status === s ? 'bg-brand-600 text-white' : 'bg-muted text-foreground hover:bg-accent')
               }>
               {s || '全部'}
             </button>
@@ -121,7 +121,7 @@ export default function OrdersPage() {
         footer={
           <>
             <button onClick={() => { setRefunding(null); setReason(''); }}
-              className="px-4 py-1.5 rounded-md border border-slate-300 text-sm">取消</button>
+              className="px-4 py-1.5 rounded-md border border-input text-sm">取消</button>
             <button onClick={doRefund} disabled={busy}
               className="px-4 py-1.5 rounded-md bg-rose-600 text-white text-sm hover:bg-rose-700 disabled:opacity-50">
               {busy ? '处理中…' : '确认退款'}
@@ -131,14 +131,14 @@ export default function OrdersPage() {
       >
         {refunding && (
           <div className="space-y-3 text-sm">
-            <div className="text-slate-700">
+            <div className="text-foreground">
               用户 <b>{refunding.user_email ?? '?'}</b>，金额 <b>{fmtCNY(refunding.amount_cents)}</b>
             </div>
             <div>
-              <div className="text-xs font-medium text-slate-600 mb-1">退款原因</div>
+              <div className="text-xs font-medium text-muted-foreground mb-1">退款原因</div>
               <textarea value={reason} onChange={(e) => setReason(e.target.value)}
                 rows={3} placeholder="如：用户主动申请 / 服务异常 / 误下单 …"
-                className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm" />
+                className="w-full px-3 py-2 rounded-md border border-input text-sm" />
             </div>
             <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-3 py-2">
               退款会同时回退订阅状态，且不可逆。请确认已通过站外渠道与用户达成一致。

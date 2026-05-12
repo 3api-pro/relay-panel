@@ -62,18 +62,18 @@ export default function OnboardingClient({ step: stepParam }: { step: string }) 
   }
 
   if (!ready) {
-    return <main className="min-h-screen flex items-center justify-center text-slate-500 text-sm">加载中…</main>;
+    return <main className="min-h-screen flex items-center justify-center text-muted-foreground text-sm">加载中…</main>;
   }
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="min-h-screen bg-muted">
       <div className="max-w-3xl mx-auto px-6 py-8">
-        <div className="mb-2 text-sm text-slate-500">站长引导 · 5 步开店</div>
-        <h1 className="text-2xl font-semibold text-slate-900 mb-6">{STEPS[step - 1].title}</h1>
+        <div className="mb-2 text-sm text-muted-foreground">站长引导 · 5 步开店</div>
+        <h1 className="text-2xl font-semibold text-foreground mb-6">{STEPS[step - 1].title}</h1>
 
         <StepIndicator current={step} />
 
-        <div className="mt-6 bg-white rounded-lg border border-slate-200 p-6 min-h-[360px]">
+        <div className="mt-6 bg-card rounded-lg border border-border p-6 min-h-[360px]">
           {step === 1 && <Step1Channels />}
           {step === 2 && <Step2Brand />}
           {step === 3 && <Step3Plans />}
@@ -85,7 +85,7 @@ export default function OnboardingClient({ step: stepParam }: { step: string }) 
           <button
             onClick={() => goto(step - 1)}
             disabled={step === 1}
-            className="px-4 py-2 rounded-md border border-slate-300 text-sm text-slate-700 disabled:opacity-40 hover:bg-white"
+            className="px-4 py-2 rounded-md border border-input text-sm text-foreground disabled:opacity-40 hover:bg-card"
           >
             ← 上一步
           </button>
@@ -93,7 +93,7 @@ export default function OnboardingClient({ step: stepParam }: { step: string }) 
             {step < 5 && (
               <button
                 onClick={() => goto(step + 1)}
-                className="px-4 py-2 rounded-md text-sm text-slate-500 hover:text-slate-700"
+                className="px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground"
               >
                 跳过
               </button>
@@ -136,17 +136,17 @@ function StepIndicator({ current }: { current: number }) {
                 'w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ' +
                 (done ? 'bg-brand-600 text-white' :
                  active ? 'bg-brand-600 text-white ring-4 ring-brand-100' :
-                 'bg-slate-200 text-slate-500')
+                 'bg-accent text-muted-foreground')
               }>
                 {done ? '✓' : s.n}
               </div>
               <div className={
                 'mt-1.5 text-xs whitespace-nowrap ' +
-                (active ? 'text-slate-900 font-medium' : 'text-slate-500')
+                (active ? 'text-foreground font-medium' : 'text-muted-foreground')
               }>{s.title}</div>
             </div>
             {idx < STEPS.length - 1 && (
-              <div className={'flex-1 h-0.5 mx-2 mb-5 ' + (done ? 'bg-brand-600' : 'bg-slate-200')} />
+              <div className={'flex-1 h-0.5 mx-2 mb-5 ' + (done ? 'bg-brand-600' : 'bg-accent')} />
             )}
           </div>
         );
@@ -171,11 +171,11 @@ function Step1Channels() {
 
   return (
     <div>
-      <p className="text-sm text-slate-600 mb-4">
+      <p className="text-sm text-muted-foreground mb-4">
         默认已为你接入 <b>3API Wholesale</b>（我方批发上游），开箱即用。如需切换到自有 BYOK key（直连 Anthropic / OpenAI），请添加。
       </p>
       {loading ? (
-        <div className="text-sm text-slate-400">加载中…</div>
+        <div className="text-sm text-muted-foreground">加载中…</div>
       ) : list.length === 0 ? (
         <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-700">
           尚未检测到 channel — 系统会在你首次开店时自动注入 wholesale；如果未注入可在 <a href="/admin/channels" className="underline">上游 Channel</a> 页手动添加。
@@ -183,13 +183,13 @@ function Step1Channels() {
       ) : (
         <ul className="space-y-2">
           {list.map((c) => (
-            <li key={c.id} className="flex items-center gap-3 p-3 rounded-md border border-slate-200 bg-slate-50">
+            <li key={c.id} className="flex items-center gap-3 p-3 rounded-md border border-border bg-muted">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-slate-800">{c.name}</div>
-                <div className="text-xs text-slate-500 font-mono truncate">{c.base_url}</div>
+                <div className="text-sm font-medium text-foreground">{c.name}</div>
+                <div className="text-xs text-muted-foreground font-mono truncate">{c.base_url}</div>
               </div>
-              <span className="text-xs text-slate-500">{c.type}</span>
+              <span className="text-xs text-muted-foreground">{c.type}</span>
               {c.is_default && <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">默认</span>}
             </li>
           ))}
@@ -233,27 +233,27 @@ function Step2Brand() {
     <div className="space-y-3">
       <Field label="店铺名称">
         <input type="text" value={brand.store_name ?? ''} onChange={(e) => setBrand({ ...brand, store_name: e.target.value })}
-          placeholder="例如：算力中转站" className="w-full px-3 py-2 rounded-md border border-slate-300" />
+          placeholder="例如：算力中转站" className="w-full px-3 py-2 rounded-md border border-input" />
       </Field>
       <Field label="Logo URL">
         <input type="text" value={brand.logo_url ?? ''} onChange={(e) => setBrand({ ...brand, logo_url: e.target.value })}
-          placeholder="https://..." className="w-full px-3 py-2 rounded-md border border-slate-300" />
+          placeholder="https://..." className="w-full px-3 py-2 rounded-md border border-input" />
       </Field>
       <Field label="主题色">
         <div className="flex items-center gap-2">
           <input type="color" value={brand.primary_color ?? '#0e9486'} onChange={(e) => setBrand({ ...brand, primary_color: e.target.value })}
-            className="h-9 w-12 rounded border border-slate-300" />
+            className="h-9 w-12 rounded border border-input" />
           <input type="text" value={brand.primary_color ?? '#0e9486'} onChange={(e) => setBrand({ ...brand, primary_color: e.target.value })}
-            className="flex-1 px-3 py-2 rounded-md border border-slate-300 font-mono text-sm" />
+            className="flex-1 px-3 py-2 rounded-md border border-input font-mono text-sm" />
         </div>
       </Field>
       <Field label="联系邮箱">
         <input type="email" value={brand.contact_email ?? ''} onChange={(e) => setBrand({ ...brand, contact_email: e.target.value })}
-          placeholder="support@example.com" className="w-full px-3 py-2 rounded-md border border-slate-300" />
+          placeholder="support@example.com" className="w-full px-3 py-2 rounded-md border border-input" />
       </Field>
       <Field label="首页公告（可空）">
         <textarea value={brand.announcement ?? ''} onChange={(e) => setBrand({ ...brand, announcement: e.target.value })}
-          rows={2} className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm" />
+          rows={2} className="w-full px-3 py-2 rounded-md border border-input text-sm" />
       </Field>
       <div className="flex items-center justify-between pt-1">
         <div className="text-xs">
@@ -261,7 +261,7 @@ function Step2Brand() {
           {err && <span className="text-amber-700">{err}</span>}
         </div>
         <button onClick={save} disabled={busy}
-          className="px-4 py-1.5 rounded-md bg-slate-800 text-white text-sm hover:bg-slate-900 disabled:opacity-50">
+          className="px-4 py-1.5 rounded-md bg-accent text-white text-sm hover:bg-foreground disabled:opacity-50">
           {busy ? '保存中…' : '保存'}
         </button>
       </div>
@@ -294,27 +294,27 @@ function Step3Plans() {
 
   return (
     <div>
-      <p className="text-sm text-slate-600 mb-4">
+      <p className="text-sm text-muted-foreground mb-4">
         系统已为你预置 4 个标准套餐。这里可以快速启用 / 禁用，或前往 <a href="/admin/plans" className="text-brand-700 underline">套餐管理</a> 改价。
       </p>
       {loading ? (
-        <div className="text-sm text-slate-400">加载中…</div>
+        <div className="text-sm text-muted-foreground">加载中…</div>
       ) : plans.length === 0 ? (
-        <div className="text-sm text-slate-500">暂未检测到套餐（数据库可能未 seed）。</div>
+        <div className="text-sm text-muted-foreground">暂未检测到套餐（数据库可能未 seed）。</div>
       ) : (
         <div className="space-y-2">
           {plans.map((p) => (
-            <div key={p.id} className="flex items-center gap-4 p-3 rounded-md border border-slate-200">
+            <div key={p.id} className="flex items-center gap-4 p-3 rounded-md border border-border">
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-slate-800">{p.name}</div>
-                <div className="text-xs text-slate-500">
+                <div className="text-sm font-medium text-foreground">{p.name}</div>
+                <div className="text-xs text-muted-foreground">
                   {fmtCNY(p.price_cents)} / {p.period_days}天 ·{' '}
                   {p.quota_tokens === -1 ? '不限 token' : `${(p.quota_tokens / 1_000_000).toFixed(1)}M token`}
                 </div>
               </div>
               <label className="flex items-center gap-2 text-xs cursor-pointer">
                 <input type="checkbox" checked={p.enabled} onChange={() => toggle(p)} />
-                <span className={p.enabled ? 'text-emerald-700' : 'text-slate-400'}>
+                <span className={p.enabled ? 'text-emerald-700' : 'text-muted-foreground'}>
                   {p.enabled ? '已上架' : '已下架'}
                 </span>
               </label>
@@ -371,27 +371,27 @@ function Step4Payment() {
       <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">
         收款接口由 payments agent 提供。如果你现在还没收到这两行接口，先跳过本步——主流程不受阻。
       </div>
-      <fieldset className="border border-slate-200 rounded-md p-4">
-        <legend className="text-sm font-medium text-slate-700 px-1">支付宝</legend>
+      <fieldset className="border border-border rounded-md p-4">
+        <legend className="text-sm font-medium text-foreground px-1">支付宝</legend>
         <Field label="APP ID">
           <input type="text" value={alipayAppId} onChange={(e) => setAlipayAppId(e.target.value)}
-            placeholder="2021..." className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm font-mono" />
+            placeholder="2021..." className="w-full px-3 py-2 rounded-md border border-input text-sm font-mono" />
         </Field>
         <Field label="商户私钥（PEM）">
           <textarea value={alipayKey} onChange={(e) => setAlipayKey(e.target.value)}
             rows={3} placeholder="-----BEGIN RSA PRIVATE KEY-----..."
-            className="w-full px-3 py-2 rounded-md border border-slate-300 text-xs font-mono" />
+            className="w-full px-3 py-2 rounded-md border border-input text-xs font-mono" />
         </Field>
       </fieldset>
-      <fieldset className="border border-slate-200 rounded-md p-4">
-        <legend className="text-sm font-medium text-slate-700 px-1">USDT</legend>
+      <fieldset className="border border-border rounded-md p-4">
+        <legend className="text-sm font-medium text-foreground px-1">USDT</legend>
         <Field label="TRC20 地址">
           <input type="text" value={usdtTrc} onChange={(e) => setUsdtTrc(e.target.value)}
-            placeholder="T..." className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm font-mono" />
+            placeholder="T..." className="w-full px-3 py-2 rounded-md border border-input text-sm font-mono" />
         </Field>
         <Field label="ERC20 地址">
           <input type="text" value={usdtErc} onChange={(e) => setUsdtErc(e.target.value)}
-            placeholder="0x..." className="w-full px-3 py-2 rounded-md border border-slate-300 text-sm font-mono" />
+            placeholder="0x..." className="w-full px-3 py-2 rounded-md border border-input text-sm font-mono" />
         </Field>
       </fieldset>
       <div className="flex items-center justify-between pt-1">
@@ -400,7 +400,7 @@ function Step4Payment() {
           {err && <span className="text-amber-700">{err}</span>}
         </div>
         <button onClick={save} disabled={busy}
-          className="px-4 py-1.5 rounded-md bg-slate-800 text-white text-sm hover:bg-slate-900 disabled:opacity-50">
+          className="px-4 py-1.5 rounded-md bg-accent text-white text-sm hover:bg-foreground disabled:opacity-50">
           {busy ? '保存中…' : '保存'}
         </button>
       </div>
@@ -434,18 +434,18 @@ function Step5Done({ onDone }: { onDone: () => void }) {
   return (
     <div className="text-center py-4">
       <div className="text-5xl mb-3">🎉</div>
-      <h2 className="text-xl font-semibold text-slate-900">你的店铺已开张</h2>
-      <p className="text-sm text-slate-600 mt-2">把这条链接发给你的用户，他们就能注册下单了。</p>
+      <h2 className="text-xl font-semibold text-foreground">你的店铺已开张</h2>
+      <p className="text-sm text-muted-foreground mt-2">把这条链接发给你的用户，他们就能注册下单了。</p>
 
-      <div className="mt-6 inline-flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-md px-4 py-2.5 font-mono text-sm">
+      <div className="mt-6 inline-flex items-center gap-2 bg-muted border border-border rounded-md px-4 py-2.5 font-mono text-sm">
         <span>{url}</span>
-        <button onClick={copy} className="px-2 py-1 rounded bg-white border border-slate-300 hover:bg-slate-100 text-xs">
+        <button onClick={copy} className="px-2 py-1 rounded bg-card border border-input hover:bg-muted text-xs">
           {copied ? '已复制 ✓' : '复制'}
         </button>
       </div>
 
-      <div className="mt-8 max-w-md mx-auto text-left text-sm text-slate-600 space-y-2">
-        <p className="font-medium text-slate-700">下一步建议</p>
+      <div className="mt-8 max-w-md mx-auto text-left text-sm text-muted-foreground space-y-2">
+        <p className="font-medium text-foreground">下一步建议</p>
         <ul className="space-y-1.5 list-disc list-inside">
           <li>到 <a href="/admin/finance" className="text-brand-700 underline">财务</a> 给 wholesale 余额充值（首次建议 ¥500）</li>
           <li>到 <a href="/admin/branding" className="text-brand-700 underline">品牌</a> 上传 logo 完成形象</li>
@@ -466,7 +466,7 @@ function Step5Done({ onDone }: { onDone: () => void }) {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="mb-2">
-      <div className="text-xs font-medium text-slate-600 mb-1">{label}</div>
+      <div className="text-xs font-medium text-muted-foreground mb-1">{label}</div>
       {children}
     </div>
   );

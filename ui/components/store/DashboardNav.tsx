@@ -12,14 +12,14 @@ const items = [
 export function DashboardNav() {
   const path = usePathname() || '';
   return (
-    <nav className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+    <nav className="bg-card border border-border rounded-lg overflow-hidden">
       <ul className="flex sm:block">
         {items.map((it) => {
           const active = path === it.href || path.startsWith(it.href + '/');
           return (
             <li key={it.href} className="flex-1">
               <Link href={it.href}
-                className={`block px-4 py-3 text-sm border-b border-slate-100 last:border-b-0 ${active ? 'font-medium text-slate-900 bg-slate-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                className={`block px-4 py-3 text-sm border-b border-border/50 last:border-b-0 ${active ? 'font-medium text-foreground bg-background' : 'text-muted-foreground hover:bg-background'}`}
                 style={active ? { borderLeft: '3px solid var(--brand-primary, #0e9486)' } : undefined}>
                 {it.label}
               </Link>

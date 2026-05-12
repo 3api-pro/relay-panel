@@ -6,19 +6,19 @@ import { Badge } from './ui';
 export function PlanCard({ plan, recommended = false }: { plan: Plan; recommended?: boolean }) {
   const models = parseAllowedModels(plan.allowed_models);
   return (
-    <div className={`relative rounded-xl border bg-white p-6 flex flex-col ${recommended ? 'border-2 shadow-md' : 'border-slate-200'}`}
+    <div className={`relative rounded-xl border bg-card p-6 flex flex-col ${recommended ? 'border-2 shadow-md' : 'border-border'}`}
          style={recommended ? { borderColor: 'var(--brand-primary, #0e9486)' } : undefined}>
       {recommended && (
         <div className="absolute -top-3 right-4">
           <Badge tone="brand">推荐</Badge>
         </div>
       )}
-      <div className="text-lg font-semibold text-slate-900">{plan.name}</div>
+      <div className="text-lg font-semibold text-foreground">{plan.name}</div>
       <div className="mt-4 flex items-baseline gap-1">
-        <span className="text-3xl font-bold text-slate-900">{fmtCents(plan.price_cents)}</span>
-        <span className="text-sm text-slate-500">/ {plan.period_days} 天</span>
+        <span className="text-3xl font-bold text-foreground">{fmtCents(plan.price_cents)}</span>
+        <span className="text-sm text-muted-foreground">/ {plan.period_days} 天</span>
       </div>
-      <ul className="mt-5 space-y-2 text-sm text-slate-700 flex-1">
+      <ul className="mt-5 space-y-2 text-sm text-foreground flex-1">
         <li className="flex items-start gap-2">
           <span style={{ color: 'var(--brand-primary, #0e9486)' }}>✓</span>
           <span>{fmtTokens(plan.quota_tokens)} tokens 额度</span>

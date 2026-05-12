@@ -10,7 +10,7 @@ export default function SettingsPage() {
   return (
     <AuthGuard>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <h1 className="text-2xl font-semibold text-slate-900 mb-6">控制台</h1>
+        <h1 className="text-2xl font-semibold text-foreground mb-6">控制台</h1>
         <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6">
           <DashboardNav />
           <SettingsInner />
@@ -91,28 +91,28 @@ function SettingsInner() {
     <div className="space-y-4">
       <Card title="账号信息">
         {!me ? (
-          <div className="flex items-center text-slate-400 text-sm"><Spinner /> <span className="ml-2">加载中…</span></div>
+          <div className="flex items-center text-muted-foreground text-sm"><Spinner /> <span className="ml-2">加载中…</span></div>
         ) : (
           <dl className="text-sm space-y-2">
             <div className="flex">
-              <dt className="w-24 text-slate-500">邮箱</dt>
-              <dd className="text-slate-900">{me.email || '—'}</dd>
+              <dt className="w-24 text-muted-foreground">邮箱</dt>
+              <dd className="text-foreground">{me.email || '—'}</dd>
             </div>
             {me.created_at && (
               <div className="flex">
-                <dt className="w-24 text-slate-500">注册时间</dt>
-                <dd className="text-slate-900">{me.created_at}</dd>
+                <dt className="w-24 text-muted-foreground">注册时间</dt>
+                <dd className="text-foreground">{me.created_at}</dd>
               </div>
             )}
             {me.aff_code && (
               <div className="flex">
-                <dt className="w-24 text-slate-500">邀请码</dt>
-                <dd><code className="text-xs bg-slate-100 px-2 py-0.5 rounded">{me.aff_code}</code></dd>
+                <dt className="w-24 text-muted-foreground">邀请码</dt>
+                <dd><code className="text-xs bg-muted px-2 py-0.5 rounded">{me.aff_code}</code></dd>
               </div>
             )}
           </dl>
         )}
-        <div className="text-xs text-slate-500 mt-3">邮箱地址绑定后不可修改; 如需更换请联系客服。</div>
+        <div className="text-xs text-muted-foreground mt-3">邮箱地址绑定后不可修改; 如需更换请联系客服。</div>
       </Card>
 
       <Card title="修改密码">
@@ -127,7 +127,7 @@ function SettingsInner() {
       </Card>
 
       <Card title="危险区">
-        <div className="text-sm text-slate-600 mb-3">删除账号将永久注销, 已购买的额度不予退款。</div>
+        <div className="text-sm text-muted-foreground mb-3">删除账号将永久注销, 已购买的额度不予退款。</div>
         <Button variant="danger" onClick={() => setOpenDelete(true)}>删除账号</Button>
       </Card>
 
@@ -137,7 +137,7 @@ function SettingsInner() {
           <Button variant="ghost" onClick={() => !busy && setOpenDelete(false)}>取消</Button>
           <Button variant="danger" onClick={deleteAccount} disabled={busy}>{busy ? '处理中…' : '永久删除'}</Button>
         </>}>
-        <p className="text-sm text-slate-600">此操作不可恢复。继续吗?</p>
+        <p className="text-sm text-muted-foreground">此操作不可恢复。继续吗?</p>
       </Modal>
     </div>
   );
