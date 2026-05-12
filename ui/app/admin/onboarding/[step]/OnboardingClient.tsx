@@ -57,8 +57,11 @@ export default function OnboardingClient({ step: stepParam }: { step: string }) 
     if (typeof window !== 'undefined') {
       localStorage.removeItem('onboarding_step');
       localStorage.setItem('onboarding_done', '1');
+      // Clear any prior tour seen-flag so a freshly onboarded tenant
+      // really gets the guided tour on the dashboard.
+      try { localStorage.removeItem('3api_tour_done_v1'); } catch {}
     }
-    router.push('/admin');
+    router.push('/admin?tour=1');
   }
 
   if (!ready) {

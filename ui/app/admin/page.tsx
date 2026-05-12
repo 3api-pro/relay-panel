@@ -5,6 +5,8 @@ import { StatCard } from '@/components/admin/StatCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { api, safe, fmtCNY, fmtDate } from '@/lib/api';
+import { useAutoRefresh } from '@/lib/use-auto-refresh';
+import { OnboardingTour } from '@/components/OnboardingTour';
 
 interface StatsSeries { date: string; cents?: number; value?: number }
 interface Stats {
@@ -36,14 +38,23 @@ function seriesValues(s?: StatsSeries[]): number[] {
 }
 
 export default function AdminHome() {
-  const [period, setPeriod] = useState<'7d' | '30d'>('7d');
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-
+  // Read ?tour=1 from window.location to avoid useSearchParams + Suspense.
+  const [startTour, setStartTour] = useState(false);
   useEffect(() => {
-    setLoading(true);
-    Promise.all([
+    if (typeof window === 'undefined') return;
+    try {
+      const u = new URL(window.location.href);
+      if (u.searchParams.get('tour') === '1') setStartTour(true);
+    } catch {}
+  }, []);
+
+  const [period, setPeriod] = useState<'7d' | '30d'>('7d');
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+
+  /* ---- stats: auto-refreshing every 30 s (visibility-aware) ---- */
+  const { data: stats, loading: statsLoading } = useAutoRefresh<Stats>(async () => {
+    const [s, w] = await Promise.all([
       safe(api<Stats>(`/admin/stats?period=${period}`), {
         revenue_today_cents: 0,
         active_subscriptions: 0,
@@ -52,13 +63,19 @@ export default function AdminHome() {
         revenue_series: [],
       } as Stats),
       safe(api<{ balance_cents: number }>('/admin/wholesale'), { balance_cents: 0 }),
-      safe(api<{ data: Order[] }>('/admin/orders?limit=10'), { data: [] }),
-    ]).then(([s, w, o]) => {
-      setStats({ ...s, wholesale_balance_cents: w.balance_cents ?? s.wholesale_balance_cents });
-      setOrders(o.data || []);
-      setLoading(false);
-    });
+    ]);
+    return { ...s, wholesale_balance_cents: w.balance_cents ?? s.wholesale_balance_cents };
+  }, { intervalMs: 30_000 });
+
+  /* ---- orders: one-shot on mount/period change (no polling) ---- */
+  useEffect(() => {
+    setOrdersLoading(true);
+    safe(api<{ data: Order[] }>('/admin/orders?limit=10'), { data: [] })
+      .then((o) => setOrders(o.data || []))
+      .finally(() => setOrdersLoading(false));
   }, [period]);
+
+  const loading = statsLoading || ordersLoading;
 
   const lowBalance = stats != null && stats.wholesale_balance_cents < LOW_WHOLESALE_THRESHOLD;
 
@@ -69,6 +86,7 @@ export default function AdminHome() {
 
   return (
     <AdminShell title="总览" subtitle="今日营收 / 用户活跃 / 上游余额一览">
+      <OnboardingTour autoStart={startTour} force={startTour} />
       {lowBalance && (
         <div className="mb-5 rounded-md bg-amber-500/10 border border-amber-500/30 px-4 py-3 text-sm text-amber-700 dark:text-amber-300 flex items-center justify-between">
           <span>⚠️ wholesale 余额低于 {fmtCNY(LOW_WHOLESALE_THRESHOLD)}（当前 {fmtCNY(stats!.wholesale_balance_cents)}），建议尽快充值避免用户付款后无法供给。</span>

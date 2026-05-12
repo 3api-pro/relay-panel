@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { Search, ChevronRight, LogOut, Settings as SettingsIcon, User } from 'lucide-react';
 import { auth } from '@/lib/api';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { openCommandPalette } from '@/components/CommandPalette';
+import { resetOnboardingTour } from '@/components/OnboardingTour';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -66,12 +68,18 @@ export function TopBar({ title, subtitle, actions }: Props) {
 
       <div className="flex items-center gap-2">
         {actions}
-        <div className="hidden md:flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-background text-muted-foreground text-xs cursor-not-allowed opacity-70">
+        <button
+          type="button"
+          data-tour="topbar-cmdk"
+          onClick={openCommandPalette}
+          aria-label="打开命令面板"
+          className="hidden md:flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-background text-muted-foreground text-xs hover:text-foreground hover:bg-accent transition-colors"
+        >
           <Search className="h-3.5 w-3.5" />
           <span>搜索</span>
           <kbd className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-muted border border-border">Ctrl K</kbd>
-        </div>
-        <ThemeToggle />
+        </button>
+        <div data-tour="topbar-theme"><ThemeToggle /></div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" aria-label="账号菜单" className="h-9 w-9">
@@ -91,6 +99,14 @@ export function TopBar({ title, subtitle, actions }: Props) {
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push('/admin/branding')}>
               <User className="mr-2 h-4 w-4" /> 品牌资料
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                resetOnboardingTour();
+                router.push('/admin?tour=1');
+              }}
+            >
+              <Search className="mr-2 h-4 w-4" /> 再看一次新手引导
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
