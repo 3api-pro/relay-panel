@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, ReactNode } from 'react';
+import { Key, CheckCircle2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { api, auth, safe, fmtCNY } from '@/lib/api';
 import { useTranslations } from '@/lib/i18n';
@@ -287,9 +288,7 @@ function Step1Channels() {
         {/* BYOK card */}
         <div className="rounded-lg border border-border bg-card p-5 flex flex-col">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-7 h-7 rounded-full bg-muted text-foreground flex items-center justify-center text-sm font-bold">
-              🔑
-            </div>
+            <div className="w-7 h-7 rounded-full bg-muted text-foreground flex items-center justify-center text-sm font-bold"><Key className="h-4 w-4" /></div>
             <h3 className="text-base font-semibold text-foreground">{t('byok_title')}</h3>
           </div>
           <p className="text-sm text-foreground/80 mb-3">
@@ -557,7 +556,7 @@ function Step5Done({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="text-center py-4">
-      <div className="text-5xl mb-3">🎉</div>
+      <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-[color:var(--accent)]/10 text-[color:var(--accent)] mb-3"><CheckCircle2 className="h-8 w-8" /></div>
       <h2 className="text-xl font-semibold text-foreground">{t('title')}</h2>
       <p className="text-sm text-muted-foreground mt-2">{t('subtitle')}</p>
 
