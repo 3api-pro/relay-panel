@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/assets/logo.svg" alt="3api" width="120"/>
   <h1>3api / relay-panel</h1>
-  <p><strong>Open-source multi-tenant Claude-compatible relay panel &mdash; turn yourself into an AI reseller in 30 minutes.</strong></p>
+  <p><strong>Multi-tenant Claude/OpenAI relay panel &mdash; zero inventory, one-click upstream, 30-minute store launch.</strong></p>
   <p>
     <a href="https://github.com/3api-pro/relay-panel/blob/main/LICENSE"><img src="https://img.shields.io/github/license/3api-pro/relay-panel?color=blue" alt="License"/></a>
     <a href="https://github.com/3api-pro/relay-panel/releases"><img src="https://img.shields.io/github/v/release/3api-pro/relay-panel?include_prereleases&sort=semver" alt="Release"/></a>
@@ -33,7 +33,23 @@ Unlike Go-based `one-api` / `new-api`, this is a modern **TypeScript + Postgres 
 Next.js** stack with first-class multi-tenancy, an onboarding wizard, a real
 storefront UI, and native subscription billing &mdash; not just token quota.
 
-## 30-second Quick Start
+> **Why 3api?** Other open-source relay panels (`new-api`, `sub2api`) ship empty
+> &mdash; you bring your own Anthropic / OpenAI keys, negotiate quota, rotate
+> banned keys, eat the upstream outages. **3api comes pre-wired to
+> `llmapi.pro` wholesale upstream**: register and you're selling on day one.
+> BYOK is still supported &mdash; mix freely. Full positioning piece:
+> [docs/WHY-3API.md](docs/WHY-3API.md).
+
+## Quick Start &mdash; Pick One
+
+### Option A: Hosted SaaS (5 seconds)
+
+Visit <https://3api.pro/create> &rarr; register email + password &rarr;
+auto-assigned subdomain like `swift-fox-7k9m.3api.pro` &rarr; you land on
+`/admin` with wholesale upstream, 4 plans and 2 token packs pre-seeded.
+Configure Alipay merchant ID + USDT addresses and share the subdomain link.
+
+### Option B: Self-host with one command (30 seconds)
 
 ```bash
 git clone https://github.com/3api-pro/relay-panel
@@ -43,8 +59,15 @@ docker compose up -d
 # → open http://localhost:8080 → signup → onboarding wizard → done
 ```
 
-Full walkthrough in [docs/QUICKSTART.md](docs/QUICKSTART.md) (clone &rarr; first
-paying customer in 5 minutes).
+### Option C: VPS one-line install (60 seconds)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/install.sh \
+  | DOMAIN=relay.example.com UPSTREAM_KEY=wsk-... bash
+```
+
+Full walkthrough (including the hosted path) in
+[docs/QUICKSTART.md](docs/QUICKSTART.md).
 
 ## Screenshots
 

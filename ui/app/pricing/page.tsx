@@ -79,22 +79,67 @@ function MarketingPricing() {
       <section className="border-b border-border">
         <div className="max-w-4xl mx-auto px-6 py-16 text-center">
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
-            你的 Claude 中转开店平台
+            30 分钟开起你自己的 Claude 中转店
           </h1>
           <p className="mt-4 text-lg text-muted-foreground">
-            站长按 face value 批发上游额度，自由加价转售。
-            利润 = 卖价 − face value，平台不抽成。
+            零库存 — 不用谈号池, 不用买 API key。3api 内置 <span className="font-semibold text-brand-700">llmapi.pro 批发上游</span>, 注册即开卖。
+            利润 = 你的零售价 − 批发价, 平台不抽成。
           </p>
-          <div className="mt-8 flex justify-center gap-4">
+          <div className="mt-8 flex justify-center gap-4 flex-wrap">
             <Link href="/create"
               className="px-6 py-3 rounded-md bg-brand-600 text-white text-base font-medium hover:bg-brand-700">
-              开始 →
+              免费注册, 立即开店 →
             </Link>
             <Link href="https://github.com/3api-pro/3api-relay-panel" target="_blank" rel="noopener"
               className="px-6 py-3 rounded-md border border-input text-foreground text-base font-medium hover:bg-background">
-              查看源码
+              我有 key, BYOK 自部署
             </Link>
           </div>
+        </div>
+      </section>
+
+      <section className="border-b border-border bg-muted/30">
+        <div className="max-w-5xl mx-auto px-6 py-14">
+          <h2 className="text-2xl font-semibold text-foreground text-center">为什么选 3api, 而不是自己搞 new-api</h2>
+          <p className="mt-2 text-sm text-muted-foreground text-center">
+            你也可以下载 new-api 自己部署 — 但有几件事你逃不掉。下面是核心区别 (完整 25 行矩阵看 <Link href="https://github.com/3api-pro/relay-panel/blob/main/docs/COMPARISON.md" className="underline" target="_blank" rel="noopener">docs/COMPARISON.md</Link>)。
+          </p>
+          <div className="mt-6 overflow-x-auto">
+            <table className="min-w-full text-sm border border-border rounded-lg overflow-hidden bg-card">
+              <thead>
+                <tr className="text-left text-muted-foreground border-b border-border bg-muted/40">
+                  <th className="py-3 px-4 font-medium"></th>
+                  <th className="py-3 px-4 font-medium text-brand-700">3api</th>
+                  <th className="py-3 px-4 font-medium">自部署 new-api</th>
+                </tr>
+              </thead>
+              <tbody className="text-foreground">
+                <tr className="border-b border-border/50">
+                  <td className="py-3 px-4 text-muted-foreground">需要自己谈号池</td>
+                  <td className="py-3 px-4 font-medium">❌ 不需要 (内置批发上游)</td>
+                  <td className="py-3 px-4">✅ 自己谈 Anthropic / OpenAI key</td>
+                </tr>
+                <tr className="border-b border-border/50">
+                  <td className="py-3 px-4 text-muted-foreground">启动时间</td>
+                  <td className="py-3 px-4 font-medium">30 分钟</td>
+                  <td className="py-3 px-4">数天到数周 (拿 key + 配池子)</td>
+                </tr>
+                <tr className="border-b border-border/50">
+                  <td className="py-3 px-4 text-muted-foreground">上游挂了谁背锅</td>
+                  <td className="py-3 px-4 font-medium">平台兜底, 自动 failover</td>
+                  <td className="py-3 px-4">你自己背 (半夜起来切 base)</td>
+                </tr>
+                <tr>
+                  <td className="py-3 px-4 text-muted-foreground">多租户 / 子域开店</td>
+                  <td className="py-3 px-4 font-medium">✅ 内置 (Caddy on-demand TLS)</td>
+                  <td className="py-3 px-4">❌ 不支持 (单租户设计)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground text-center">
+            BYOK 也支持 — 你可以同时挂 llmapi 批发 + 自己的 key, 走 priority + 自动 failover。
+          </p>
         </div>
       </section>
 
@@ -208,6 +253,10 @@ function MarketingPricing() {
           站长在后台填入自己的域名 → 把 DNS A 记录指向 3api.pro 服务 IP → Caddy 自动签证书。
           整个过程无需登录 Cloudflare，无需手贴证书。
         </FAQ>
+        <FAQ q="我可以同时用 llmapi 推荐上游 + 自己的 key (BYOK) 吗？">
+          可以。后台 Channels 里加一个 BYOK channel (粘贴你的 Anthropic / OpenAI key), 给它设 priority。
+          系统按 priority + 模型 allowlist 选最便宜的通道；任一通道失败自动 failover 到下一个。
+          推荐策略：BYOK 走小流量降本, llmapi 批发兜底高峰。</FAQ>
       </section>
 
       <footer className="border-t border-border bg-card mt-auto">
