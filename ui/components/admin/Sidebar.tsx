@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, BarChart3, Package, ShoppingCart, Users,
   Plug, Wallet, Palette, CreditCard, Settings, SlidersHorizontal,
-  ChevronDown, ChevronLeft, ChevronRight, Share2,
+  ChevronDown, ChevronLeft, ChevronRight, Share2, Webhook,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -43,6 +43,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: '/admin/branding',       labelKey: 'branding',       Icon: Palette },
       { href: '/admin/system-setting', labelKey: 'system_setting', Icon: SlidersHorizontal },
+      { href: '/admin/webhooks',       labelKey: 'webhooks',       Icon: Webhook },
       { href: '/admin/payment-config', labelKey: 'payment_config', Icon: CreditCard },
       { href: '/admin/settings',       labelKey: 'settings',       Icon: Settings },
     ],

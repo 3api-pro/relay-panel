@@ -1,0 +1,663 @@
+# Auto-generated — DO NOT EDIT.
+# Edit src/routes/_openapi-meta.ts then run scripts/generate-openapi.ts.
+openapi: "3.0.3"
+info:
+  title: "3API Relay Panel"
+  version: "0.5.0"
+  description: "Anthropic-compatible LLM relay with multi-tenant storefront, reseller admin, plans / orders / subscriptions, webhook delivery, and per-tenant BYOK upstream channels."
+servers:
+  - url: "https://3api.pro"
+    description: "SaaS root (multi-tenant)"
+  - url: "https://{store}.3api.pro"
+    description: "Tenant storefront (replace {store})"
+  - url: "http://localhost:8080"
+    description: "Local dev"
+tags:
+  - name: "relay"
+    description: "Anthropic-compatible LLM relay (drop-in)"
+  - name: "storefront"
+    description: "End-user signup / login / orders / subscriptions"
+  - name: "admin"
+    description: "Reseller admin (per-tenant CRUD)"
+  - name: "webhooks"
+    description: "Outbound webhook subscriptions + delivery"
+components:
+  securitySchemes:
+    apiKey:
+      type: "http"
+      scheme: "bearer"
+      bearerFormat: "sk-..."
+    adminBearer:
+      type: "http"
+      scheme: "bearer"
+      bearerFormat: "JWT"
+    customerBearer:
+      type: "http"
+      scheme: "bearer"
+      bearerFormat: "JWT"
+paths:
+  /v1/messages:
+    post:
+      summary: "Create a message (Anthropic-compatible)"
+      tags:
+        - "relay"
+      responses:
+        "200":
+          description: "Message response (JSON or text/event-stream)"
+          content:
+            application/json:
+              example:
+                id: "msg_01..."
+                type: "message"
+                role: "assistant"
+                content:
+                  - type: "text"
+                    text: "Hi!"
+                model: "claude-sonnet-4-20250514"
+                stop_reason: "end_turn"
+                usage:
+                  input_tokens: 10
+                  output_tokens: 4
+        "401":
+          description: "Missing / invalid API key"
+        "429":
+          description: "Rate limited or quota exhausted"
+      description: "Drop-in for `POST https://api.anthropic.com/v1/messages`. Supports streaming (SSE) when `stream:true`."
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              model: "claude-sonnet-4-20250514"
+              max_tokens: 1024
+              messages:
+                - role: "user"
+                  content: "Hello"
+  /v1/messages/count_tokens:
+    post:
+      summary: "Count tokens for a prospective message"
+      tags:
+        - "relay"
+      responses:
+        "200":
+          description: "Token count"
+          content:
+            application/json:
+              example:
+                input_tokens: 10
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              model: "claude-sonnet-4-20250514"
+              messages:
+                - role: "user"
+                  content: "Hello"
+  /v1/models:
+    get:
+      summary: "List available models"
+      tags:
+        - "relay"
+      responses:
+        "200":
+          description: "Models array"
+          content:
+            application/json:
+              example:
+                data:
+                  - id: "claude-sonnet-4-7"
+                    object: "model"
+      security:
+        - apiKey: []
+  /storefront/signup:
+    post:
+      summary: "End-user signup"
+      tags:
+        - "storefront"
+      responses:
+        "200":
+          description: "JWT token"
+          content:
+            application/json:
+              example:
+                token: "eyJ..."
+        "409":
+          description: "email already exists"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              email: "alice@example.com"
+              password: "secret123"
+  /storefront/login:
+    post:
+      summary: "End-user login"
+      tags:
+        - "storefront"
+      responses:
+        "200":
+          description: "JWT token"
+        "401":
+          description: "bad credentials"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              email: "alice@example.com"
+              password: "secret123"
+  /storefront/forgot-password:
+    post:
+      summary: "Request a password-reset email"
+      tags:
+        - "storefront"
+      responses:
+        "200":
+          description: "always 200 to avoid enumeration"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              email: "alice@example.com"
+  /storefront/reset-password:
+    post:
+      summary: "Consume reset token + set new password"
+      tags:
+        - "storefront"
+      responses:
+        "200":
+          description: "reset OK"
+        "400":
+          description: "expired or invalid token"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              token: "…"
+              password: "new-secret-123"
+  /storefront/plans:
+    get:
+      summary: "List enabled plans for this storefront"
+      tags:
+        - "storefront"
+      responses:
+        "200":
+          description: "Plan list"
+          content:
+            application/json:
+              example:
+                data:
+                  - id: 1
+                    slug: "pro"
+                    name: "Pro"
+                    price_cents: 9900
+  /storefront/brand:
+    get:
+      summary: "Get tenant branding (logo, colors)"
+      tags:
+        - "storefront"
+      responses:
+        "200":
+          description: "Brand config"
+  /storefront/balance:
+    get:
+      summary: "Current user quota + subscription status"
+      tags:
+        - "storefront"
+      responses:
+        "200":
+          description: "Balance"
+          content:
+            application/json:
+              example:
+                quota_cents: 10000
+                used_quota_cents: 1200
+      security:
+        - customerBearer: []
+  /storefront/orders:
+    post:
+      summary: "Create order for a plan"
+      tags:
+        - "storefront"
+      responses:
+        "201":
+          description: "Order with payment URL"
+        "402":
+          description: "payment required"
+      security:
+        - customerBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              plan_id: 1
+              idempotency_key: "cli-2025-01-01-001"
+    get:
+      summary: "List user orders"
+      tags:
+        - "storefront"
+      responses:
+        "200":
+          description: "Orders array"
+      security:
+        - customerBearer: []
+  /storefront/subscriptions:
+    get:
+      summary: "List user subscriptions"
+      tags:
+        - "storefront"
+      responses:
+        "200":
+          description: "Subscriptions array"
+      security:
+        - customerBearer: []
+  /storefront/checkin/status:
+    get:
+      summary: "Daily check-in availability"
+      tags:
+        - "storefront"
+      responses:
+        "200":
+          description: "Status + streak"
+      security:
+        - customerBearer: []
+  /storefront/checkin:
+    post:
+      summary: "Claim daily check-in reward"
+      tags:
+        - "storefront"
+      responses:
+        "200":
+          description: "Reward applied"
+        "409":
+          description: "already claimed today"
+      security:
+        - customerBearer: []
+  /admin/login:
+    post:
+      summary: "Admin login"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "JWT cookie set"
+        "401":
+          description: "bad credentials"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              email: "admin@example.com"
+              password: "secret"
+  /admin/me:
+    get:
+      summary: "Admin + tenant + brand bundle"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Bundle"
+      security:
+        - adminBearer: []
+  /admin/brand:
+    get:
+      summary: "Read brand config"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Brand config"
+      security:
+        - adminBearer: []
+    patch:
+      summary: "Update brand config"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Updated brand config"
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              store_name: "My Relay"
+              primary_color: "#0e9486"
+  /admin/stats:
+    get:
+      summary: "Revenue / subs / tokens aggregates"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Stats"
+      security:
+        - adminBearer: []
+  /admin/orders:
+    get:
+      summary: "List orders (paginated)"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Orders"
+      security:
+        - adminBearer: []
+  /admin/orders/export:
+    get:
+      summary: "Bulk CSV export (streamed)"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "text/csv; charset=utf-8 — UTF-8 BOM + header row + rows"
+      security:
+        - adminBearer: []
+  /admin/orders/{id}/refund:
+    post:
+      summary: "Issue full or partial refund"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Refund issued + email sent"
+        "409":
+          description: "order not refundable"
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              amount_cents: 9900
+              reason: "customer cancelled"
+  /admin/end-users:
+    get:
+      summary: "List end users (paginated)"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "End users"
+      security:
+        - adminBearer: []
+    post:
+      summary: "Create an end user"
+      tags:
+        - "admin"
+      responses:
+        "201":
+          description: "Created"
+        "409":
+          description: "email already exists"
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              email: "bob@example.com"
+              password: "secret"
+              initial_quota_cents: 10000
+  /admin/plans:
+    get:
+      summary: "List plans"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Plans"
+      security:
+        - adminBearer: []
+    post:
+      summary: "Create a plan"
+      tags:
+        - "admin"
+      responses:
+        "201":
+          description: "Plan created"
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              name: "Pro"
+              slug: "pro"
+              period_days: 30
+              quota_tokens: 10000000
+              price_cents: 9900
+  /admin/plans/{id}:
+    patch:
+      summary: "Update plan"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Updated"
+      security:
+        - adminBearer: []
+    delete:
+      summary: "Disable plan (soft delete)"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Disabled"
+      security:
+        - adminBearer: []
+  /admin/channels:
+    get:
+      summary: "List upstream channels"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Channels"
+      security:
+        - adminBearer: []
+    post:
+      summary: "Create upstream channel"
+      tags:
+        - "admin"
+      responses:
+        "201":
+          description: "Created"
+      security:
+        - adminBearer: []
+  /admin/wholesale:
+    get:
+      summary: "Wholesale balance"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Balance"
+      security:
+        - adminBearer: []
+  /admin/affiliate:
+    get:
+      summary: "Affiliate stats"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Stats + invite link"
+      security:
+        - adminBearer: []
+  /admin/affiliate/referrals:
+    get:
+      summary: "List referred tenants"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Referrals"
+      security:
+        - adminBearer: []
+  /admin/affiliate/withdraw:
+    post:
+      summary: "File payout request"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Recorded"
+        "400":
+          description: "amount > available"
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              amount_cents: 10000
+              method: "alipay"
+              account_info: "user@example.com"
+  /admin/system-setting:
+    get:
+      summary: "Read tenant runtime switches"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Settings"
+      security:
+        - adminBearer: []
+    patch:
+      summary: "Update tenant runtime switches"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Updated"
+      security:
+        - adminBearer: []
+  /admin/payment-config:
+    get:
+      summary: "Read payment provider config (masked)"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Config"
+      security:
+        - adminBearer: []
+    patch:
+      summary: "Update payment provider config"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Updated"
+      security:
+        - adminBearer: []
+  /admin/change-password:
+    post:
+      summary: "Change admin password"
+      tags:
+        - "admin"
+      responses:
+        "200":
+          description: "Changed"
+        "401":
+          description: "old password wrong"
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              old_password: "old"
+              new_password: "new-secret-123"
+  /admin/webhooks:
+    get:
+      summary: "List webhook subscriptions"
+      tags:
+        - "admin"
+        - "webhooks"
+      responses:
+        "200":
+          description: "Webhook list incl. last_triggered_at, fail_count_total"
+      security:
+        - adminBearer: []
+    post:
+      summary: "Create webhook subscription"
+      tags:
+        - "admin"
+        - "webhooks"
+      responses:
+        "201":
+          description: "Created (secret returned once)"
+      description: "Returns the HMAC secret in the response **once** — record it for signature verification. Subsequent reads will not include the secret. Allowed event types: order.paid, subscription.expired, refund.processed, wholesale.low."
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              url: "https://example.com/3api-webhook"
+              events:
+                - "order.paid"
+                - "subscription.expired"
+  /admin/webhooks/{id}:
+    patch:
+      summary: "Update webhook url / events / enabled"
+      tags:
+        - "admin"
+        - "webhooks"
+      responses:
+        "200":
+          description: "Updated"
+      security:
+        - adminBearer: []
+    delete:
+      summary: "Delete webhook (cascades deliveries)"
+      tags:
+        - "admin"
+        - "webhooks"
+      responses:
+        "200":
+          description: "Deleted"
+      security:
+        - adminBearer: []
+  /admin/webhooks/{id}/test:
+    post:
+      summary: "Send a synthetic test event"
+      tags:
+        - "admin"
+        - "webhooks"
+      responses:
+        "200":
+          description: "Delivery row with status"
+      security:
+        - adminBearer: []
+  /admin/webhooks/{id}/deliveries:
+    get:
+      summary: "Delivery history"
+      tags:
+        - "admin"
+        - "webhooks"
+      responses:
+        "200":
+          description: "Recent deliveries (most recent first)"
+      security:
+        - adminBearer: []

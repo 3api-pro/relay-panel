@@ -27,6 +27,7 @@ COPY --from=deps  /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=ui    /app/ui/out ./public
 COPY db/ ./db/
+COPY docs/ ./docs/
 COPY package.json ./
 
 # Non-root user

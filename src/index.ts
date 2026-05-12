@@ -27,6 +27,8 @@ import { ensureDefaultAdmin } from './services/auth';
 import { startUsdtWatcher } from "./services/payments/usdt-watcher";
 import { startEmailCron } from "./services/email-cron";
 import { startWholesaleSync } from "./services/wholesale-sync";
+import { startWebhookWorker } from "./services/webhook";
+import { openapiRouter } from "./routes/openapi";
 
 try { require('dotenv').config(); } catch {}
 
@@ -95,6 +97,9 @@ async function main(): Promise<void> {
   const apiRouter = Router();
   mountApi(apiRouter);
   app.use('/api', apiRouter);
+
+  // OpenAPI YAML — public, no auth (so swagger-ui-react / curl can grab it).
+  app.use('/', openapiRouter);
   mountApi(app as unknown as express.Router);
 
   // 404 fallback. HTML for browser-ish requests, JSON for SDK paths.
@@ -120,6 +125,7 @@ async function main(): Promise<void> {
   try { startUsdtWatcher(); } catch (e: any) { logger.warn({ err: e.message }, 'usdt:watcher:start:fail'); }
   try { startEmailCron(); } catch (e: any) { logger.warn({ err: e.message }, 'email:cron:start:fail'); }
   try { startWholesaleSync(); } catch (e: any) { logger.warn({ err: e.message }, 'wholesale:sync:start:fail'); }
+  try { startWebhookWorker(); } catch (e: any) { logger.warn({ err: e.message }, 'webhook:worker:start:fail'); }
 
   app.listen(config.port, () => {
     logger.info(

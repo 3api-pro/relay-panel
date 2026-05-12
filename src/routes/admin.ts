@@ -13,6 +13,8 @@ import { adminWholesaleRouter } from "./admin/wholesale";
 import { adminExtrasRouter } from "./admin/extras";
 import { adminSystemSettingRouter } from "./admin/system-setting";
 import { adminAffiliateRouter } from "./admin/affiliate";
+import { adminWebhooksRouter } from "./admin/webhooks";
+import { adminOrdersExportRouter } from "./admin/orders-export";
 
 export const adminRouter = Router();
 
@@ -24,6 +26,10 @@ adminRouter.use('/wholesale', adminWholesaleRouter);
 adminRouter.use('/system-setting', adminSystemSettingRouter);
 // /admin/affiliate — reseller-to-reseller referral (P2 #18, v0.4)
 adminRouter.use('/affiliate', adminAffiliateRouter);
+// /admin/webhooks — outbound webhook subscriptions (P2 #19, v0.5)
+adminRouter.use('/webhooks', adminWebhooksRouter);
+// /admin/orders/export — bulk CSV via PG cursor (memory-safe)
+adminRouter.use('/', adminOrdersExportRouter);
 // Extras (me / brand / orders / refund / stats / change-password / payment-config).
 // Mounted BEFORE the legacy '/me' below so the richer payload wins.
 adminRouter.use('/', adminExtrasRouter);

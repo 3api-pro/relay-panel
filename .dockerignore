@@ -14,7 +14,8 @@ coverage
 pgdata
 caddy-data
 caddy-config
-docs
+docs/*
+!docs/openapi.yaml
 README.legacy.md
 .vscode
 .idea
