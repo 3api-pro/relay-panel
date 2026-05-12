@@ -71,15 +71,15 @@ Full walkthrough (including the hosted path) in
 
 ## Screenshots
 
-> Real screenshots land with v0.2 demo. SVG placeholders below.
+> Captured from a live `demo` tenant on v0.4 (see [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md) to regenerate).
 
 | Marketing landing | Admin onboarding | Storefront |
 |---|---|---|
-| ![landing](docs/assets/screenshot-landing.svg) | ![onboarding](docs/assets/screenshot-onboarding.svg) | ![storefront](docs/assets/screenshot-storefront.svg) |
+| ![landing](docs/assets/screenshot-landing.png) | ![onboarding](docs/assets/screenshot-onboarding.png) | ![storefront](docs/assets/screenshot-storefront.png) |
 
 | Admin dashboard | End-user dashboard |
 |---|---|
-| ![admin](docs/assets/screenshot-admin.svg) | ![user](docs/assets/screenshot-user.svg) |
+| ![admin](docs/assets/screenshot-admin.png) | ![user](docs/assets/screenshot-user.png) |
 
 ## Why 3api vs one-api / new-api / sub2api
 
