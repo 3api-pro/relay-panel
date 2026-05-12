@@ -84,17 +84,31 @@ async function resolveChannel(
     base_url: string;
     api_key: string;
     keys_n: number;
+    provider_type: string | null;
+    model_mapping: Record<string, string> | null;
+    custom_headers: Record<string, string> | null;
   }>(
+    // v0.3 — also pull provider_type / model_mapping / custom_headers so
+    // upstream.ts can pick the right protocol adapter. enabled=false rows
+    // are skipped (soft-off independent of status).
     `SELECT id, base_url, api_key,
-            jsonb_array_length(COALESCE(keys, '[]'::jsonb)) AS keys_n
+            jsonb_array_length(COALESCE(keys, '[]'::jsonb)) AS keys_n,
+            provider_type,
+            model_mapping,
+            custom_headers
        FROM upstream_channel
-      WHERE tenant_id = $1 AND status = 'active'
+      WHERE tenant_id = $1 AND status = 'active' AND enabled = TRUE
       ORDER BY is_default DESC, weight DESC, priority ASC, id ASC
       LIMIT 1`,
     [tenantId],
   );
   if (rows.length > 0) {
     const row = rows[0];
+    const meta = {
+      provider_type: row.provider_type || 'anthropic',
+      model_mapping: row.model_mapping || null,
+      custom_headers: row.custom_headers || null,
+    };
     if (Number(row.keys_n) > 0) {
       // Multi-key path — rotate.
       const picked = await pickKey(row.id);
@@ -109,14 +123,14 @@ async function resolveChannel(
         };
       }
       return {
-        channel: { id: row.id, base_url: row.base_url, api_key: picked.key },
+        channel: { id: row.id, base_url: row.base_url, api_key: picked.key, ...meta },
         channelId: row.id,
         keyIndex: picked.index,
       };
     }
     // Legacy single-key row.
     return {
-      channel: { id: row.id, base_url: row.base_url, api_key: row.api_key },
+      channel: { id: row.id, base_url: row.base_url, api_key: row.api_key, ...meta },
       channelId: row.id,
       keyIndex: null,
     };

@@ -14,6 +14,8 @@ const STEPS = [
 interface Channel {
   id: number; name: string; base_url: string; type: string;
   status: string; is_default: boolean; key_preview: string | null;
+  // v0.3 — recommendation flag from migration 010.
+  is_recommended?: boolean;
 }
 
 interface Plan {
@@ -159,12 +161,24 @@ function StepIndicator({ current }: { current: number }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Step 1: Channels                                                   */
+/*  Step 1: Channels — v0.3 dual-path                                  */
+/*                                                                     */
+/*  Two cards side-by-side:                                            */
+/*    (left)  "Use recommended" → llmapi.pro wholesale, zero inventory */
+/*    (right) "BYOK"            → bring your own Anthropic / OpenAI key */
+/*                                                                     */
+/*  "Use recommended" is one-click — we just mark the existing default */
+/*  channel as is_recommended and bounce to step 2. "BYOK" jumps the   */
+/*  reseller to /admin/channels where the new-channel modal already    */
+/*  lives.                                                             */
 /* ------------------------------------------------------------------ */
 function Step1Channels() {
+  const router = useRouter();
   const [list, setList] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
-  const [addOpen, setAddOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
 
   useEffect(() => {
     safe(api<{ data: Channel[] }>('/admin/channels'), { data: [] })
@@ -172,37 +186,129 @@ function Step1Channels() {
       .finally(() => setLoading(false));
   }, []);
 
+  const recommended = list.find((c) => (c as any).is_recommended) ?? null;
+  const hasAnyChannel = list.length > 0;
+
+  async function useRecommended() {
+    setBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      // If we already have a recommended channel, just advance. Otherwise
+      // create the canonical llmapi.pro wholesale row and mark it default.
+      if (!hasAnyChannel) {
+        const created = await api<any>('/admin/channels', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: 'llmapi.pro Wholesale',
+            base_url: 'https://api.llmapi.pro/wholesale/v1',
+            api_key: 'platform-default-placeholder-key-replace-with-real',
+            provider_type: 'llmapi-wholesale',
+            type: 'wholesale-3api',
+          }),
+        });
+        await api(`/admin/channels/${created.id}/set-default`, { method: 'POST' });
+      }
+      setMsg('已启用推荐上游，下一步');
+      router.push('/admin/onboarding/2');
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function goByok() {
+    router.push('/admin/channels');
+  }
+
+  if (loading) {
+    return <div className="text-sm text-muted-foreground">加载中…</div>;
+  }
+
   return (
-    <div>
-      <p className="text-sm text-muted-foreground mb-4">
-        默认已为你接入 <b>3API Wholesale</b>（我方批发上游），开箱即用。如需切换到自有 BYOK key（直连 Anthropic / OpenAI），请添加。
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        选择如何让客户的 /v1/messages 真转发出去。<b className="text-foreground">推荐</b>路径零库存、零谈判；<b className="text-foreground">BYOK</b>路径你完全控制谁是上游。
       </p>
-      {loading ? (
-        <div className="text-sm text-muted-foreground">加载中…</div>
-      ) : list.length === 0 ? (
-        <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-700">
-          尚未检测到 channel — 系统会在你首次开店时自动注入 wholesale；如果未注入可在 <a href="/admin/channels" className="underline">上游 Channel</a> 页手动添加。
+      {(msg || err) && (
+        <div
+          className={
+            'px-3 py-2 rounded-md border text-sm ' +
+            (err
+              ? 'border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400'
+              : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400')
+          }
+        >
+          {err || msg}
         </div>
-      ) : (
-        <ul className="space-y-2">
-          {list.map((c) => (
-            <li key={c.id} className="flex items-center gap-3 p-3 rounded-md border border-border bg-muted">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground">{c.name}</div>
-                <div className="text-xs text-muted-foreground font-mono truncate">{c.base_url}</div>
-              </div>
-              <span className="text-xs text-muted-foreground">{c.type}</span>
-              {c.is_default && <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">默认</span>}
-            </li>
-          ))}
-        </ul>
       )}
-      <div className="mt-4">
-        <a href="/admin/channels" className="text-sm text-brand-700 hover:underline">
-          + 添加 BYOK channel（高级，可后做）
-        </a>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Recommended card */}
+        <div
+          className="rounded-lg border-2 border-brand-500 bg-brand-50/60 dark:bg-brand-950/30 p-5 flex flex-col"
+          data-tour="onboarding-recommended"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-7 h-7 rounded-full bg-brand-600 text-white flex items-center justify-center text-sm font-bold">
+              ★
+            </div>
+            <h3 className="text-base font-semibold text-foreground">使用推荐 (零库存)</h3>
+            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-brand-600 text-white">推荐</span>
+          </div>
+          <p className="text-sm text-foreground/80 mb-3">
+            <b>llmapi.pro Wholesale</b> — 我方批发上游，已 baked。
+          </p>
+          <ul className="text-xs text-foreground/70 space-y-1.5 mb-4 flex-1">
+            <li>• Claude 4.x / Sonnet / Haiku 全系</li>
+            <li>• 0 配置，注册即开</li>
+            <li>• 充值平台批发余额 = 库存</li>
+            <li>• 每卖一单从余额扣 face value，不需要谈渠道</li>
+          </ul>
+          {recommended && (
+            <div className="text-[11px] text-muted-foreground font-mono mb-3 truncate">
+              当前: {recommended.name} · {recommended.base_url}
+            </div>
+          )}
+          <button
+            onClick={useRecommended}
+            disabled={busy}
+            className="w-full px-4 py-2.5 rounded-md bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-60"
+          >
+            {busy ? '启用中…' : recommended ? '一键启用 →' : '一键启用 →'}
+          </button>
+        </div>
+        {/* BYOK card */}
+        <div className="rounded-lg border border-border bg-card p-5 flex flex-col">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-7 h-7 rounded-full bg-muted text-foreground flex items-center justify-center text-sm font-bold">
+              🔑
+            </div>
+            <h3 className="text-base font-semibold text-foreground">我有自己的 API Key (BYOK)</h3>
+          </div>
+          <p className="text-sm text-foreground/80 mb-3">
+            Anthropic / OpenAI / 自建中转 — 完全自负。
+          </p>
+          <ul className="text-xs text-foreground/70 space-y-1.5 mb-4 flex-1">
+            <li>• 自己谈渠道、自己控制成本</li>
+            <li>• 需要先充值上游 API key (花的是你自己的钱)</li>
+            <li>• 上游抖动 / 涨价 / 封号你独自承担</li>
+            <li>• 多 key 轮询 / 协议适配 我们 baked</li>
+          </ul>
+          <button
+            onClick={goByok}
+            className="w-full px-4 py-2.5 rounded-md border border-input bg-background text-foreground text-sm font-medium hover:bg-muted"
+          >
+            配置 BYOK →
+          </button>
+        </div>
       </div>
+      {hasAnyChannel && (
+        <p className="text-xs text-muted-foreground text-center">
+          已有 {list.length} 个 channel —{' '}
+          <a href="/admin/channels" className="underline">在 channel 页查看</a>
+        </p>
+      )}
     </div>
   );
 }

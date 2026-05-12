@@ -17,14 +17,32 @@ import {
   maskKey,
   ChannelKeyEntry,
 } from '../services/channel-keys';
+import { testChannel } from '../services/channel-test';
 
 export const channelsRouter = Router();
 
+// Legacy taxonomy kept for backward compat — the UI / signup-tenant /
+// onboarding all set one of these on creation. v0.3 introduces a separate
+// `provider_type` for the protocol adapter.
 const VALID_TYPES = new Set([
   'wholesale-3api',
   'byok-claude',
   'byok-openai-compat',
   'byok-other',
+]);
+
+// v0.3 — protocol adapter selector. Mirror of the DB CHECK constraint
+// in migration 010. Validated on POST/PATCH to keep bad enum values out.
+const VALID_PROVIDER_TYPES = new Set([
+  'anthropic',
+  'openai',
+  'gemini',
+  'moonshot',
+  'deepseek',
+  'minimax',
+  'qwen',
+  'llmapi-wholesale',
+  'custom',
 ]);
 
 function isValidUrl(s: string): boolean {
@@ -46,6 +64,23 @@ interface ChannelInput {
   priority?: number;
   models?: string;
   group_access?: string;
+  // v0.3 — new-api parity fields.
+  provider_type?: string;
+  model_mapping?: Record<string, string> | null;
+  custom_headers?: Record<string, string> | null;
+  enabled?: boolean;
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function isStringStringMap(v: unknown): v is Record<string, string> {
+  if (!isPlainObject(v)) return false;
+  for (const [k, val] of Object.entries(v)) {
+    if (typeof k !== 'string' || typeof val !== 'string') return false;
+  }
+  return true;
 }
 
 function validate(body: ChannelInput, partial = false): string | null {
@@ -64,11 +99,21 @@ function validate(body: ChannelInput, partial = false): string | null {
     (body.type != null && !VALID_TYPES.has(body.type)
       ? `type must be one of: ${Array.from(VALID_TYPES).join(', ')}` : null) ||
     (body.status != null && !['active', 'disabled'].includes(body.status)
-      ? "status must be 'active' or 'disabled'" : null)
+      ? "status must be 'active' or 'disabled'" : null) ||
+    (body.provider_type != null && !VALID_PROVIDER_TYPES.has(body.provider_type)
+      ? `provider_type must be one of: ${Array.from(VALID_PROVIDER_TYPES).join(', ')}` : null) ||
+    (body.model_mapping != null && !isStringStringMap(body.model_mapping)
+      ? 'model_mapping must be a {string: string} object' : null) ||
+    (body.custom_headers != null && !isStringStringMap(body.custom_headers)
+      ? 'custom_headers must be a {string: string} object' : null) ||
+    (body.enabled != null && typeof body.enabled !== 'boolean'
+      ? 'enabled must be a boolean' : null)
   );
 }
 
-const SAFE_COLS = `id, tenant_id, name, base_url, type, status, weight, priority, is_default, models, group_access, created_at`;
+const SAFE_COLS = `id, tenant_id, name, base_url, type, status, weight, priority, is_default,
+                   models, model_mapping, custom_headers, group_access, created_at,
+                   provider_type, enabled, is_recommended, last_tested_at, last_test_result`;
 
 /**
  * POST /admin/channels
@@ -95,10 +140,21 @@ channelsRouter.post('/', async (req: Request, res: Response) => {
       last_error: null,
     },
   ]);
+
+  // v0.3 — default provider_type from legacy `type` if caller didn't pin one.
+  // wholesale-3api → llmapi-wholesale; everything else → anthropic. This
+  // matches the migration-010 backfill rule so new and old rows agree.
+  const inferredProvider =
+    body.provider_type ??
+    (body.type === 'wholesale-3api' ? 'llmapi-wholesale' : 'anthropic');
+
   const rows = await query<any>(
     `INSERT INTO upstream_channel
-       (tenant_id, name, base_url, api_key, type, status, weight, priority, models, group_access, keys, current_key_idx)
-     VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, $8, $9, $10::jsonb, 0)
+       (tenant_id, name, base_url, api_key, type, status, weight, priority,
+        models, model_mapping, custom_headers, group_access, keys, current_key_idx,
+        provider_type, enabled)
+     VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, $8, $9::jsonb, $10::jsonb,
+             $11, $12::jsonb, 0, $13, $14)
      RETURNING ${SAFE_COLS}`,
     [
       tenantId,
@@ -109,8 +165,12 @@ channelsRouter.post('/', async (req: Request, res: Response) => {
       Number(body.weight ?? 100),
       Number(body.priority ?? 100),
       body.models ?? null,
+      body.model_mapping ? JSON.stringify(body.model_mapping) : '{}',
+      body.custom_headers ? JSON.stringify(body.custom_headers) : '{}',
       body.group_access ?? 'default',
       seedKeys,
+      inferredProvider,
+      body.enabled !== false,
     ],
   );
   res.status(201).json(rows[0]);
@@ -125,6 +185,8 @@ channelsRouter.post('/', async (req: Request, res: Response) => {
  */
 channelsRouter.get('/', async (req: Request, res: Response) => {
   const tenantId = req.resellerAdmin!.tenantId;
+  // v0.3 — surface recommended channels at the top so the Hero card has
+  // something to render in O(1) without re-querying.
   const rows = await query<any>(
     `SELECT ${SAFE_COLS},
             CASE
@@ -136,7 +198,7 @@ channelsRouter.get('/', async (req: Request, res: Response) => {
             current_key_idx
        FROM upstream_channel
       WHERE tenant_id = $1
-      ORDER BY is_default DESC, weight DESC, id ASC`,
+      ORDER BY is_recommended DESC, is_default DESC, weight DESC, id ASC`,
     [tenantId],
   );
   const data = rows.map((r) => {
@@ -183,15 +245,26 @@ channelsRouter.patch('/:id', async (req: Request, res: Response) => {
     sets.push(`${col} = $${sets.length + 1}`);
     vals.push(val);
   };
-  if (body.name        != null) push('name', body.name);
-  if (body.base_url    != null) push('base_url', body.base_url);
-  if (body.api_key     != null) push('api_key', body.api_key);
-  if (body.type        != null) push('type', body.type);
-  if (body.status      != null) push('status', body.status);
-  if (body.weight      != null) push('weight', Number(body.weight));
-  if (body.priority    != null) push('priority', Number(body.priority));
-  if (body.models      != null) push('models', body.models);
-  if (body.group_access!= null) push('group_access', body.group_access);
+  if (body.name           != null) push('name', body.name);
+  if (body.base_url       != null) push('base_url', body.base_url);
+  if (body.api_key        != null) push('api_key', body.api_key);
+  if (body.type           != null) push('type', body.type);
+  if (body.status         != null) push('status', body.status);
+  if (body.weight         != null) push('weight', Number(body.weight));
+  if (body.priority       != null) push('priority', Number(body.priority));
+  if (body.models         != null) push('models', body.models);
+  if (body.group_access   != null) push('group_access', body.group_access);
+  // v0.3 — new-api parity fields.
+  if (body.provider_type  != null) push('provider_type', body.provider_type);
+  if (body.enabled        != null) push('enabled', !!body.enabled);
+  if (body.model_mapping  != null) {
+    sets.push(`model_mapping = $${sets.length + 1}::jsonb`);
+    vals.push(JSON.stringify(body.model_mapping));
+  }
+  if (body.custom_headers != null) {
+    sets.push(`custom_headers = $${sets.length + 1}::jsonb`);
+    vals.push(JSON.stringify(body.custom_headers));
+  }
 
   // Bulk-replace keys[] if the caller supplied a 'keys' array. We accept
   // an array of strings (raw keys) or { key, status } objects.
@@ -396,4 +469,34 @@ channelsRouter.delete('/:id', async (req: Request, res: Response) => {
   }
   await query(`DELETE FROM upstream_channel WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
   res.status(204).end();
+});
+
+// =========================================================================
+// v0.3 — Connectivity test endpoint.
+// =========================================================================
+
+/**
+ * POST /admin/channels/:id/test
+ * Probes the channel with a provider-specific request and persists
+ * last_tested_at + last_test_result. Returns the result.
+ *
+ * Always 200 unless the channel doesn't exist (404). The probe itself
+ * can report ok=false in the body — that's not an HTTP error, the
+ * channel is just unreachable / auth-failed / etc. and the UI shows
+ * a coloured badge accordingly.
+ */
+channelsRouter.post('/:id/test', async (req: Request, res: Response) => {
+  const tenantId = req.resellerAdmin!.tenantId;
+  const id = parseInt(req.params.id, 10);
+  if (!id) {
+    res.status(400).json({ error: { type: 'invalid_request_error', message: 'invalid id' } });
+    return;
+  }
+  const result = await testChannel(id, tenantId);
+  if (!result) {
+    res.status(404).json({ error: { type: 'not_found', message: 'channel not found' } });
+    return;
+  }
+  logger.info({ tenantId, channelId: id, ok: result.ok, category: result.category }, 'admin:channel:test');
+  res.json(result);
 });
