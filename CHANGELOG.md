@@ -7,13 +7,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned for v0.2.0
+Nothing pending.
 
-- Custom-domain auto-TLS via Caddy on-demand
-- Referral program (reseller-to-reseller, recurring commission)
-- Public OpenAPI spec generated from route definitions
-- Per-plan rate-limit overrides
-- en/zh i18n parity for storefront
+## [0.8.0] — 2026-05-12
+
+- End-user `/dashboard/redeem` page completes the redemption-code flow
+  (admin generates → customer pastes → quota credited atomically)
+- `/embed/<slug>` SSR mini buy-box (1 KB) for bloggers to iframe a
+  3-plan widget on their own sites; CSP allows any frame-ancestor
+
+## [0.7.0] — 2026-05-12
+
+- `/admin/logs` paginated per-request usage log with 4-axis filter
+  (status / model / user / time)
+- `/admin/redemption` batch generator (1-1000 codes, optional prefix +
+  expiry, one-shot reveal + copy-all) plus per-code revoke
+- `/models` public model catalogue (11 models × Anthropic / OpenAI /
+  Google / DeepSeek / Moonshot / Qwen / MiniMax with wholesale vs BYOK
+  badges)
+- OpenAPI: 51 → 55 endpoints
+
+## [0.6.1] — 2026-05-12
+
+- Hotfix: admin sidebar overlapped main content on desktop (Tailwind
+  has no `md:` variant of `fixed`; added `md:static md:z-auto`)
+
+## [0.6.0] — 2026-05-12
+
+- Mobile-responsive across landing + admin + onboarding (iPhone 14
+  captured + visually verified)
+- Admin sidebar drawer < md (hamburger toggle, off-canvas, backdrop)
+- Landing CSS-only hamburger via checkbox-hack (no JS), hero h1 → 30px
+- Onboarding stepper compact "N/5 + title" pill on mobile
+
+## [0.5.1] — 2026-05-12
+
+- OpenAPI: 5 `/platform/*` endpoints exposed (operator API,
+  X-Platform-Token security scheme added)
+- Webhooks admin pages fully localized (64 new i18n keys, zh/en parity)
+- SCREENSHOTS.md documents the zh/en locale capture loop
+
+## [0.5.0] — 2026-05-12
+
+- Phase 2: per-tenant shadow `sk-` minted on demand via
+  `/platform/tenants/{id}/upgrade-shadow` (consumes wholesale_balance)
+- 5 provider real `healthCheck` (Anthropic / OpenAI / Gemini / DeepSeek
+  / Moonshot) with `sample_models` + `latency_ms`
+- Webhook system: subscribe to `order.paid` / `subscription.expired` /
+  `refund.processed` / `wholesale.low`, HMAC SHA256 signed deliveries,
+  retry + dead-letter table, admin UI to manage hooks
+- OpenAPI auto-generated from `_openapi-meta.ts` → `docs/openapi.yaml`
+- Bulk CSV order export (streamed)
+
+## [0.4.0] — 2026-05-12
+
+- Localization: zh + en, 1041 keys × 38 pages parity; cookie + nav
+  language detect; LanguageSwitcher in TopBar
+- 5 upstream providers wired (Anthropic / OpenAI / Gemini / DeepSeek /
+  Moonshot) with channel-aware SSE transcoding for non-Anthropic
+- Reseller-to-reseller affiliate (10% lifetime commission on referred
+  tenants)
+- Public-facing landing copy refresh; emoji → lucide-react icons
+- Real Playwright screenshots replace placeholder SVGs
+
+## [0.3.0] — 2026-05-12
+
+- Dual-track billing — subscription plans + token packs in one UI
+- Onboarding dual path: "Use recommended (wholesale)" vs BYOK
+- Multi-key per channel + new-api parity on channels schema
+- "0 inventory · one-click" positioning across marketing pages
+
+## [0.2.0] — 2026-05-12
+
+- shadcn/ui 12-component library + theme switcher (light/dark/auto)
+- Sidebar + TopBar shell with 4 workspace groups, collapsible
+- TanStack Table v8 across users / orders / channels
+- Stat-card sparklines + auto-refresh on visibility-driven polling
+- Daily check-in widget for end users
+- Cmd+K command palette + driver.js onboarding tour
+- Public pricing page on root domain
+- Admin lives on root domain (drops subdomain login gate)
 
 ## [0.1.0] — 2026-05-12
 
@@ -44,5 +117,14 @@ relay panel.
 - Per-tenant row-level isolation on every storefront query
 - Webhook signature validation for Alipay notify
 
-[Unreleased]: https://github.com/3api-pro/relay-panel/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/3api-pro/relay-panel/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/3api-pro/relay-panel/releases/tag/v0.8.0
+[0.7.0]: https://github.com/3api-pro/relay-panel/releases/tag/v0.7.0
+[0.6.1]: https://github.com/3api-pro/relay-panel/releases/tag/v0.6.1
+[0.6.0]: https://github.com/3api-pro/relay-panel/releases/tag/v0.6.0
+[0.5.1]: https://github.com/3api-pro/relay-panel/releases/tag/v0.5.1
+[0.5.0]: https://github.com/3api-pro/relay-panel/releases/tag/v0.5.0
+[0.4.0]: https://github.com/3api-pro/relay-panel/releases/tag/v0.4.0
+[0.3.0]: https://github.com/3api-pro/relay-panel/releases/tag/v0.3.0
+[0.2.0]: https://github.com/3api-pro/relay-panel/releases/tag/v0.2.0
 [0.1.0]: https://github.com/3api-pro/relay-panel/releases/tag/v0.1.0

@@ -9,6 +9,7 @@ export function DashboardNav() {
     { href: '/dashboard/keys',     label: t('keys') },
     { href: '/dashboard/usage',    label: t('usage') },
     { href: '/dashboard/billing',  label: t('billing') },
+    { href: '/dashboard/redeem',   label: t('redeem') },
     { href: '/dashboard/settings', label: t('settings') },
   ];
   const path = usePathname() || '';

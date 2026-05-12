@@ -1016,7 +1016,8 @@
       "keys": "API Keys",
       "usage": "使用统计",
       "billing": "订单 & 续费",
-      "settings": "账号设置"
+      "settings": "账号设置",
+      "redeem": "兑换码"
     },
     "usage_chart": {
       "no_data": "暂无数据"
@@ -1302,6 +1303,25 @@
       "validate_min_pwd": "密码至少 6 位",
       "validate_mismatch": "两次输入不一致",
       "fail": "重置失败"
+    },
+    "redeem": {
+      "title": "兑换码",
+      "card_title": "兑换一张卡密",
+      "card_subtitle": "卡密直接入账到你当前账号的可用额度。",
+      "placeholder": "粘贴 / 输入兑换码",
+      "submit": "立即兑换",
+      "submitting": "兑换中…",
+      "help": "区分大小写。",
+      "success_prefix": "兑换成功，已入账 ",
+      "success_suffix": "。",
+      "err_empty": "请输入兑换码",
+      "err_not_found": "卡密不存在",
+      "err_already_used": "卡密已使用过或已作废",
+      "err_expired": "卡密已过期",
+      "faq_title": "常见问题",
+      "faq_q1": "每张卡密只能用一次，并且只对发卡的店铺有效。",
+      "faq_q2": "兑换后立即入账，可在「使用统计」看到余额变化。",
+      "faq_q3": "看到「卡密不存在」？检查是否粘错店铺，或先在本店登录。"
     }
   },
   "models": {

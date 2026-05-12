@@ -21,6 +21,7 @@ import { authCustomer } from './middleware/auth-customer';
 import { platformRouter } from './routes/platform';
 import { signupTenantRouter } from './routes/signup-tenant';
 import { landingRouter } from "./routes/landing";
+import { embedRouter } from "./routes/embed";
 import { storefrontRouter } from "./routes/storefront";
 import { paymentsRouter, storefrontPaymentsRouter } from "./routes/payments";
 import { ensureDefaultAdmin } from './services/auth';
@@ -47,6 +48,10 @@ async function main(): Promise<void> {
       tenant_mode: config.tenantMode,
     });
   });
+
+  // Iframe-embeddable mini buy-box widget. Mounted before landing so the
+  // root-domain catch-all doesn't try to claim /embed/* paths.
+  app.use('/embed', embedRouter);
 
   // Marketing landing on the SaaS root domain (3api.pro / www).
   // Subdomains and single-tenant deploys fall through.

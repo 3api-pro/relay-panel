@@ -1016,7 +1016,8 @@
       "keys": "API Keys",
       "usage": "Usage",
       "billing": "Billing",
-      "settings": "Account"
+      "settings": "Account",
+      "redeem": "Redeem"
     },
     "usage_chart": {
       "no_data": "No data"
@@ -1302,6 +1303,25 @@
       "validate_min_pwd": "Password must be at least 6 chars",
       "validate_mismatch": "Passwords don't match",
       "fail": "Reset failed"
+    },
+    "redeem": {
+      "title": "Redeem code",
+      "card_title": "Redeem a code",
+      "card_subtitle": "Redeemed value is credited to your current account quota.",
+      "placeholder": "Paste / type the code",
+      "submit": "Redeem",
+      "submitting": "Redeeming…",
+      "help": "Case-sensitive.",
+      "success_prefix": "Redeemed — ",
+      "success_suffix": " credited to your account.",
+      "err_empty": "Please enter a code",
+      "err_not_found": "Code not found",
+      "err_already_used": "Code already used or revoked",
+      "err_expired": "Code expired",
+      "faq_title": "FAQ",
+      "faq_q1": "Each code is single-use and only valid for the store that issued it.",
+      "faq_q2": "Quota lands instantly — check the Usage tab to confirm.",
+      "faq_q3": "Got \"Code not found\"? Make sure you’re logged into the correct store."
     }
   },
   "models": {

@@ -1,132 +1,212 @@
-# HackerNews Show HN — submission
+# Launch templates — v0.8 ready
 
-**Title** (max 80 chars):
-> Show HN: 3API Panel – open-source Claude-compatible API reseller with bundled upstream
+Polished templates for **HN / r/selfhosted / V2EX / Linux.do**. Drop-in
+copy-paste; substitute one URL or screenshot per channel.
 
-**URL**: https://github.com/3api-pro/relay-panel
-
-**Text** (optional but recommended for context):
-> Hi HN, I built this after watching the messy Chinese AI API resale market
-> for a year. Existing self-host panels like one-api and new-api are great
-> but they all assume you BYOK (bring your own keys) — meaning you go
-> negotiate with OpenAI/Anthropic, manage credit, deal with bans yourself.
->
-> 3API Panel is different: it ships with a bundled upstream (3API
-> wholesale) so distributors install it in 5 minutes and immediately have
-> a functioning Claude-compatible API to resell. They focus on customer
-> acquisition; we handle the upstream relationships.
->
-> Same code runs in two modes:
-> - Single-tenant: `curl install.sh | bash` on a VPS, your domain
-> - Multi-tenant: hosted by us at <name>.3api.pro, free tier
->
-> Open source under MIT. Architecture borrows from one-api (quota cents,
-> channel pool, redemption codes) plus adds: multi-tenant routing, custom
-> domain binding via Caddy on-demand TLS, hybrid token+subscription
-> billing, and the bundled upstream itself.
->
-> Backend: Express + TypeScript + PostgreSQL. UI: Next.js + Tailwind.
->
-> Repo: https://github.com/3api-pro/relay-panel
-> Demo will be at https://3api.pro (DNS + deploy in progress)
->
-> Feedback welcome — especially on the wholesale economics design and
-> the custom-domain CNAME flow.
+> Status at v0.8.0 (2026-05-12): 41 static admin/storefront pages, 55
+> OpenAPI endpoints, 1209 zh/en i18n keys at parity, mobile-responsive,
+> 9 upstream providers, 14 DB migrations, 24 git commits on `main`.
 
 ---
 
-## Reddit r/selfhosted — submission
+## HackerNews — Show HN
 
-**Title**:
-> 3API Panel: Self-hostable Claude API reseller panel with bundled upstream (open source MIT)
+**Title** (max 80 chars):
+> Show HN: 3API Panel – Open-source Claude API reseller panel with bundled upstream
+
+**URL**: `https://github.com/3api-pro/relay-panel`
 
 **Text**:
-> Hey r/selfhosted, sharing a project I think this community will find
-> interesting. Open-source AI API reseller panel, MIT licensed, single
-> command to install on any VPS:
+> Hi HN — after a year watching the messy Chinese AI API resale market I
+> built a self-hostable panel for it. Existing OSS panels (`one-api`,
+> `sub2api`) are mature but assume you already negotiated with
+> OpenAI/Anthropic and own a pool of upstream keys. That's the actual
+> hard part.
 >
-> ```
+> 3API ships with a bundled wholesale upstream (we operate it) so a
+> reseller installs in 5 minutes and is selling on day one. BYOK is still
+> first-class — mix wholesale and your own keys with weighted failover.
+>
+> Same code runs in two modes:
+> - `docker compose up` on a VPS → your domain, single-tenant
+> - Multi-tenant — managed at `<slug>.3api.pro`, free tier
+>
+> Stack: Node 20 + Express + TypeScript + PostgreSQL + Next.js 14 +
+> Tailwind. UI is shadcn/ui + TanStack Table + recharts; zh/en i18n
+> with 1200+ keys at parity. MIT license.
+>
+> What's actually built (v0.8.0):
+> - Admin: dashboard with sparklines, plans / orders / users (TanStack
+>   Table), upstream channels (9 providers wired), wholesale balance,
+>   redemption-code batch generator, per-request usage logs with 4-axis
+>   filter, affiliate program (reseller-to-reseller, lifetime commission),
+>   webhooks (4 events, HMAC SHA256), light/dark theme, Cmd+K palette,
+>   driver.js onboarding tour
+> - Storefront: signup / login / password reset / verify email, plan
+>   purchase via Alipay + USDT (TRC20/ERC20), API keys, usage stats,
+>   subscription billing alongside token packs, daily check-in widget,
+>   redeem code page
+> - Architecture borrows from `one-api` (channels / quota cents /
+>   redemption) plus things they don't have: multi-tenant routing, custom
+>   domain binding via Caddy on-demand TLS, hybrid token+sub billing,
+>   bundled upstream, iframe-embeddable mini buy-box at /embed/<slug>
+>
+> Demo: <https://3api.pro> (root domain SaaS) — register and you land on
+> your own subdomain admin in 5 seconds.
+>
+> Feedback most welcome on:
+> 1. The wholesale-economics design (multiplexing arbitrage, no markup
+>    for distributors)
+> 2. The custom-domain CNAME + Caddy on-demand TLS flow
+> 3. What's missing for parity with the Chinese-market panels (we have
+>    a competitive-research doc at `docs/COMPETITOR-RESEARCH.md`)
+>
+> Repo: <https://github.com/3api-pro/relay-panel>
+
+---
+
+## Reddit — r/selfhosted
+
+**Title**:
+> 3API Panel: self-hostable Claude/OpenAI relay panel with bundled wholesale upstream (MIT)
+
+**Text**:
+> Sharing a project I think this community will find interesting: an
+> open-source AI API reseller panel for self-hosting on a VPS.
+>
+> ```bash
 > curl -sSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/install.sh | bash
 > ```
 >
-> The novel bit vs one-api/new-api: instead of you bringing your own
-> OpenAI/Anthropic keys, the panel ships pointing at a wholesale upstream
-> (we operate it, you can also self-supply by changing one env var). For
-> people who just want to run a small Claude reseller side-business
-> without the operational headache of managing upstream provider
-> relationships.
+> The novel bit vs `one-api` / `new-api` / `sub2api`: instead of BYOK
+> (bring-your-own OpenAI/Anthropic key), the panel ships pre-pointed at a
+> wholesale upstream so you start selling without negotiating quota or
+> managing key rotations. BYOK is still supported — set `UPSTREAM_KEY` in
+> `.env` and you're on your own pool.
 >
-> Stack: Node 20 + Express + Postgres + Caddy + Next.js
+> Stack: Node 20 + TypeScript + PostgreSQL + Next.js 14 + Tailwind +
+> Caddy. Multi-tenant via subdomain or custom domain with Caddy on-demand
+> TLS. Single-tenant deploy just sets `TENANT_MODE=single`.
 >
-> https://github.com/3api-pro/relay-panel
+> Notable features at v0.8.0:
+> - 9 upstream providers (Anthropic / OpenAI / Gemini / DeepSeek /
+>   Moonshot / Qwen / MiniMax / llmapi-wholesale / custom)
+> - Dual billing: subscription plans + token packs in one UI
+> - Daily check-in, redemption codes, affiliate referrals
+> - Webhooks (order.paid / subscription.expired / refund.processed /
+>   wholesale.low) with HMAC SHA256 signing
+> - Admin: logs page, redemption batch generator (1-1000 at a time),
+>   light/dark theme, Cmd+K, zh/en i18n
+> - Mobile-responsive (iPhone 14 captured + visually verified)
 >
-> Looking for early users who want to kick the tires + give feedback.
+> Looking for early users to kick the tires + give feedback. GitHub
+> Issues are open; happy to walk anyone through self-host on a fresh VPS.
+>
+> Repo: <https://github.com/3api-pro/relay-panel>
 
 ---
 
 ## V2EX — 分享创造
 
 **Title**:
-> [开源] 3API Panel — 开源 Claude API 中转分销面板, 内置上游, 一键部署
+> [开源] 3API Panel — Claude/OpenAI 中转分销面板, 内置上游, 一键自部署
 
 **Body**:
-> 给中文圈做 AI API 中转的同学。
+> 给中文圈做 AI API 中转的朋友。
 >
-> 一年前看到闲鱼上 Claude API 量贩生意, 一直想自己做个 SaaS 工具
-> 帮这些小卖家。`one-api` / `new-api` 已经很成熟, 但它们都假设你自
-> 己有 OpenAI/Anthropic 的 key — 这个门槛对很多人来说是阻碍。
+> 看了一年闲鱼上 Claude API 量贩生意, 也用过 `one-api` / `new-api` /
+> `sub2api`, 写了个开源面板填一块空白:
 >
-> **3API Panel** 解决这个: 内置上游 (3API wholesale), 装完就能用。
-> 分销只关心拉客户, 不碰底层。
+> **3API Panel** 跟主流 OSS 面板的区别 = **内置上游**。
+> 装完 5 分钟就能开店, 不用先去谈 OpenAI/Anthropic 的 key。BYOK 仍然
+> 支持 — `.env` 改一个 `UPSTREAM_KEY` 就走自己的池。
 >
-> 一键安装:
-> ```
+> ## 一键安装
+>
+> ```bash
 > curl -sSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/install.sh | bash
 > ```
 >
-> 跟 2API/new-api 比:
-> - 不需要自己谈号池, 内置即用
-> - 跨境支付/封号风险我们扛
-> - 多租户托管模式 (TENANT_MODE=multi)
-> - 现代 UI (Next.js + Tailwind 而不是老 Antd)
+> 或 Hosted SaaS 直接注册: <https://3api.pro/create>, 5 秒钟拿到自己的
+> `<slug>.3api.pro` 后台, 可绑自定义域。
 >
-> MIT License。借鉴 one-api 的 quota/channel/redemption 设计。
+> ## v0.8.0 现状 (今日发版)
 >
-> Repo: https://github.com/3api-pro/relay-panel
-> 后续 demo 站会在 https://3api.pro
+> - 9 个上游 (Anthropic / OpenAI / Gemini / DeepSeek / Moonshot / Qwen /
+>   MiniMax / llmapi 批发 / custom)
+> - 套餐 + token 包**双轨**计费 (one-api 是纯 token 倍率制)
+> - 兑换码批量生成 (1-1000 张, 可设前缀 + 过期), 客户面板有兑换入口
+> - 每日签到 widget, 站长邀站长 affiliate (10% 终身分成)
+> - Webhooks (order.paid / sub.expired / refund / wholesale.low, HMAC SHA256)
+> - 调用日志页 + 4 维筛选, 一键 CSV 导出
+> - shadcn/ui + TanStack Table + 浅深主题 + Cmd+K + 新手引导
+> - 中英双语 1209 keys 100% parity
+> - 移动端响应式 (admin drawer + landing hamburger + 紧凑 stepper)
+> - 嵌入小组件 `/embed/<slug>` — 博客 iframe 一行带走 3 套餐 + 购买入口
 >
-> 找 5-10 个早期分销试用 + 反馈, 留邮箱评论 (不会发, 走 GitHub
-> Issues 也行)。
+> ## 商业模型 (核心差异)
+>
+> 我们卖批发, 与直营**同价不让利**:
+> - Pro ¥29 → multiplex 给 5 个轻量客户各 ¥10 = 月毛 ¥50 → 利 ¥21
+> - Max5x ¥149 → 20 个限速客户各 ¥15 = 月毛 ¥300 → 利 ¥151
+>
+> 终端价站长自定。我们扛号池, 你管获客。
+>
+> ## 借鉴谁
+>
+> 数据库设计借了 `one-api` 的 quota_cents + channel pool + redemption,
+> UI/UX 借了 `new-api` 的 4-group workspace nav + TanStack Table 风格 +
+> `sub2api` 的 multi-key per channel + daily check-in。反学清单见
+> `docs/COMPETITOR-RESEARCH.md`。
+>
+> MIT, 仓库: <https://github.com/3api-pro/relay-panel>。找 5-10 个早期
+> 站长一起跑这条赛道, 留邮箱评论或开 GitHub Issue。
 
 ---
 
 ## Linux.do — 开发调优 板块
 
 **Title**:
-> [开源] 5 分钟搭建自己的 Claude API 中转站 (内置上游)
+> [开源] 5 分钟搭起自己的 Claude API 中转站 (内置上游, 不需要自己谈号池)
 
 **Body**:
-> 直接放 GitHub: https://github.com/3api-pro/relay-panel
+> 一年前看闲鱼 Claude 量贩, 一直觉得 `one-api` / `new-api` / `sub2api`
+> 这条赛道差了**最痛的一环** — 上游号池。所有 OSS 面板都默认你已经
+> 自己有 OpenAI/Anthropic key。
 >
-> 看了一年闲鱼 Claude API 量贩, 写了个开源面板。跟主流 `one-api` /
-> `new-api` 的区别: **内置上游**, 分销不需要自己谈 key。
+> 所以写了个开源面板补上这个: **3API Panel**, 内置 `llmapi.pro` 批发
+> 上游, 装完就能卖, 也支持 BYOK。
 >
 > ## 一键装
-> ```
+>
+> ```bash
 > curl -sSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/install.sh | bash
 > ```
 >
-> ## 经济模型 (multiplexing 套利)
-> 我们卖批发套餐 (跟我们直营同价不让利):
-> - Pro ¥29 → multiplex 给 5 个轻量客户各 ¥10 = ¥50 月毛 → 利 ¥21
-> - Max5x ¥149 → 20 个限速客户各 ¥15 = ¥300 月毛 → 利 ¥151
+> ## 或者直接用 Hosted SaaS
 >
-> 终端定价 token / 包月 / 混合任选, admin 后台一键切换。
+> <https://3api.pro/create> → 邮箱密码 → 5 秒后进自己的 `<slug>.3api.pro/admin`,
+> 套餐 + 上游已经 baked, 把链接发出去就开始卖。
 >
-> ## 不一样的地方
-> - 多租户托管 (TENANT_MODE=multi) 跑成 SaaS
-> - 自定义域绑定, Caddy on-demand TLS
-> - 现代栈 Next.js + Tailwind, 不是老 Vue/Antd 风
+> ## 跟 new-api / 2API 比少了什么 / 多了什么
 >
-> MIT。希望能找到一些有获客能力的同学一起把这条赛道跑起来。
-> Issues / PR 欢迎: https://github.com/3api-pro/relay-panel
+> 少了:
+> - WeChat / Lark OIDC SSO (Overkill, 后续 v1.x 再说)
+> - Telegram bot 集成 (同上)
+>
+> 多了:
+> - 内置上游 — 不用自己谈号池, 装完即卖
+> - 多租户 (TENANT_MODE=multi 跑成 SaaS, 子域 / 自定义域绑定 Caddy on-demand TLS)
+> - 套餐 + token 双轨 (one-api 是纯倍率制, 终端用户体验不好)
+> - 现代栈 Next.js 14 + Tailwind + shadcn (不是老 Vue / Antd)
+>
+> ## 一些数字 (v0.8.0)
+>
+> - 41 个静态页, 1209 i18n keys 中英 100% parity
+> - 9 个 provider 真接入 (Anthropic / OpenAI / Gemini / DeepSeek /
+>   Moonshot / Qwen / MiniMax / llmapi-wholesale / custom)
+> - 14 个 DB migration, OpenAPI 55 个 endpoint
+> - 移动响应式 (iPhone 14 真测), 浅深主题
+>
+> MIT。这条赛道一个人跑不完, 找 5-10 个有获客的朋友一起。GitHub Issue
+> 或私信都行: <https://github.com/3api-pro/relay-panel>

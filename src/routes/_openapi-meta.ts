@@ -26,7 +26,7 @@ export interface ApiEndpoint {
 
 export const OPENAPI_INFO = {
   title: '3API Relay Panel',
-  version: '0.7.0',
+  version: '0.8.0',
   description:
     'Anthropic-compatible LLM relay with multi-tenant storefront, ' +
     'reseller admin, plans / orders / subscriptions, webhook delivery, ' +
