@@ -18,11 +18,13 @@ import { Router, Request, Response } from 'express';
 import { withTransaction, query } from '../services/database';
 import { createAdminForTenant } from '../services/auth';
 import { seedPlansForTenant, seedBrandConfigForTenant, ensureWholesaleBalance } from '../services/plans-seed';
+import { provisionTenantUpstreamInTx } from '../services/signup-provisioner';
 import { RateLimiter } from '../services/rate-limit';
 import { signSession } from '../services/jwt';
 import { setAdminCookie, ADMIN_TTL_SECONDS } from './auth-admin';
 import { config } from '../config';
 import { logger } from '../services/logger';
+import { recordReferral } from '../services/affiliate';
 
 export const signupTenantRouter = Router();
 
@@ -105,6 +107,14 @@ signupTenantRouter.post('/', async (req: Request, res: Response) => {
   }
 
   const { slug: maybeSlug, admin_email, admin_password } = req.body ?? {};
+  // Affiliate referral (v0.4 P2 #18). Accepts ?ref=<aff_code> via either
+  // body or query; advisory — never blocks signup. Recorded *after* the
+  // tenant transaction commits so a malformed code can't roll us back.
+  const refCode = (
+    (req.body && typeof req.body.ref === 'string' && req.body.ref) ||
+    (typeof req.query.ref === 'string' && req.query.ref) ||
+    ''
+  ).toString().toLowerCase();
 
   if (typeof admin_email !== 'string' || !admin_email.includes('@') || admin_email.length > 255) {
     res.status(400).json({
@@ -164,8 +174,34 @@ signupTenantRouter.post('/', async (req: Request, res: Response) => {
       await seedPlansForTenant(client, tenant.id);
       await seedBrandConfigForTenant(client, tenant.id, tenant.slug);
       await ensureWholesaleBalance(client, tenant.id, 0);
-      return { tenant, adminId };
+      // Auto-provision the platform-default upstream channel so the new
+      // admin can call /v1/messages immediately. Failure here is logged
+      // but does NOT block signup — admin can BYOK from /admin/channels.
+      let provision: Awaited<ReturnType<typeof provisionTenantUpstreamInTx>> = {
+        ok: false, channel_id: null, reason: 'unattempted',
+      };
+      try {
+        provision = await provisionTenantUpstreamInTx(client, tenant.id);
+      } catch (err: any) {
+        logger.warn({ tenantId: tenant.id, err: err?.message ?? String(err) }, 'tenant:self_signup:provision_failed');
+      }
+      return { tenant, adminId, provision };
     });
+
+    // Affiliate: best-effort record. If the code is bad / unknown the call
+    // returns { ok: false, reason } and we just log — never block signup.
+    let referralRecorded = false;
+    if (refCode && refCode.length >= 4 && refCode.length <= 16) {
+      try {
+        const r = await recordReferral(refCode, result.tenant.id);
+        referralRecorded = r.ok;
+        if (!r.ok) {
+          logger.info({ refCode, tenantId: result.tenant.id, reason: r.reason }, 'tenant:self_signup:referral_skipped');
+        }
+      } catch (err: any) {
+        logger.warn({ err: err?.message ?? String(err), refCode }, 'tenant:self_signup:referral_error');
+      }
+    }
 
     const storeUrl = config.saasDomain
       ? `https://${result.tenant.slug}.${config.saasDomain}/`
@@ -182,7 +218,13 @@ signupTenantRouter.post('/', async (req: Request, res: Response) => {
     setAdminCookie(res, token);
 
     logger.info(
-      { tenantId: result.tenant.id, slug: result.tenant.slug, adminId: result.adminId, ip, autoSlug: !maybeSlug },
+      {
+        tenantId: result.tenant.id, slug: result.tenant.slug, adminId: result.adminId,
+        ip, autoSlug: !maybeSlug,
+        provisionedChannelId: result.provision.channel_id,
+        provisionReason: result.provision.reason,
+        referralRecorded,
+      },
       'tenant:self_signup',
     );
 
@@ -194,6 +236,10 @@ signupTenantRouter.post('/', async (req: Request, res: Response) => {
       token,
       expires_in_seconds: ADMIN_TTL_SECONDS,
       slug_was_auto: !maybeSlug,
+      upstream_channel: result.provision.ok
+        ? { id: result.provision.channel_id, reason: result.provision.reason }
+        : null,
+      referral_recorded: referralRecorded,
     });
   } catch (err: any) {
     if (err?.code === '23505') {

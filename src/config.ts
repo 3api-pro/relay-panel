@@ -12,8 +12,11 @@ export const config = {
   tenantMode: (process.env.TENANT_MODE as "single" | "multi") || "single",
   saasDomain: process.env.SAAS_DOMAIN, // only when tenantMode=multi
 
+  // Corrected default — llmapi.pro mounts wholesale under /v1/wholesale,
+  // not /wholesale/v1. wholesale-sync.ts falls back to the legacy path if
+  // the canonical one 404s, so existing operators don't break on upgrade.
   upstreamBaseUrl:
-    process.env.UPSTREAM_BASE_URL || "https://api.llmapi.pro/wholesale/v1",
+    process.env.UPSTREAM_BASE_URL || "https://api.llmapi.pro/v1/wholesale",
   upstreamKey: process.env.UPSTREAM_KEY || "",
 
   jwtSecret: process.env.JWT_SECRET || "dev-secret-change-me",

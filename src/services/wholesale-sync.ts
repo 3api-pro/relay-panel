@@ -20,8 +20,26 @@ import { logger } from './logger';
 const SYNC_INTERVAL_MS = 5 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 10_000;
 
+/**
+ * Build candidate balance URLs to probe.
+ *
+ *   Canonical: {base}/balance   (where base ends with /v1/wholesale)
+ *   Fallback:  {base}/wholesale/balance  (legacy /wholesale/v1 layout)
+ *
+ * We probe canonical first; on 404 the caller retries with fallback. This
+ * keeps both the new and old UPSTREAM_BASE_URL env values working without
+ * a config migration.
+ */
+function balanceUrlCandidates(): string[] {
+  const base = config.upstreamBaseUrl.replace(/\/$/, '');
+  return [
+    `${base}/balance`,
+    `${base}/wholesale/balance`,
+  ];
+}
+
 function balanceUrl(): string {
-  return `${config.upstreamBaseUrl.replace(/\/$/, '')}/wholesale/balance`;
+  return balanceUrlCandidates()[0];
 }
 
 function isConfigured(): boolean {
@@ -45,19 +63,38 @@ export async function syncWholesaleOnce(): Promise<void> {
     return;
   }
 
-  const url = balanceUrl();
+  const candidates = balanceUrlCandidates();
   const t0 = Date.now();
+  let chosenUrl: string = candidates[0];
   try {
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${config.upstreamKey}`,
-        'User-Agent': '3api-relay-panel/wholesale-sync',
-      },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    // Probe each candidate until one returns 2xx or non-404. Anything
+    // other than 404 is treated as authoritative — auth failures, 5xx,
+    // etc. all stop the chain.
+    let res: Response | null = null;
+    let lastStatus = 0;
+    let lastText = '';
+    for (const url of candidates) {
+      chosenUrl = url;
+      const r = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${config.upstreamKey}`,
+          'User-Agent': '3api-relay-panel/wholesale-sync',
+        },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (r.ok) { res = r; break; }
+      lastStatus = r.status;
+      lastText = await r.text().catch(() => '');
+      if (r.status !== 404) {
+        // non-404 = authoritative failure, stop probing.
+        res = r;
+        break;
+      }
+      // 404 — try next candidate (legacy path).
+      logger.debug({ url, status: r.status }, 'wholesale-sync:try_fallback');
+    }
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
+    if (!res || !res.ok) {
       await query(
         `INSERT INTO wholesale_platform_balance (id, last_sync_at, last_sync_status, last_sync_error, updated_at)
            VALUES (1, NOW(), 'http_error', $1, NOW())
@@ -66,9 +103,9 @@ export async function syncWholesaleOnce(): Promise<void> {
            last_sync_status  = 'http_error',
            last_sync_error   = $1,
            updated_at        = NOW()`,
-        [`HTTP ${res.status}: ${text.slice(0, 200)}`],
+        [`HTTP ${res?.status ?? lastStatus}: ${(lastText || '').slice(0, 200)}`],
       );
-      logger.warn({ url, status: res.status, body: text.slice(0, 200) }, 'wholesale-sync:http_error');
+      logger.warn({ url: chosenUrl, status: res?.status ?? lastStatus, body: (lastText || '').slice(0, 200) }, 'wholesale-sync:http_error');
       return;
     }
 
@@ -96,6 +133,7 @@ export async function syncWholesaleOnce(): Promise<void> {
     );
     logger.info(
       {
+        url: chosenUrl,
         balance_cents: balanceCents,
         reseller_id: resellerId,
         elapsed_ms: Date.now() - t0,
@@ -114,7 +152,7 @@ export async function syncWholesaleOnce(): Promise<void> {
          updated_at        = NOW()`,
       [msg.slice(0, 500)],
     );
-    logger.warn({ url, err: msg, elapsed_ms: Date.now() - t0 }, 'wholesale-sync:network_error');
+    logger.warn({ url: chosenUrl, err: msg, elapsed_ms: Date.now() - t0 }, 'wholesale-sync:network_error');
   }
 }
 

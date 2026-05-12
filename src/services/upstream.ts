@@ -3,19 +3,28 @@
  *
  * Two transport modes:
  *  - JSON (non-streaming): callUpstream({ stream: false })
- *  - SSE (streaming):      callUpstreamStream(...) — yields chunks
+ *  - SSE (streaming):      callUpstreamStream(...) — returns a Response
+ *                          whose body is Anthropic-shaped SSE the relay can
+ *                          pipe directly to the client.
  *
- * v0.3 — multi-protocol routing.
+ * v0.4 — full multi-protocol routing.
  *   Anthropic-shaped /v1/messages is our wire format. provider_type on the
  *   channel selects how we talk to the upstream:
+ *
  *     anthropic         → POST {base}/messages, body as-is (default).
  *     llmapi-wholesale  → same as anthropic; route through llmapi.pro.
- *     openai            → POST {base}/chat/completions, adapt body + response.
- *                         Non-stream only in v0.3; streaming returns 501.
- *     gemini / moonshot / deepseek / minimax / qwen
- *                       → not yet implemented (v0.4); responds with a
- *                         clean 501 so the panel doesn't crash and the
- *                         admin gets a useful error.
+ *     openai            → POST {base}/chat/completions with anthropic↔openai
+ *                         transcode (both JSON and SSE). Tools, vision,
+ *                         system prompts all map.
+ *     deepseek          → same as openai with a DeepSeek default base_url
+ *                         (api.deepseek.com/v1). Channel can override.
+ *     moonshot          → openai-compat; default api.moonshot.cn/v1.
+ *     qwen              → openai-compat;
+ *                         default dashscope.aliyuncs.com/compatible-mode/v1.
+ *     minimax           → openai-compat (chatcompletion-v2 endpoint);
+ *                         default api.minimax.chat/v1.
+ *     gemini            → google v1beta REST with its own adapter
+ *                         (contents/parts schema, ?key=…, streamGenerateContent).
  *     custom            → passthrough — sends the body as-is to the
  *                         configured base_url + custom_headers. Caller is
  *                         responsible for picking a compatible shape.
@@ -24,8 +33,7 @@
  *     applied to req.body.model before forwarding.
  *
  *   custom_headers: arbitrary header map merged after Authorization /
- *     Content-Type / User-Agent so the channel owner can override them
- *     (e.g. for x-api-key auth or anthropic-beta toggles).
+ *     Content-Type / User-Agent so the channel owner can override them.
  *
  * Multi-tenant note: pass `channel` to override the env-driven defaults
  * with a per-tenant upstream_channel row. Single-tenant deploys can
@@ -33,6 +41,26 @@
  */
 import { config } from '../config';
 import { logger } from './logger';
+import {
+  anthropicReqToOpenAI,
+  openaiRespToAnthropic,
+  transcodeOpenAIStream,
+  parseOpenAISseLines,
+  encodeAnthropicEvent,
+  type AnthropicMessageRequest,
+} from './openai-adapter';
+import {
+  anthropicReqToGemini,
+  geminiToAnthropic,
+  transcodeGeminiStream,
+  parseGeminiSseLines,
+  buildGeminiUrl,
+  GEMINI_DEFAULT_BASE_URL,
+} from './provider-gemini';
+import { DEEPSEEK_DEFAULT_BASE_URL } from './provider-deepseek';
+import { MOONSHOT_DEFAULT_BASE_URL } from './provider-moonshot';
+import { QWEN_DEFAULT_BASE_URL } from './provider-qwen';
+import { MINIMAX_DEFAULT_BASE_URL } from './provider-minimax';
 
 export type ProviderType =
   | 'anthropic'
@@ -98,12 +126,32 @@ function asStringMap(v: unknown): Record<string, string> {
   return out;
 }
 
+/**
+ * Per-provider default base_url. When the channel has an explicit
+ * base_url we keep it; otherwise we fall back to the provider's public
+ * endpoint so a newly-created channel doesn't 404 against the empty default.
+ */
+function providerDefaultBase(p: ProviderType): string | null {
+  switch (p) {
+    case 'deepseek': return DEEPSEEK_DEFAULT_BASE_URL;
+    case 'moonshot': return MOONSHOT_DEFAULT_BASE_URL;
+    case 'qwen':     return QWEN_DEFAULT_BASE_URL;
+    case 'minimax':  return MINIMAX_DEFAULT_BASE_URL;
+    case 'gemini':   return GEMINI_DEFAULT_BASE_URL;
+    default:         return null;
+  }
+}
+
 function resolveTarget(req: UpstreamRequest): ResolvedTarget {
   if (req.channel) {
+    const pt = normaliseProvider(req.channel.provider_type as string);
+    const baseUrl = req.channel.base_url && req.channel.base_url.length > 0
+      ? req.channel.base_url
+      : (providerDefaultBase(pt) ?? '');
     return {
-      baseUrl: req.channel.base_url,
+      baseUrl,
       apiKey: req.channel.api_key,
-      providerType: normaliseProvider(req.channel.provider_type as string),
+      providerType: pt,
       modelMapping: asStringMap(req.channel.model_mapping),
       customHeaders: asStringMap(req.channel.custom_headers),
     };
@@ -138,7 +186,7 @@ function buildHeaders(
     'Content-Type': 'application/json',
     Accept: accept,
     Authorization: `Bearer ${apiKey}`,
-    'User-Agent': '3api-relay-panel/0.3.0',
+    'User-Agent': '3api-relay-panel/0.4.0',
     ...customHeaders,
   };
 }
@@ -147,76 +195,6 @@ export interface UpstreamJsonResponse {
   status: number;
   headers: Record<string, string>;
   body: any;
-}
-
-// =========================================================================
-// Adapters — Anthropic ⇄ OpenAI
-// =========================================================================
-
-/**
- * Flatten Anthropic `content` (string or list of {type,text}) to a plain
- * OpenAI-style string. Tool / image blocks are dropped with a stub note
- * since the OpenAI chat-completions response shape can't carry them.
- */
-function anthropicContentToOpenAi(content: any): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content
-    .map((b: any) => {
-      if (typeof b === 'string') return b;
-      if (b?.type === 'text') return String(b.text ?? '');
-      if (b?.type === 'image') return '[image]';
-      if (b?.type === 'tool_use') return `[tool_use:${b.name}]`;
-      if (b?.type === 'tool_result') return `[tool_result]`;
-      return '';
-    })
-    .filter(Boolean)
-    .join('\n');
-}
-
-function anthropicToOpenaiRequest(body: any): any {
-  const messages: any[] = [];
-  if (typeof body?.system === 'string' && body.system.length > 0) {
-    messages.push({ role: 'system', content: body.system });
-  } else if (Array.isArray(body?.system)) {
-    const sys = body.system.map((b: any) => (b?.text ?? '')).filter(Boolean).join('\n');
-    if (sys) messages.push({ role: 'system', content: sys });
-  }
-  for (const m of body?.messages ?? []) {
-    messages.push({
-      role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: anthropicContentToOpenAi(m.content),
-    });
-  }
-  return {
-    model: body.model,
-    messages,
-    max_tokens: body.max_tokens ?? 1024,
-    temperature: body.temperature,
-    top_p: body.top_p,
-    stop: body.stop_sequences,
-    stream: false, // v0.3 — non-stream only for openai adapter
-  };
-}
-
-function openaiToAnthropicResponse(oai: any): any {
-  const choice = oai?.choices?.[0];
-  const text = choice?.message?.content ?? '';
-  return {
-    id: oai?.id ?? `msg_oai_${Date.now().toString(36)}`,
-    type: 'message',
-    role: 'assistant',
-    model: oai?.model ?? '',
-    content: [{ type: 'text', text: String(text) }],
-    stop_reason:
-      choice?.finish_reason === 'length' ? 'max_tokens' :
-      choice?.finish_reason === 'stop' ? 'end_turn' :
-      'end_turn',
-    usage: {
-      input_tokens: Number(oai?.usage?.prompt_tokens ?? 0),
-      output_tokens: Number(oai?.usage?.completion_tokens ?? 0),
-    },
-  };
 }
 
 // =========================================================================
@@ -235,24 +213,15 @@ export async function callUpstream(req: UpstreamRequest): Promise<UpstreamJsonRe
     case 'llmapi-wholesale':
       return callJsonRaw(t, req.path, body);
     case 'openai':
+    case 'deepseek':
+    case 'moonshot':
+    case 'qwen':
+    case 'minimax':
       return callOpenAiJson(t, body);
+    case 'gemini':
+      return callGeminiJson(t, body);
     case 'custom':
       return callJsonRaw(t, req.path, body);
-    case 'gemini':
-    case 'moonshot':
-    case 'deepseek':
-    case 'minimax':
-    case 'qwen':
-      return {
-        status: 501,
-        headers: {},
-        body: {
-          error: {
-            type: 'not_implemented',
-            message: `provider_type '${t.providerType}' is configured on this channel but the protocol adapter ships in v0.4. Use 'anthropic' / 'llmapi-wholesale' / 'openai' for now.`,
-          },
-        },
-      };
     default:
       return callJsonRaw(t, req.path, body);
   }
@@ -286,7 +255,8 @@ async function callJsonRaw(t: ResolvedTarget, path: string, body: any): Promise<
 }
 
 async function callOpenAiJson(t: ResolvedTarget, body: any): Promise<UpstreamJsonResponse> {
-  const oaiBody = anthropicToOpenaiRequest(body);
+  const oaiBody = anthropicReqToOpenAI(body as AnthropicMessageRequest);
+  oaiBody.stream = false;
   const url = `${t.baseUrl.replace(/\/$/, '')}/chat/completions`;
   const start = Date.now();
   let res: Response;
@@ -297,7 +267,7 @@ async function callOpenAiJson(t: ResolvedTarget, body: any): Promise<UpstreamJso
       body: JSON.stringify(oaiBody),
     });
   } catch (err: any) {
-    logger.error({ err: err.message, url, provider: 'openai' }, 'upstream:network_error');
+    logger.error({ err: err.message, url, provider: t.providerType }, 'upstream:network_error');
     throw new Error(`upstream network error: ${err.message}`);
   }
 
@@ -305,13 +275,13 @@ async function callOpenAiJson(t: ResolvedTarget, body: any): Promise<UpstreamJso
   const text = await res.text();
   let oai: any;
   try { oai = JSON.parse(text); } catch { oai = { raw: text }; }
-  logger.info({ url, status: res.status, elapsed, mode: 'json', provider: 'openai' }, 'upstream:response');
+  logger.info({ url, status: res.status, elapsed, mode: 'json', provider: t.providerType }, 'upstream:response');
 
   if (res.status >= 200 && res.status < 300 && oai?.choices) {
     return {
       status: res.status,
       headers: Object.fromEntries(res.headers.entries()),
-      body: openaiToAnthropicResponse(oai),
+      body: openaiRespToAnthropic(oai, body?.model ?? ''),
     };
   }
   return {
@@ -321,20 +291,56 @@ async function callOpenAiJson(t: ResolvedTarget, body: any): Promise<UpstreamJso
   };
 }
 
+async function callGeminiJson(t: ResolvedTarget, body: any): Promise<UpstreamJsonResponse> {
+  const model = body?.model || 'gemini-2.5-pro';
+  const url = buildGeminiUrl(t.baseUrl, model, t.apiKey, false);
+  const gemBody = anthropicReqToGemini(body as AnthropicMessageRequest);
+  const start = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'User-Agent': '3api-relay-panel/0.4.0',
+        ...t.customHeaders,
+      },
+      body: JSON.stringify(gemBody),
+    });
+  } catch (err: any) {
+    logger.error({ err: err.message, url, provider: 'gemini' }, 'upstream:network_error');
+    throw new Error(`upstream network error: ${err.message}`);
+  }
+  const elapsed = Date.now() - start;
+  const text = await res.text();
+  let gem: any;
+  try { gem = JSON.parse(text); } catch { gem = { raw: text }; }
+  logger.info({ url, status: res.status, elapsed, mode: 'json', provider: 'gemini' }, 'upstream:response');
+
+  if (res.status >= 200 && res.status < 300 && gem?.candidates) {
+    return {
+      status: res.status,
+      headers: Object.fromEntries(res.headers.entries()),
+      body: geminiToAnthropic(gem, model),
+    };
+  }
+  return {
+    status: res.status,
+    headers: Object.fromEntries(res.headers.entries()),
+    body: gem,
+  };
+}
+
 // =========================================================================
 // Transport — SSE
 // =========================================================================
 
 /**
- * SSE streaming proxy. Returns the upstream Response so caller can pipe
- * res.body to client. Caller is responsible for closing the connection.
- *
- * Streaming is only fully implemented for anthropic / llmapi-wholesale /
- * custom (which assumes wire-compatible). openai streaming would require
- * transcoding `delta.content` → `content_block_delta` on the fly; we
- * synthesise a fake SSE message_start/stop pair using the JSON adapter
- * so the storefront stays functional but degraded. Other providers
- * return a 501 SSE error event so the client gets a clean error.
+ * SSE streaming proxy. Returns a Response whose body is Anthropic-shaped
+ * SSE; the relay pipes the body straight to the client. For non-anthropic
+ * upstreams we synthesise the SSE locally by streaming through the
+ * appropriate provider adapter.
  */
 export async function callUpstreamStream(req: UpstreamRequest): Promise<Response> {
   const t = resolveTarget(req);
@@ -343,6 +349,7 @@ export async function callUpstreamStream(req: UpstreamRequest): Promise<Response
   }
   const body = applyModelMapping(req.body, t.modelMapping);
 
+  // Native Anthropic-shaped passthrough.
   if (t.providerType === 'anthropic' || t.providerType === 'llmapi-wholesale' || t.providerType === 'custom') {
     const url = `${t.baseUrl.replace(/\/$/, '')}${req.path}`;
     const res = await fetch(url, {
@@ -354,36 +361,139 @@ export async function callUpstreamStream(req: UpstreamRequest): Promise<Response
     return res;
   }
 
-  if (t.providerType === 'openai') {
-    // Degraded path: run non-stream OpenAI call, wrap response as Anthropic-SSE.
-    const jsonRes = await callOpenAiJson(t, body);
-    const headers = new Headers({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
-    if (jsonRes.status < 200 || jsonRes.status >= 300) {
-      const errBody = JSON.stringify(jsonRes.body);
-      return new Response(errBody, { status: jsonRes.status, headers });
-    }
-    const ant = jsonRes.body;
-    const text = ant?.content?.[0]?.text ?? '';
-    const sse =
-      `event: message_start\ndata: ${JSON.stringify({ type: 'message_start', message: ant })}\n\n` +
-      `event: content_block_start\ndata: ${JSON.stringify({ type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } })}\n\n` +
-      `event: content_block_delta\ndata: ${JSON.stringify({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } })}\n\n` +
-      `event: content_block_stop\ndata: ${JSON.stringify({ type: 'content_block_stop', index: 0 })}\n\n` +
-      `event: message_delta\ndata: ${JSON.stringify({ type: 'message_delta', delta: { stop_reason: ant.stop_reason }, usage: ant.usage })}\n\n` +
-      `event: message_stop\ndata: ${JSON.stringify({ type: 'message_stop' })}\n\n`;
-    return new Response(sse, { status: 200, headers });
+  // OpenAI-compatible — DeepSeek / Moonshot / Qwen / MiniMax / openai.
+  if (t.providerType === 'openai' || t.providerType === 'deepseek' ||
+      t.providerType === 'moonshot' || t.providerType === 'qwen' ||
+      t.providerType === 'minimax') {
+    return callOpenAiStream(t, body);
   }
 
-  // Stub providers — synthesise a 501 JSON error so caller propagates.
-  const errPayload = JSON.stringify({
-    error: {
-      type: 'not_implemented',
-      message: `provider_type '${t.providerType}' streaming ships in v0.4.`,
+  if (t.providerType === 'gemini') {
+    return callGeminiStream(t, body);
+  }
+
+  // Fallback — should not hit.
+  return new Response(JSON.stringify({
+    error: { type: 'not_implemented', message: `provider_type '${t.providerType}' streaming not supported` },
+  }), { status: 501, headers: new Headers({ 'Content-Type': 'application/json' }) });
+}
+
+async function callOpenAiStream(t: ResolvedTarget, body: any): Promise<Response> {
+  const oaiBody = anthropicReqToOpenAI(body as AnthropicMessageRequest);
+  oaiBody.stream = true;
+  const url = `${t.baseUrl.replace(/\/$/, '')}/chat/completions`;
+  let upstream: Response;
+  try {
+    upstream = await fetch(url, {
+      method: 'POST',
+      headers: buildHeaders(t.apiKey, t.customHeaders, 'text/event-stream'),
+      body: JSON.stringify(oaiBody),
+    });
+  } catch (err: any) {
+    logger.error({ err: err.message, url, provider: t.providerType }, 'upstream:stream:network_error');
+    throw new Error(`upstream network error: ${err.message}`);
+  }
+  logger.info({ url, status: upstream.status, mode: 'stream', provider: t.providerType }, 'upstream:response');
+
+  if (upstream.status < 200 || upstream.status >= 300) {
+    // Pass the error JSON through unchanged so the relay records it.
+    const errText = await upstream.text();
+    return new Response(errText, {
+      status: upstream.status,
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+    });
+  }
+
+  const fallbackModel = body?.model ?? '';
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const enc = new TextEncoder();
+      try {
+        for await (const ev of transcodeOpenAIStream(parseOpenAISseLines(upstream.body), fallbackModel)) {
+          controller.enqueue(enc.encode(encodeAnthropicEvent(ev)));
+        }
+        controller.close();
+      } catch (err: any) {
+        logger.error({ err: err?.message ?? String(err), provider: t.providerType }, 'openai-sse:transcode_error');
+        try {
+          controller.enqueue(enc.encode(encodeAnthropicEvent({
+            type: 'error',
+            error: { type: 'overloaded_error', message: 'upstream stream transcode error' },
+          })));
+        } catch { /* noop */ }
+        controller.close();
+      }
     },
   });
-  return new Response(errPayload, {
-    status: 501,
-    headers: new Headers({ 'Content-Type': 'application/json' }),
+
+  return new Response(stream, {
+    status: 200,
+    headers: new Headers({
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    }),
+  });
+}
+
+async function callGeminiStream(t: ResolvedTarget, body: any): Promise<Response> {
+  const model = body?.model || 'gemini-2.5-pro';
+  const url = buildGeminiUrl(t.baseUrl, model, t.apiKey, true);
+  const gemBody = anthropicReqToGemini(body as AnthropicMessageRequest);
+  let upstream: Response;
+  try {
+    upstream = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        'User-Agent': '3api-relay-panel/0.4.0',
+        ...t.customHeaders,
+      },
+      body: JSON.stringify(gemBody),
+    });
+  } catch (err: any) {
+    logger.error({ err: err.message, url, provider: 'gemini' }, 'upstream:stream:network_error');
+    throw new Error(`upstream network error: ${err.message}`);
+  }
+  logger.info({ url, status: upstream.status, mode: 'stream', provider: 'gemini' }, 'upstream:response');
+
+  if (upstream.status < 200 || upstream.status >= 300) {
+    const errText = await upstream.text();
+    return new Response(errText, {
+      status: upstream.status,
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+    });
+  }
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const enc = new TextEncoder();
+      try {
+        for await (const ev of transcodeGeminiStream(parseGeminiSseLines(upstream.body), model)) {
+          controller.enqueue(enc.encode(encodeAnthropicEvent(ev)));
+        }
+        controller.close();
+      } catch (err: any) {
+        logger.error({ err: err?.message ?? String(err), provider: 'gemini' }, 'gemini-sse:transcode_error');
+        try {
+          controller.enqueue(enc.encode(encodeAnthropicEvent({
+            type: 'error',
+            error: { type: 'overloaded_error', message: 'upstream gemini stream transcode error' },
+          })));
+        } catch { /* noop */ }
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: new Headers({
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    }),
   });
 }
 
