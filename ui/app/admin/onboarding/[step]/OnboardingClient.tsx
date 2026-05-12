@@ -2,13 +2,14 @@
 import { useEffect, useState, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, auth, safe, fmtCNY } from '@/lib/api';
+import { useTranslations } from '@/lib/i18n';
 
-const STEPS = [
-  { n: 1, title: '上游 Channel',   desc: '配置 API 转发的上游来源' },
-  { n: 2, title: '品牌信息',       desc: '设置店铺名、Logo、配色' },
-  { n: 3, title: '套餐定价',       desc: '审核 4 个默认套餐' },
-  { n: 4, title: '收款方式',       desc: '配置支付宝 / USDT 收款' },
-  { n: 5, title: '完成 & 邀请',    desc: '获取你的店铺链接' },
+const STEP_KEYS = [
+  { n: 1, titleKey: 'step1_title', descKey: 'step1_desc' },
+  { n: 2, titleKey: 'step2_title', descKey: 'step2_desc' },
+  { n: 3, titleKey: 'step3_title', descKey: 'step3_desc' },
+  { n: 4, titleKey: 'step4_title', descKey: 'step4_desc' },
+  { n: 5, titleKey: 'step5_title', descKey: 'step5_desc' },
 ];
 
 interface Channel {
@@ -40,6 +41,8 @@ interface Brand {
 export default function OnboardingClient({ step: stepParam }: { step: string }) {
   const router = useRouter();
   const step = Math.max(1, Math.min(5, parseInt(stepParam, 10) || 1));
+  const t = useTranslations('admin.onboarding');
+  const tCommon = useTranslations('common');
 
   const [ready, setReady] = useState(false);
 
@@ -67,14 +70,14 @@ export default function OnboardingClient({ step: stepParam }: { step: string }) 
   }
 
   if (!ready) {
-    return <main className="min-h-screen flex items-center justify-center text-muted-foreground text-sm">加载中…</main>;
+    return <main className="min-h-screen flex items-center justify-center text-muted-foreground text-sm">{tCommon('loading')}</main>;
   }
 
   return (
     <main className="min-h-screen bg-muted">
       <div className="max-w-3xl mx-auto px-6 py-8">
-        <div className="mb-2 text-sm text-muted-foreground">站长引导 · 5 步开店</div>
-        <h1 className="text-2xl font-semibold text-foreground mb-6">{STEPS[step - 1].title}</h1>
+        <div className="mb-2 text-sm text-muted-foreground">{t('header')}</div>
+        <h1 className="text-2xl font-semibold text-foreground mb-6">{t(STEP_KEYS[step - 1].titleKey)}</h1>
 
         <StepIndicator current={step} />
 
@@ -92,7 +95,7 @@ export default function OnboardingClient({ step: stepParam }: { step: string }) 
             disabled={step === 1}
             className="px-4 py-2 rounded-md border border-input text-sm text-foreground disabled:opacity-40 hover:bg-card"
           >
-            ← 上一步
+            ← {tCommon('prev')}
           </button>
           <div className="flex gap-2">
             {step < 5 && (
@@ -100,7 +103,7 @@ export default function OnboardingClient({ step: stepParam }: { step: string }) 
                 onClick={() => goto(step + 1)}
                 className="px-4 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground"
               >
-                跳过
+                {tCommon('skip')}
               </button>
             )}
             {step < 5 ? (
@@ -108,14 +111,14 @@ export default function OnboardingClient({ step: stepParam }: { step: string }) 
                 onClick={() => goto(step + 1)}
                 className="px-5 py-2 rounded-md bg-brand-600 text-white text-sm hover:bg-brand-700"
               >
-                继续 →
+                {t('continue')}
               </button>
             ) : (
               <button
                 onClick={finish}
                 className="px-5 py-2 rounded-md bg-brand-600 text-white text-sm hover:bg-brand-700"
               >
-                进入控制台
+                {t('enter_console')}
               </button>
             )}
           </div>
@@ -129,9 +132,10 @@ export default function OnboardingClient({ step: stepParam }: { step: string }) 
 /*  Step indicator                                                     */
 /* ------------------------------------------------------------------ */
 function StepIndicator({ current }: { current: number }) {
+  const t = useTranslations('admin.onboarding');
   return (
     <div className="flex items-center">
-      {STEPS.map((s, idx) => {
+      {STEP_KEYS.map((s, idx) => {
         const done = s.n < current;
         const active = s.n === current;
         return (
@@ -148,9 +152,9 @@ function StepIndicator({ current }: { current: number }) {
               <div className={
                 'mt-1.5 text-xs whitespace-nowrap ' +
                 (active ? 'text-foreground font-medium' : 'text-muted-foreground')
-              }>{s.title}</div>
+              }>{t(s.titleKey)}</div>
             </div>
-            {idx < STEPS.length - 1 && (
+            {idx < STEP_KEYS.length - 1 && (
               <div className={'flex-1 h-0.5 mx-2 mb-5 ' + (done ? 'bg-brand-600' : 'bg-accent')} />
             )}
           </div>
@@ -179,6 +183,8 @@ function Step1Channels() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const t = useTranslations('admin.onboarding.step1');
+  const tCommon = useTranslations('common');
 
   useEffect(() => {
     safe(api<{ data: Channel[] }>('/admin/channels'), { data: [] })
@@ -209,7 +215,7 @@ function Step1Channels() {
         });
         await api(`/admin/channels/${created.id}/set-default`, { method: 'POST' });
       }
-      setMsg('已启用推荐上游，下一步');
+      setMsg(t('rec_msg_done'));
       router.push('/admin/onboarding/2');
     } catch (e: any) {
       setErr(e.message);
@@ -223,13 +229,13 @@ function Step1Channels() {
   }
 
   if (loading) {
-    return <div className="text-sm text-muted-foreground">加载中…</div>;
+    return <div className="text-sm text-muted-foreground">{tCommon('loading')}</div>;
   }
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        选择如何让客户的 /v1/messages 真转发出去。<b className="text-foreground">推荐</b>路径零库存、零谈判；<b className="text-foreground">BYOK</b>路径你完全控制谁是上游。
+        {t('intro')}<b className="text-foreground">{t('intro_recommended')}</b>{t('intro_recommended_tail')}<b className="text-foreground">{t('intro_byok')}</b>{t('intro_byok_tail')}
       </p>
       {(msg || err) && (
         <div
@@ -253,21 +259,21 @@ function Step1Channels() {
             <div className="w-7 h-7 rounded-full bg-brand-600 text-white flex items-center justify-center text-sm font-bold">
               ★
             </div>
-            <h3 className="text-base font-semibold text-foreground">使用推荐 (零库存)</h3>
-            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-brand-600 text-white">推荐</span>
+            <h3 className="text-base font-semibold text-foreground">{t('rec_title')}</h3>
+            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-brand-600 text-white">{t('rec_badge')}</span>
           </div>
           <p className="text-sm text-foreground/80 mb-3">
-            <b>llmapi.pro Wholesale</b> — 我方批发上游，已 baked。
+            <b>{t('rec_subtitle_strong')}</b>{t('rec_subtitle_tail')}
           </p>
           <ul className="text-xs text-foreground/70 space-y-1.5 mb-4 flex-1">
-            <li>• Claude 4.x / Sonnet / Haiku 全系</li>
-            <li>• 0 配置，注册即开</li>
-            <li>• 充值平台批发余额 = 库存</li>
-            <li>• 每卖一单从余额扣 face value，不需要谈渠道</li>
+            <li>• {t('rec_bullet_1')}</li>
+            <li>• {t('rec_bullet_2')}</li>
+            <li>• {t('rec_bullet_3')}</li>
+            <li>• {t('rec_bullet_4')}</li>
           </ul>
           {recommended && (
             <div className="text-[11px] text-muted-foreground font-mono mb-3 truncate">
-              当前: {recommended.name} · {recommended.base_url}
+              {t('rec_current_prefix')} {recommended.name} · {recommended.base_url}
             </div>
           )}
           <button
@@ -275,7 +281,7 @@ function Step1Channels() {
             disabled={busy}
             className="w-full px-4 py-2.5 rounded-md bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-60"
           >
-            {busy ? '启用中…' : recommended ? '一键启用 →' : '一键启用 →'}
+            {busy ? t('rec_cta_busy') : t('rec_cta')}
           </button>
         </div>
         {/* BYOK card */}
@@ -284,29 +290,29 @@ function Step1Channels() {
             <div className="w-7 h-7 rounded-full bg-muted text-foreground flex items-center justify-center text-sm font-bold">
               🔑
             </div>
-            <h3 className="text-base font-semibold text-foreground">我有自己的 API Key (BYOK)</h3>
+            <h3 className="text-base font-semibold text-foreground">{t('byok_title')}</h3>
           </div>
           <p className="text-sm text-foreground/80 mb-3">
-            Anthropic / OpenAI / 自建中转 — 完全自负。
+            {t('byok_subtitle')}
           </p>
           <ul className="text-xs text-foreground/70 space-y-1.5 mb-4 flex-1">
-            <li>• 自己谈渠道、自己控制成本</li>
-            <li>• 需要先充值上游 API key (花的是你自己的钱)</li>
-            <li>• 上游抖动 / 涨价 / 封号你独自承担</li>
-            <li>• 多 key 轮询 / 协议适配 我们 baked</li>
+            <li>• {t('byok_bullet_1')}</li>
+            <li>• {t('byok_bullet_2')}</li>
+            <li>• {t('byok_bullet_3')}</li>
+            <li>• {t('byok_bullet_4')}</li>
           </ul>
           <button
             onClick={goByok}
             className="w-full px-4 py-2.5 rounded-md border border-input bg-background text-foreground text-sm font-medium hover:bg-muted"
           >
-            配置 BYOK →
+            {t('byok_cta')}
           </button>
         </div>
       </div>
       {hasAnyChannel && (
         <p className="text-xs text-muted-foreground text-center">
-          已有 {list.length} 个 channel —{' '}
-          <a href="/admin/channels" className="underline">在 channel 页查看</a>
+          {t('has_n_channels_prefix')} {list.length} {t('has_n_channels_mid')}{' '}
+          <a href="/admin/channels" className="underline">{t('channels_link')}</a>
         </p>
       )}
     </div>
@@ -321,6 +327,8 @@ function Step2Brand() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const t = useTranslations('admin.onboarding.step2');
+  const tCommon = useTranslations('common');
 
   useEffect(() => {
     safe(api<Brand>('/admin/brand'), {}).then((b) => setBrand(b || {}));
@@ -330,9 +338,9 @@ function Step2Brand() {
     setBusy(true); setMsg(''); setErr('');
     try {
       await api('/admin/brand', { method: 'PATCH', body: JSON.stringify(brand) });
-      setMsg('✓ 已保存');
+      setMsg(tCommon('saved_ok'));
     } catch (e: any) {
-      setErr(`保存失败（接口可能未就绪）：${e.message}`);
+      setErr(`${tCommon('save_failed')}: ${e.message}`);
     } finally {
       setBusy(false);
     }
@@ -340,15 +348,15 @@ function Step2Brand() {
 
   return (
     <div className="space-y-3">
-      <Field label="店铺名称">
+      <Field label={t('field_store_name')}>
         <input type="text" value={brand.store_name ?? ''} onChange={(e) => setBrand({ ...brand, store_name: e.target.value })}
-          placeholder="例如：算力中转站" className="w-full px-3 py-2 rounded-md border border-input" />
+          placeholder={t('ph_store_name')} className="w-full px-3 py-2 rounded-md border border-input" />
       </Field>
-      <Field label="Logo URL">
+      <Field label={t('field_logo')}>
         <input type="text" value={brand.logo_url ?? ''} onChange={(e) => setBrand({ ...brand, logo_url: e.target.value })}
           placeholder="https://..." className="w-full px-3 py-2 rounded-md border border-input" />
       </Field>
-      <Field label="主题色">
+      <Field label={t('field_primary')}>
         <div className="flex items-center gap-2">
           <input type="color" value={brand.primary_color ?? '#0e9486'} onChange={(e) => setBrand({ ...brand, primary_color: e.target.value })}
             className="h-9 w-12 rounded border border-input" />
@@ -356,11 +364,11 @@ function Step2Brand() {
             className="flex-1 px-3 py-2 rounded-md border border-input font-mono text-sm" />
         </div>
       </Field>
-      <Field label="联系邮箱">
+      <Field label={t('field_email')}>
         <input type="email" value={brand.contact_email ?? ''} onChange={(e) => setBrand({ ...brand, contact_email: e.target.value })}
-          placeholder="support@example.com" className="w-full px-3 py-2 rounded-md border border-input" />
+          placeholder={t('ph_email')} className="w-full px-3 py-2 rounded-md border border-input" />
       </Field>
-      <Field label="首页公告（可空）">
+      <Field label={t('field_announcement')}>
         <textarea value={brand.announcement ?? ''} onChange={(e) => setBrand({ ...brand, announcement: e.target.value })}
           rows={2} className="w-full px-3 py-2 rounded-md border border-input text-sm" />
       </Field>
@@ -371,7 +379,7 @@ function Step2Brand() {
         </div>
         <button onClick={save} disabled={busy}
           className="px-4 py-1.5 rounded-md bg-accent text-white text-sm hover:bg-foreground disabled:opacity-50">
-          {busy ? '保存中…' : '保存'}
+          {busy ? tCommon('saving') : tCommon('save')}
         </button>
       </div>
     </div>
@@ -384,6 +392,8 @@ function Step2Brand() {
 function Step3Plans() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const t = useTranslations('admin.onboarding.step3');
+  const tCommon = useTranslations('common');
 
   useEffect(() => {
     safe(api<{ data: Plan[] }>('/admin/plans'), { data: [] })
@@ -404,12 +414,12 @@ function Step3Plans() {
   return (
     <div>
       <p className="text-sm text-muted-foreground mb-4">
-        系统已为你预置 4 个标准套餐。这里可以快速启用 / 禁用，或前往 <a href="/admin/plans" className="text-brand-700 underline">套餐管理</a> 改价。
+        {t('intro')} <a href="/admin/plans" className="text-brand-700 underline">{t('intro_link')}</a> {t('intro_tail')}
       </p>
       {loading ? (
-        <div className="text-sm text-muted-foreground">加载中…</div>
+        <div className="text-sm text-muted-foreground">{tCommon('loading')}</div>
       ) : plans.length === 0 ? (
-        <div className="text-sm text-muted-foreground">暂未检测到套餐（数据库可能未 seed）。</div>
+        <div className="text-sm text-muted-foreground">{t('no_plans')}</div>
       ) : (
         <div className="space-y-2">
           {plans.map((p) => (
@@ -417,14 +427,14 @@ function Step3Plans() {
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-foreground">{p.name}</div>
                 <div className="text-xs text-muted-foreground">
-                  {fmtCNY(p.price_cents)} / {p.period_days}天 ·{' '}
-                  {p.quota_tokens === -1 ? '不限 token' : `${(p.quota_tokens / 1_000_000).toFixed(1)}M token`}
+                  {fmtCNY(p.price_cents)} / {p.period_days}d ·{' '}
+                  {p.quota_tokens === -1 ? t('unlimited') : `${(p.quota_tokens / 1_000_000).toFixed(1)} ${t('tokens_m')}`}
                 </div>
               </div>
               <label className="flex items-center gap-2 text-xs cursor-pointer">
                 <input type="checkbox" checked={p.enabled} onChange={() => toggle(p)} />
                 <span className={p.enabled ? 'text-emerald-700' : 'text-muted-foreground'}>
-                  {p.enabled ? '已上架' : '已下架'}
+                  {p.enabled ? tCommon('enabled') : tCommon('disabled')}
                 </span>
               </label>
             </div>
@@ -446,6 +456,8 @@ function Step4Payment() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const t = useTranslations('admin.onboarding.step4');
+  const tCommon = useTranslations('common');
 
   useEffect(() => {
     safe(api<any>('/admin/payment-config'), {}).then((c: any) => {
@@ -467,9 +479,9 @@ function Step4Payment() {
           usdt_erc20: usdtErc || null,
         }),
       });
-      setMsg('✓ 已保存');
+      setMsg(tCommon('saved_ok'));
     } catch (e: any) {
-      setErr(`后端 payment 接口暂未上线（payments agent 跟进），此步可先跳过：${e.message}`);
+      setErr(`${t('save_warn')}${e.message}`);
     } finally {
       setBusy(false);
     }
@@ -478,27 +490,27 @@ function Step4Payment() {
   return (
     <div className="space-y-4">
       <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">
-        收款接口由 payments agent 提供。如果你现在还没收到这两行接口，先跳过本步——主流程不受阻。
+        {t('note')}
       </div>
       <fieldset className="border border-border rounded-md p-4">
-        <legend className="text-sm font-medium text-foreground px-1">支付宝</legend>
-        <Field label="APP ID">
+        <legend className="text-sm font-medium text-foreground px-1">{t('alipay_legend')}</legend>
+        <Field label={t('field_app_id')}>
           <input type="text" value={alipayAppId} onChange={(e) => setAlipayAppId(e.target.value)}
             placeholder="2021..." className="w-full px-3 py-2 rounded-md border border-input text-sm font-mono" />
         </Field>
-        <Field label="商户私钥（PEM）">
+        <Field label={t('field_private_key')}>
           <textarea value={alipayKey} onChange={(e) => setAlipayKey(e.target.value)}
             rows={3} placeholder="-----BEGIN RSA PRIVATE KEY-----..."
             className="w-full px-3 py-2 rounded-md border border-input text-xs font-mono" />
         </Field>
       </fieldset>
       <fieldset className="border border-border rounded-md p-4">
-        <legend className="text-sm font-medium text-foreground px-1">USDT</legend>
-        <Field label="TRC20 地址">
+        <legend className="text-sm font-medium text-foreground px-1">{t('usdt_legend')}</legend>
+        <Field label={t('field_trc20')}>
           <input type="text" value={usdtTrc} onChange={(e) => setUsdtTrc(e.target.value)}
             placeholder="T..." className="w-full px-3 py-2 rounded-md border border-input text-sm font-mono" />
         </Field>
-        <Field label="ERC20 地址">
+        <Field label={t('field_erc20')}>
           <input type="text" value={usdtErc} onChange={(e) => setUsdtErc(e.target.value)}
             placeholder="0x..." className="w-full px-3 py-2 rounded-md border border-input text-sm font-mono" />
         </Field>
@@ -510,7 +522,7 @@ function Step4Payment() {
         </div>
         <button onClick={save} disabled={busy}
           className="px-4 py-1.5 rounded-md bg-accent text-white text-sm hover:bg-foreground disabled:opacity-50">
-          {busy ? '保存中…' : '保存'}
+          {busy ? tCommon('saving') : tCommon('save')}
         </button>
       </div>
     </div>
@@ -523,6 +535,9 @@ function Step4Payment() {
 function Step5Done({ onDone }: { onDone: () => void }) {
   const [me, setMe] = useState<Me | null>(null);
   const [copied, setCopied] = useState(false);
+  const t = useTranslations('admin.onboarding.step5');
+  const tCommon = useTranslations('common');
+  const tOnboard = useTranslations('admin.onboarding');
 
   useEffect(() => {
     safe(api<Me>('/admin/me'), { admin: { email: '' }, tenant: { slug: 'your-shop' } }).then(setMe);
@@ -543,27 +558,27 @@ function Step5Done({ onDone }: { onDone: () => void }) {
   return (
     <div className="text-center py-4">
       <div className="text-5xl mb-3">🎉</div>
-      <h2 className="text-xl font-semibold text-foreground">你的店铺已开张</h2>
-      <p className="text-sm text-muted-foreground mt-2">把这条链接发给你的用户，他们就能注册下单了。</p>
+      <h2 className="text-xl font-semibold text-foreground">{t('title')}</h2>
+      <p className="text-sm text-muted-foreground mt-2">{t('subtitle')}</p>
 
       <div className="mt-6 inline-flex items-center gap-2 bg-muted border border-border rounded-md px-4 py-2.5 font-mono text-sm">
         <span>{url}</span>
         <button onClick={copy} className="px-2 py-1 rounded bg-card border border-input hover:bg-muted text-xs">
-          {copied ? '已复制 ✓' : '复制'}
+          {copied ? tCommon('copied') : tCommon('copy')}
         </button>
       </div>
 
       <div className="mt-8 max-w-md mx-auto text-left text-sm text-muted-foreground space-y-2">
-        <p className="font-medium text-foreground">下一步建议</p>
+        <p className="font-medium text-foreground">{t('next_step_title')}</p>
         <ul className="space-y-1.5 list-disc list-inside">
-          <li>到 <a href="/admin/finance" className="text-brand-700 underline">财务</a> 给 wholesale 余额充值（首次建议 ¥500）</li>
-          <li>到 <a href="/admin/branding" className="text-brand-700 underline">品牌</a> 上传 logo 完成形象</li>
-          <li>导出 <a href="/admin/users" className="text-brand-700 underline">推广素材</a>，发到目标社区</li>
+          <li>{t('next_step_finance_prefix')} <a href="/admin/finance" className="text-brand-700 underline">{t('next_step_finance_link')}</a>{t('next_step_finance_tail')}</li>
+          <li>{t('next_step_brand_prefix')} <a href="/admin/branding" className="text-brand-700 underline">{t('next_step_brand_link')}</a>{t('next_step_brand_tail')}</li>
+          <li>{t('next_step_users_prefix')} <a href="/admin/users" className="text-brand-700 underline">{t('next_step_users_link')}</a>{t('next_step_users_tail')}</li>
         </ul>
       </div>
 
       <button onClick={onDone} className="mt-8 px-6 py-2.5 rounded-md bg-brand-600 text-white text-sm hover:bg-brand-700">
-        进入控制台
+        {tOnboard('enter_console')}
       </button>
     </div>
   );

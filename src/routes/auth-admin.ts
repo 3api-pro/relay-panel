@@ -118,6 +118,72 @@ adminAuthRouter.post('/login', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /admin/login-lookup
+ * Body: { email }
+ *
+ * Public (no auth) — used by /admin/login "Forgot my shop address?" modal so
+ * resellers who don't remember which subdomain owns their store can recover
+ * it from their email. Returns { tenant_slug } or { tenant_slug: null } if
+ * not found. We DO NOT return any other tenant fields here to keep this
+ * surface tight: an attacker who guesses an email only learns the public
+ * subdomain slug (already exposed via DNS for active shops).
+ *
+ * Rate-limit: 1 req / 1.5s per IP (in-memory rolling map). The window is
+ * coarse on purpose — admins use this once. The limit's only job is to
+ * make email enumeration painful.
+ */
+const LOOKUP_RATE_MS = 1500;
+const lookupHits = new Map<string, number>();
+function lookupRateLimitHit(ip: string): boolean {
+  const now = Date.now();
+  const last = lookupHits.get(ip) || 0;
+  if (now - last < LOOKUP_RATE_MS) return true;
+  lookupHits.set(ip, now);
+  // Periodic GC — keep map small.
+  if (lookupHits.size > 5000) {
+    const cutoff = now - LOOKUP_RATE_MS * 4;
+    for (const [k, v] of lookupHits.entries()) {
+      if (v < cutoff) lookupHits.delete(k);
+    }
+  }
+  return false;
+}
+
+adminAuthRouter.post('/login-lookup', async (req: Request, res: Response) => {
+  try {
+    const ip = (req.ip || req.socket.remoteAddress || 'unknown').toString();
+    if (lookupRateLimitHit(ip)) {
+      res.status(429).json({ error: { type: 'rate_limited', message: 'Too many requests' } });
+      return;
+    }
+
+    const { email } = req.body ?? {};
+    if (typeof email !== 'string' || !email.trim()) {
+      res.status(400).json({ error: { type: 'invalid_request_error', message: 'email required' } });
+      return;
+    }
+
+    const rows = await query<any>(
+      `SELECT t.slug AS tenant_slug
+         FROM reseller_admin a
+         JOIN tenant t ON t.id = a.tenant_id
+        WHERE LOWER(a.email) = LOWER($1)
+          AND a.status = 'active'
+          AND t.status <> 'deleted'
+        ORDER BY a.id ASC
+        LIMIT 1`,
+      [email.trim()],
+    );
+    const slug = rows.length > 0 ? rows[0].tenant_slug : null;
+    res.json({ tenant_slug: slug });
+  } catch (err: any) {
+    logger.error({ err: err.message }, 'admin:login_lookup:error');
+    // Don't leak DB errors here — just say not found so the modal stays usable.
+    res.json({ tenant_slug: null });
+  }
+});
+
+/**
  * POST /admin/logout — clear the cookie. JWT is stateless so the bearer
  * version still works until expiry; this is a best-effort browser logout.
  */

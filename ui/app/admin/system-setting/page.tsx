@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select';
 import { AlertTriangle } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useTranslations } from '@/lib/i18n';
 
 interface SystemSetting {
   signup_enabled: boolean;
@@ -36,6 +37,8 @@ export default function SystemSettingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+  const t = useTranslations('admin.system_setting');
+  const tCommon = useTranslations('common');
 
   useEffect(() => {
     refresh();
@@ -73,7 +76,7 @@ export default function SystemSettingPage() {
   }
 
   return (
-    <AdminShell title="系统设置" subtitle="注册开关 / 维护模式 / 顶部公告（按 tenant 隔离）">
+    <AdminShell title={t('title')} subtitle={t('subtitle')}>
       {err && (
         <div className="mb-4 px-4 py-2 rounded-md border border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400 text-sm">
           {err}
@@ -91,9 +94,9 @@ export default function SystemSettingPage() {
           {/* Signup enabled */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">注册开放</CardTitle>
+              <CardTitle className="text-base">{t('signup_title')}</CardTitle>
               <CardDescription>
-                关闭后终端用户无法在你的店铺注册新账号；已注册用户不受影响。
+                {t('signup_desc')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -106,9 +109,9 @@ export default function SystemSettingPage() {
                 />
                 <Label htmlFor="signup_enabled" className="cursor-pointer">
                   {data.signup_enabled ? (
-                    <span className="text-emerald-700 dark:text-emerald-400">已开放</span>
+                    <span className="text-emerald-700 dark:text-emerald-400">{t('signup_on')}</span>
                   ) : (
-                    <span className="text-muted-foreground">已关闭</span>
+                    <span className="text-muted-foreground">{t('signup_off')}</span>
                   )}
                 </Label>
               </div>
@@ -119,17 +122,17 @@ export default function SystemSettingPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                维护模式
+                {t('maint_title')}
                 {data.maintenance_mode && (
                   <span className="text-xs px-2 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-400">
-                    生效中
+                    {t('maint_active_badge')}
                   </span>
                 )}
               </CardTitle>
               <CardDescription className="text-amber-700 dark:text-amber-400 flex items-start gap-1.5">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 <span>
-                  开启后店铺前台和 /v1/messages 都返回 503，仅 admin 后台可访问。慎用。
+                  {t('maint_desc')}
                 </span>
               </CardDescription>
             </CardHeader>
@@ -138,7 +141,7 @@ export default function SystemSettingPage() {
                 <Switch
                   checked={data.maintenance_mode}
                   onCheckedChange={(v) => {
-                    if (v && !confirm('⚠ 启用维护模式将拦截所有终端用户请求 (503)。继续？')) return;
+                    if (v && !confirm(t('maint_confirm'))) return;
                     save({ maintenance_mode: v });
                   }}
                   disabled={saving}
@@ -146,9 +149,9 @@ export default function SystemSettingPage() {
                 />
                 <Label htmlFor="maintenance_mode" className="cursor-pointer">
                   {data.maintenance_mode ? (
-                    <span className="text-amber-700 dark:text-amber-400">维护中</span>
+                    <span className="text-amber-700 dark:text-amber-400">{t('maint_on')}</span>
                   ) : (
-                    <span className="text-emerald-700 dark:text-emerald-400">正常运行</span>
+                    <span className="text-emerald-700 dark:text-emerald-400">{t('maint_off')}</span>
                   )}
                 </Label>
               </div>
@@ -158,14 +161,14 @@ export default function SystemSettingPage() {
           {/* Announcement */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">顶部公告</CardTitle>
+              <CardTitle className="text-base">{t('announce_title')}</CardTitle>
               <CardDescription>
-                在店铺首页显示一条公告横幅（终端用户可见）。留空 = 关闭。
+                {t('announce_desc')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-1.5">
-                <Label>公告级别</Label>
+                <Label>{t('announce_level_label')}</Label>
                 <Select
                   value={data.announcement_level || 'info'}
                   onValueChange={(v: 'info' | 'warn' | 'error') =>
@@ -177,19 +180,19 @@ export default function SystemSettingPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="info">信息（蓝）</SelectItem>
-                    <SelectItem value="warn">警告（黄）</SelectItem>
-                    <SelectItem value="error">紧急（红）</SelectItem>
+                    <SelectItem value="info">{t('announce_level_info')}</SelectItem>
+                    <SelectItem value="warn">{t('announce_level_warn')}</SelectItem>
+                    <SelectItem value="error">{t('announce_level_error')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>公告内容</Label>
+                <Label>{t('announce_content')}</Label>
                 <textarea
                   className="w-full min-h-24 px-3 py-2 rounded-md border border-input bg-background text-sm"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
-                  placeholder="例：5/15 凌晨 2-4 点维护 …（留空关闭横幅）"
+                  placeholder={t('announce_placeholder')}
                 />
                 <div className="flex items-center gap-2">
                   <Button
@@ -197,7 +200,7 @@ export default function SystemSettingPage() {
                     onClick={() => save({ announcement: draft })}
                     disabled={saving || draft === (data.announcement ?? '')}
                   >
-                    {saving ? '保存中…' : '保存公告'}
+                    {saving ? tCommon('saving') : t('save_announce')}
                   </Button>
                   {draft !== (data.announcement ?? '') && (
                     <Button
@@ -206,7 +209,7 @@ export default function SystemSettingPage() {
                       onClick={() => setDraft(data.announcement ?? '')}
                       disabled={saving}
                     >
-                      撤销改动
+                      {t('revert_changes')}
                     </Button>
                   )}
                   {data.announcement && (
@@ -217,7 +220,7 @@ export default function SystemSettingPage() {
                       onClick={() => save({ announcement: '' })}
                       disabled={saving}
                     >
-                      清除公告
+                      {t('clear_announce')}
                     </Button>
                   )}
                 </div>
@@ -225,7 +228,7 @@ export default function SystemSettingPage() {
               {/* Preview */}
               {draft && (
                 <div className="pt-2 border-t border-border">
-                  <div className="text-xs text-muted-foreground mb-1.5">预览：</div>
+                  <div className="text-xs text-muted-foreground mb-1.5">{t('preview')}</div>
                   <div
                     className={
                       'text-sm px-4 py-2 rounded-md border ' +
@@ -245,7 +248,7 @@ export default function SystemSettingPage() {
 
           {data.updated_at && (
             <p className="text-xs text-muted-foreground">
-              最后更新：{new Date(data.updated_at).toLocaleString('zh-CN')}
+              {t('last_updated')}{new Date(data.updated_at).toLocaleString()}
             </p>
           )}
         </div>

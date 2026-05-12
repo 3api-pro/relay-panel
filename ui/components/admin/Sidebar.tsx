@@ -5,44 +5,46 @@ import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, BarChart3, Package, ShoppingCart, Users,
   Plug, Wallet, Palette, CreditCard, Settings, SlidersHorizontal,
-  ChevronDown, ChevronLeft, ChevronRight,
+  ChevronDown, ChevronLeft, ChevronRight, Share2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useTranslations } from '@/lib/i18n';
 
-interface NavItem { href: string; label: string; Icon: typeof LayoutDashboard; }
-interface NavGroup { id: string; title: string; items: NavItem[]; }
+interface NavItem { href: string; labelKey: string; Icon: typeof LayoutDashboard; }
+interface NavGroup { id: string; titleKey: string; items: NavItem[]; }
 
 const GROUPS: NavGroup[] = [
   {
-    id: 'overview', title: '概览',
+    id: 'overview', titleKey: 'overview',
     items: [
-      { href: '/admin',       label: '总览',  Icon: LayoutDashboard },
-      { href: '/admin/stats', label: '数据', Icon: BarChart3 },
+      { href: '/admin',       labelKey: 'dashboard', Icon: LayoutDashboard },
+      { href: '/admin/stats', labelKey: 'stats',     Icon: BarChart3 },
     ],
   },
   {
-    id: 'sales', title: '销售',
+    id: 'sales', titleKey: 'sales',
     items: [
-      { href: '/admin/plans',  label: '套餐管理', Icon: Package },
-      { href: '/admin/orders', label: '订单',     Icon: ShoppingCart },
-      { href: '/admin/users',  label: '终端用户', Icon: Users },
+      { href: '/admin/plans',     labelKey: 'plans',     Icon: Package },
+      { href: '/admin/orders',    labelKey: 'orders',    Icon: ShoppingCart },
+      { href: '/admin/users',     labelKey: 'users',     Icon: Users },
+      { href: '/admin/affiliate', labelKey: 'affiliate', Icon: Share2 },
     ],
   },
   {
-    id: 'upstream', title: '上游',
+    id: 'upstream', titleKey: 'upstream',
     items: [
-      { href: '/admin/channels',  label: '上游 Channel', Icon: Plug },
-      { href: '/admin/wholesale', label: '批发余额',    Icon: Wallet },
+      { href: '/admin/channels',  labelKey: 'channels',  Icon: Plug },
+      { href: '/admin/wholesale', labelKey: 'wholesale', Icon: Wallet },
     ],
   },
   {
-    id: 'settings', title: '设置',
+    id: 'settings', titleKey: 'settings',
     items: [
-      { href: '/admin/branding',       label: '品牌',         Icon: Palette },
-      { href: '/admin/system-setting', label: '系统设置',      Icon: SlidersHorizontal },
-      { href: '/admin/payment-config', label: '收款配置', Icon: CreditCard },
-      { href: '/admin/settings',       label: '账号设置', Icon: Settings },
+      { href: '/admin/branding',       labelKey: 'branding',       Icon: Palette },
+      { href: '/admin/system-setting', labelKey: 'system_setting', Icon: SlidersHorizontal },
+      { href: '/admin/payment-config', labelKey: 'payment_config', Icon: CreditCard },
+      { href: '/admin/settings',       labelKey: 'settings',       Icon: Settings },
     ],
   },
 ];
@@ -64,6 +66,9 @@ export function Sidebar() {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     overview: true, sales: true, upstream: true, settings: true,
   });
+  const tGroups = useTranslations('admin.sidebar.groups');
+  const tItems = useTranslations('admin.sidebar.items');
+  const t = useTranslations('admin.sidebar');
 
   // Hydrate state
   useEffect(() => {
@@ -108,8 +113,8 @@ export function Sidebar() {
           <div className="w-8 h-8 rounded-md bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm shrink-0">3</div>
           {!collapsed && (
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-foreground truncate">3API Admin</div>
-              <div className="text-[10px] text-muted-foreground truncate">站长后台</div>
+              <div className="text-sm font-semibold text-foreground truncate">{t('brand_title')}</div>
+              <div className="text-[10px] text-muted-foreground truncate">{t('brand_sub')}</div>
             </div>
           )}
         </Link>
@@ -123,7 +128,7 @@ export function Sidebar() {
                 onClick={() => toggleGroup(g.id)}
                 className="w-full px-2 py-1 text-[11px] uppercase tracking-wider text-muted-foreground flex items-center justify-between hover:text-foreground transition-colors"
               >
-                <span>{g.title}</span>
+                <span>{tGroups(g.titleKey)}</span>
                 <ChevronDown className={cn('h-3 w-3 transition-transform', !openGroups[g.id] && '-rotate-90')} />
               </button>
             )}
@@ -131,11 +136,12 @@ export function Sidebar() {
               <div className="space-y-0.5 mt-1">
                 {g.items.map((it) => {
                   const active = isActive(it.href);
+                  const label = tItems(it.labelKey);
                   return (
                     <Link
                       key={it.href}
                       href={it.href}
-                      title={collapsed ? it.label : undefined}
+                      title={collapsed ? label : undefined}
                       data-tour={TOUR_ANCHORS[it.href]}
                       className={cn(
                         'flex items-center gap-3 rounded-md text-sm transition-colors',
@@ -146,7 +152,7 @@ export function Sidebar() {
                       )}
                     >
                       <it.Icon className={cn('h-4 w-4 shrink-0', active && 'text-primary')} />
-                      {!collapsed && <span className="truncate">{it.label}</span>}
+                      {!collapsed && <span className="truncate">{label}</span>}
                     </Link>
                   );
                 })}
@@ -162,10 +168,10 @@ export function Sidebar() {
           size="sm"
           onClick={toggleCollapse}
           className="w-full justify-center text-muted-foreground"
-          title={collapsed ? '展开侧边栏' : '收起侧边栏'}
+          title={collapsed ? t('expand') : t('collapse')}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          {!collapsed && <span className="ml-2 text-xs">收起</span>}
+          {!collapsed && <span className="ml-2 text-xs">{t('collapse_short')}</span>}
         </Button>
       </div>
     </aside>

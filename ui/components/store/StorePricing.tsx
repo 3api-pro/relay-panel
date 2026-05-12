@@ -7,10 +7,13 @@ import { useEffect, useState } from 'react';
 import { Plan, store } from '@/lib/store-api';
 import { PlanCard } from '@/components/store/PlanCard';
 import { Alert, Spinner } from '@/components/store/ui';
+import { useTranslations } from '@/lib/i18n';
 
 export function StorePricing() {
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const t = useTranslations('storefront.pricing');
+  const tCommon = useTranslations('common');
 
   useEffect(() => {
     store.plans()
@@ -36,25 +39,25 @@ export function StorePricing() {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
       <div className="text-center max-w-2xl mx-auto">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">选择你的套餐</h1>
-        <p className="mt-3 text-muted-foreground">月度订阅或一次性 Token 套餐，按需选择。</p>
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">{t('title')}</h1>
+        <p className="mt-3 text-muted-foreground">{t('subtitle')}</p>
       </div>
 
       {err && (
         <div className="mt-8 max-w-xl mx-auto">
-          <Alert kind="error">无法加载套餐: {err}</Alert>
+          <Alert kind="error">{t('load_failed_prefix')}{err}</Alert>
         </div>
       )}
 
       {plans === null && !err && (
         <div className="mt-12 flex items-center justify-center text-muted-foreground">
-          <Spinner /> <span className="ml-2 text-sm">加载中…</span>
+          <Spinner /> <span className="ml-2 text-sm">{tCommon('loading')}</span>
         </div>
       )}
 
       {plans && plans.length === 0 && !err && (
         <div className="mt-12 max-w-xl mx-auto">
-          <Alert kind="info">店主尚未配置套餐, 请稍后再来。</Alert>
+          <Alert kind="info">{t('empty')}</Alert>
         </div>
       )}
 
@@ -62,8 +65,8 @@ export function StorePricing() {
       {subPlans.length > 0 && (
         <section className="mt-12">
           <div className="flex items-baseline justify-between mb-5">
-            <h2 className="text-xl font-semibold text-foreground">月度订阅</h2>
-            <p className="text-sm text-muted-foreground hidden sm:block">按周期续费 · 适合日常稳定使用</p>
+            <h2 className="text-xl font-semibold text-foreground">{t('section_sub')}</h2>
+            <p className="text-sm text-muted-foreground hidden sm:block">{t('section_sub_desc')}</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {subPlans.map((p, i) => (
@@ -77,8 +80,8 @@ export function StorePricing() {
       {packPlans.length > 0 && (
         <section className="mt-12">
           <div className="flex items-baseline justify-between mb-5">
-            <h2 className="text-xl font-semibold text-foreground">Token 套餐</h2>
-            <p className="text-sm text-muted-foreground hidden sm:block">一次购买 · 灵活按需 · 用完即止</p>
+            <h2 className="text-xl font-semibold text-foreground">{t('section_pack')}</h2>
+            <p className="text-sm text-muted-foreground hidden sm:block">{t('section_pack_desc')}</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {packPlans.map((p) => (
@@ -89,24 +92,28 @@ export function StorePricing() {
       )}
 
       <div className="mt-16 max-w-3xl mx-auto">
-        <h2 className="text-xl font-semibold text-foreground mb-4">常见问题</h2>
-        <FAQ q="怎么用 API？">
-          所有兼容 Anthropic Messages API 的工具 — Claude Code、Cursor、Cline、Continue、官方 SDK 等都可直接使用。
-          把 baseUrl 改为本站 <code className="px-1 py-0.5 bg-muted rounded text-xs">/v1</code>，
-          Authorization 头填本站签发的 <code className="px-1 py-0.5 bg-muted rounded text-xs">sk-*</code> Key。
-          详见 <a href="/docs" className="underline">API 文档</a>。
+        <h2 className="text-xl font-semibold text-foreground mb-4">{t('faq_title')}</h2>
+        <FAQ q={t('faq_api_q')}>
+          {t('faq_api_a_1')}
+          {' '}{t('faq_api_a_2')}
+          <code className="px-1 py-0.5 bg-muted rounded text-xs">/v1</code>
+          {t('faq_api_a_3')}
+          <code className="px-1 py-0.5 bg-muted rounded text-xs">sk-*</code>
+          {t('faq_api_a_4')}
+          <a href="/docs" className="underline">{t('faq_api_a_5')}</a>
+          {t('faq_api_a_dot')}
         </FAQ>
-        <FAQ q="如何充值 / 续费？">
-          支持支付宝扫码、USDT-TRC20、USDT-ERC20。订阅到期前可手动续费，避免服务中断。
+        <FAQ q={t('faq_topup_q')}>
+          {t('faq_topup_a')}
         </FAQ>
-        <FAQ q="退款政策？">
-          未消费 / 不超 7 天可申请全额退款。已消费部分按 token 数量比例扣减。详见使用条款或联系店主。
+        <FAQ q={t('faq_refund_q')}>
+          {t('faq_refund_a')}
         </FAQ>
-        <FAQ q="额度怎么计算？">
-          按 token 计费（input + output 合计）。每个 API Key 共用账户订阅余额，可单独限额防止误用。
+        <FAQ q={t('faq_quota_q')}>
+          {t('faq_quota_a')}
         </FAQ>
-        <FAQ q="联系客服">
-          有问题可邮件联系店主，或在 Dashboard → 账号设置 中查看联系方式。
+        <FAQ q={t('faq_contact_q')}>
+          {t('faq_contact_a')}
         </FAQ>
       </div>
     </div>

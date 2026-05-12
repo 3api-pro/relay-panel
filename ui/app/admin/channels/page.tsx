@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { api, auth } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useTranslations } from '@/lib/i18n';
 
 /**
  * v0.3 channel admin — Hero card + master/detail.
@@ -31,6 +32,8 @@ export default function AdminChannelsPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const t = useTranslations('admin.channels');
+  const tCommon = useTranslations('common');
 
   // New-channel modal
   const [newOpen, setNewOpen] = useState(false);
@@ -87,7 +90,7 @@ export default function AdminChannelsPage() {
           type: newForm.type,
         }),
       });
-      setMsg(`已添加 #${r.id}`);
+      setMsg(`${t('added_prefix')}${r.id}`);
       setNewOpen(false);
       setNewForm({ name: '', base_url: 'https://api.llmapi.pro/v1', api_key: '', provider_type: 'anthropic', type: 'byok-claude' });
       await refresh();
@@ -102,7 +105,7 @@ export default function AdminChannelsPage() {
   async function testFromHero(channelId: number): Promise<void> {
     try {
       const r = await api<any>(`/admin/channels/${channelId}/test`, { method: 'POST' });
-      setMsg(r.ok ? `测试 OK · ${r.latency_ms ?? '-'}ms` : `测试失败: ${r.error || r.category}`);
+      setMsg(r.ok ? t('test_ok_with_latency', { latency: r.latency_ms ?? '-' }) : t('test_fail_prefix') + (r.error || r.category));
       await refresh();
     } catch (e: any) {
       setErr(e.message);
@@ -115,12 +118,12 @@ export default function AdminChannelsPage() {
 
   return (
     <AdminShell
-      title="上游 Channel"
-      subtitle="多协议路由 · 多 key 轮询 · 一键测试连接"
+      title={t('title')}
+      subtitle={t('subtitle')}
       actions={
         <Button size="sm" onClick={() => setNewOpen(true)} className="gap-1" data-tour="channel-add">
           <Plus className="h-4 w-4" />
-          新增 channel
+          {t('new_btn')}
         </Button>
       }
     >
@@ -148,7 +151,7 @@ export default function AdminChannelsPage() {
           ) : list.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                还没有 channel。点 <b>新增 channel</b>，或直接走「推荐」启用 llmapi.pro wholesale。
+                {t('empty_hint_prefix')} <b>{t('empty_hint_strong')}</b>{t('empty_hint_tail')}
               </CardContent>
             </Card>
           ) : (
@@ -172,7 +175,7 @@ export default function AdminChannelsPage() {
                 onQuickTest={async () => {
                   try {
                     const r = await api<any>(`/admin/channels/${c.id}/test`, { method: 'POST' });
-                    setMsg(r.ok ? `#${c.id} 测试 OK` : `#${c.id} 测试失败: ${r.error || r.category}`);
+                    setMsg(r.ok ? t('test_row_ok', { id: c.id }) : t('test_row_fail_prefix', { id: c.id }) + (r.error || r.category));
                     await refresh();
                   } catch (e: any) {
                     setErr(e.message);
@@ -188,7 +191,7 @@ export default function AdminChannelsPage() {
           ) : (
             <Card className="border-dashed">
               <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                点左侧任一 channel 查看 / 编辑详情
+                {t('select_hint')}
               </CardContent>
             </Card>
           )}
@@ -199,34 +202,34 @@ export default function AdminChannelsPage() {
       <Modal
         open={newOpen}
         onClose={() => setNewOpen(false)}
-        title="新增 channel"
+        title={t('modal_new_title')}
         width="lg"
         footer={
           <>
             <Button variant="outline" size="sm" onClick={() => setNewOpen(false)}>
-              取消
+              {tCommon('cancel')}
             </Button>
             <Button
               size="sm"
               onClick={createChannel}
               disabled={newBusy || !newForm.name || !newForm.base_url || !newForm.api_key}
             >
-              {newBusy ? '提交中…' : '创建'}
+              {newBusy ? t('submit_create_busy') : t('submit_create')}
             </Button>
           </>
         }
       >
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5 col-span-1">
-            <Label>名称</Label>
+            <Label>{t('field_name')}</Label>
             <Input
               value={newForm.name}
               onChange={(e) => setNewForm({ ...newForm, name: e.target.value })}
-              placeholder="例: 主上游"
+              placeholder={t('ph_name')}
             />
           </div>
           <div className="space-y-1.5 col-span-1">
-            <Label>Provider type</Label>
+            <Label>{t('field_provider_type')}</Label>
             <select
               value={newForm.provider_type}
               onChange={(e) => setNewForm({ ...newForm, provider_type: e.target.value })}
@@ -240,7 +243,7 @@ export default function AdminChannelsPage() {
             </select>
           </div>
           <div className="space-y-1.5 col-span-2">
-            <Label>Base URL</Label>
+            <Label>{t('field_base_url')}</Label>
             <Input
               value={newForm.base_url}
               onChange={(e) => setNewForm({ ...newForm, base_url: e.target.value })}
@@ -249,7 +252,7 @@ export default function AdminChannelsPage() {
             />
           </div>
           <div className="space-y-1.5 col-span-2">
-            <Label>API key</Label>
+            <Label>{t('field_api_key')}</Label>
             <Input
               type="password"
               value={newForm.api_key}

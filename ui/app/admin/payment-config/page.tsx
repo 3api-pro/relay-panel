@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreditCard, Coins, Check, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useTranslations } from '@/lib/i18n';
 
 interface PaymentConfig {
   alipay_app_id: string;
@@ -46,6 +47,8 @@ export default function PaymentConfigPage() {
   const [err, setErr] = useState('');
   // Track which secret fields the user has touched (≠ masked echo)
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const t = useTranslations('admin.payment_config');
+  const tCommon = useTranslations('common');
 
   useEffect(() => {
     refresh();
@@ -88,7 +91,7 @@ export default function PaymentConfigPage() {
       setData(r);
       setDraft(r);
       setTouched({});
-      setMsg('✓ 支付宝配置已保存');
+      setMsg(t('save_alipay_ok'));
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -111,7 +114,7 @@ export default function PaymentConfigPage() {
       });
       setData(r);
       setDraft(r);
-      setMsg('✓ USDT 地址已保存');
+      setMsg(t('save_usdt_ok'));
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -131,8 +134,8 @@ export default function PaymentConfigPage() {
 
   return (
     <AdminShell
-      title="收款配置"
-      subtitle="管理支付宝 / USDT 等终端用户支付方式（按 tenant 隔离，私钥服务端掩码）"
+      title={t('title')}
+      subtitle={t('subtitle')}
     >
       {err && (
         <div className="mb-4 px-4 py-2 rounded-md border border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-400 text-sm flex items-center gap-2">
@@ -154,19 +157,19 @@ export default function PaymentConfigPage() {
           <TabsList>
             <TabsTrigger value="alipay" className="gap-1.5">
               <CreditCard className="h-4 w-4" />
-              支付宝
+              {t('alipay_tab')}
               {data.alipay_app_id && data.alipay_private_key_set && (
                 <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
-                  已配置
+                  {t('configured_badge')}
                 </span>
               )}
             </TabsTrigger>
             <TabsTrigger value="usdt" className="gap-1.5">
               <Coins className="h-4 w-4" />
-              USDT
+              {t('usdt_tab')}
               {(data.usdt_trc20_address || data.usdt_erc20_address) && (
                 <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
-                  已配置
+                  {t('configured_badge')}
                 </span>
               )}
             </TabsTrigger>
@@ -175,23 +178,23 @@ export default function PaymentConfigPage() {
           <TabsContent value="alipay">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">支付宝开放平台凭证</CardTitle>
+                <CardTitle className="text-base">{t('alipay_card_title')}</CardTitle>
                 <CardDescription>
-                  在
+                  {t('alipay_card_desc_pre')}
                   <a
                     href="https://open.alipay.com/develop/manage"
                     target="_blank"
                     rel="noreferrer"
                     className="text-primary hover:underline mx-1"
                   >
-                    支付宝开放平台
+                    {t('alipay_card_desc_link')}
                   </a>
-                  创建应用，配置 RSA2 公私钥后填入。私钥保存后服务端掩码，重新粘贴会覆盖。
+                  {t('alipay_card_desc_post')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label>App ID</Label>
+                  <Label>{t('field_app_id')}</Label>
                   <Input
                     {...bind('alipay_app_id')}
                     placeholder="2021000123456789"
@@ -200,10 +203,10 @@ export default function PaymentConfigPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>
-                    应用私钥 (RSA2){' '}
+                    {t('field_private_key')}{' '}
                     {data.alipay_private_key_set && !touched['alipay_private_key'] && (
                       <span className="text-xs text-muted-foreground font-normal">
-                        当前：{data.alipay_private_key}（重新粘贴会覆盖）
+                        {t('current_masked_prefix')}{data.alipay_private_key}{t('current_masked_tail')}
                       </span>
                     )}
                   </Label>
@@ -225,16 +228,16 @@ export default function PaymentConfigPage() {
                   />
                   {touched['alipay_private_key'] && (
                     <p className="text-xs text-amber-700 dark:text-amber-400">
-                      未保存。点保存提交；点撤销则恢复原值。
+                      {t('private_key_unsaved')}
                     </p>
                   )}
                 </div>
                 <div className="space-y-1.5">
                   <Label>
-                    支付宝公钥{' '}
+                    {t('field_public_key')}{' '}
                     {data.alipay_public_key_set && !touched['alipay_public_key'] && (
                       <span className="text-xs text-muted-foreground font-normal">
-                        当前：{data.alipay_public_key}（重新粘贴会覆盖）
+                        {t('current_masked_prefix')}{data.alipay_public_key}{t('current_masked_tail')}
                       </span>
                     )}
                   </Label>
@@ -257,7 +260,7 @@ export default function PaymentConfigPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button onClick={saveAlipay} disabled={saving}>
-                    {saving ? '保存中…' : '保存支付宝配置'}
+                    {saving ? tCommon('saving') : t('save_alipay')}
                   </Button>
                   <Button
                     variant="outline"
@@ -267,7 +270,7 @@ export default function PaymentConfigPage() {
                     }}
                     disabled={saving}
                   >
-                    撤销
+                    {tCommon('undo')}
                   </Button>
                 </div>
               </CardContent>
@@ -277,14 +280,14 @@ export default function PaymentConfigPage() {
           <TabsContent value="usdt">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">USDT 收款地址</CardTitle>
+                <CardTitle className="text-base">{t('usdt_card_title')}</CardTitle>
                 <CardDescription>
-                  填入你的 TRC20 / ERC20 地址；用户下单后会展示二维码 + 等待回执确认。
+                  {t('usdt_card_desc')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
                 <div className="space-y-1.5">
-                  <Label>TRC20 地址（推荐，gas 低）</Label>
+                  <Label>{t('field_trc20')}</Label>
                   <Input
                     {...bind('usdt_trc20_address')}
                     placeholder="TXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -303,14 +306,14 @@ export default function PaymentConfigPage() {
                         className="rounded-md border border-border"
                       />
                       <div className="text-xs text-muted-foreground space-y-1 pt-2">
-                        <div>扫码即可识别地址</div>
+                        <div>{t('scan_hint')}</div>
                         <div className="font-mono break-all">{draft.usdt_trc20_address}</div>
                       </div>
                     </div>
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <Label>ERC20 地址（可选）</Label>
+                  <Label>{t('field_erc20')}</Label>
                   <Input
                     {...bind('usdt_erc20_address')}
                     placeholder="0x..."
@@ -329,7 +332,7 @@ export default function PaymentConfigPage() {
                         className="rounded-md border border-border"
                       />
                       <div className="text-xs text-muted-foreground space-y-1 pt-2">
-                        <div>扫码即可识别地址</div>
+                        <div>{t('scan_hint')}</div>
                         <div className="font-mono break-all">{draft.usdt_erc20_address}</div>
                       </div>
                     </div>
@@ -337,14 +340,14 @@ export default function PaymentConfigPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button onClick={saveUsdt} disabled={saving}>
-                    {saving ? '保存中…' : '保存 USDT 地址'}
+                    {saving ? tCommon('saving') : t('save_usdt')}
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setDraft(data)}
                     disabled={saving}
                   >
-                    撤销
+                    {tCommon('undo')}
                   </Button>
                 </div>
               </CardContent>

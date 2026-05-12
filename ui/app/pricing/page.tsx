@@ -16,6 +16,8 @@ import { Header } from '@/components/store/Header';
 import { Footer } from '@/components/store/Footer';
 import { AnnouncementBar } from '@/components/store/AnnouncementBar';
 import { StorePricing } from '@/components/store/StorePricing';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { useTranslations } from '@/lib/i18n';
 
 /* ------------------------------------------------------------------ */
 /* Marketing (root domain) — 3api.pro/pricing                           */
@@ -63,15 +65,17 @@ const MARKETING_PLANS: MarketingPlan[] = [
 ];
 
 function MarketingPricing() {
+  const t = useTranslations('storefront.marketing_pricing');
   return (
     <main className="min-h-screen flex flex-col bg-background" data-marketing-pricing>
       <header className="border-b border-border bg-card">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/" className="text-xl font-semibold text-brand-700">3API Panel</Link>
-          <nav className="flex gap-4 text-sm">
-            <Link href="/pricing" className="text-brand-700 font-medium">价格</Link>
-            <Link href="/login"   className="hover:text-brand-700">登录</Link>
-            <Link href="/signup"  className="px-3 py-1.5 rounded-md bg-brand-600 text-white hover:bg-brand-700">注册</Link>
+          <nav className="flex items-center gap-4 text-sm">
+            <Link href="/pricing" className="text-brand-700 font-medium">{t('nav_pricing')}</Link>
+            <Link href="/login"   className="hover:text-brand-700">{t('nav_login')}</Link>
+            <Link href="/signup"  className="px-3 py-1.5 rounded-md bg-brand-600 text-white hover:bg-brand-700">{t('nav_signup')}</Link>
+            <LanguageSwitcher />
           </nav>
         </div>
       </header>
@@ -79,20 +83,19 @@ function MarketingPricing() {
       <section className="border-b border-border">
         <div className="max-w-4xl mx-auto px-6 py-16 text-center">
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
-            30 分钟开起你自己的 Claude 中转店
+            {t('hero_title')}
           </h1>
           <p className="mt-4 text-lg text-muted-foreground">
-            零库存 — 不用谈号池, 不用买 API key。3api 内置 <span className="font-semibold text-brand-700">llmapi.pro 批发上游</span>, 注册即开卖。
-            利润 = 你的零售价 − 批发价, 平台不抽成。
+            {t('hero_body_pre')}<span className="font-semibold text-brand-700">{t('hero_body_strong')}</span>{t('hero_body_post')}
           </p>
           <div className="mt-8 flex justify-center gap-4 flex-wrap">
             <Link href="/create"
               className="px-6 py-3 rounded-md bg-brand-600 text-white text-base font-medium hover:bg-brand-700">
-              免费注册, 立即开店 →
+              {t('cta_create')}
             </Link>
             <Link href="https://github.com/3api-pro/3api-relay-panel" target="_blank" rel="noopener"
               className="px-6 py-3 rounded-md border border-input text-foreground text-base font-medium hover:bg-background">
-              我有 key, BYOK 自部署
+              {t('cta_byok')}
             </Link>
           </div>
         </div>
@@ -100,53 +103,53 @@ function MarketingPricing() {
 
       <section className="border-b border-border bg-muted/30">
         <div className="max-w-5xl mx-auto px-6 py-14">
-          <h2 className="text-2xl font-semibold text-foreground text-center">为什么选 3api, 而不是自己搞 new-api</h2>
+          <h2 className="text-2xl font-semibold text-foreground text-center">{t('compare_title')}</h2>
           <p className="mt-2 text-sm text-muted-foreground text-center">
-            你也可以下载 new-api 自己部署 — 但有几件事你逃不掉。下面是核心区别 (完整 25 行矩阵看 <Link href="https://github.com/3api-pro/relay-panel/blob/main/docs/COMPARISON.md" className="underline" target="_blank" rel="noopener">docs/COMPARISON.md</Link>)。
+            {t('compare_subtitle_pre')}<Link href="https://github.com/3api-pro/relay-panel/blob/main/docs/COMPARISON.md" className="underline" target="_blank" rel="noopener">{t('compare_subtitle_link')}</Link>{t('compare_subtitle_post')}
           </p>
           <div className="mt-6 overflow-x-auto">
             <table className="min-w-full text-sm border border-border rounded-lg overflow-hidden bg-card">
               <thead>
                 <tr className="text-left text-muted-foreground border-b border-border bg-muted/40">
                   <th className="py-3 px-4 font-medium"></th>
-                  <th className="py-3 px-4 font-medium text-brand-700">3api</th>
-                  <th className="py-3 px-4 font-medium">自部署 new-api</th>
+                  <th className="py-3 px-4 font-medium text-brand-700">{t('compare_th_3api')}</th>
+                  <th className="py-3 px-4 font-medium">{t('compare_th_newapi')}</th>
                 </tr>
               </thead>
               <tbody className="text-foreground">
                 <tr className="border-b border-border/50">
-                  <td className="py-3 px-4 text-muted-foreground">需要自己谈号池</td>
-                  <td className="py-3 px-4 font-medium">❌ 不需要 (内置批发上游)</td>
-                  <td className="py-3 px-4">✅ 自己谈 Anthropic / OpenAI key</td>
+                  <td className="py-3 px-4 text-muted-foreground">{t('compare_row1_label')}</td>
+                  <td className="py-3 px-4 font-medium">{t('compare_row1_3api')}</td>
+                  <td className="py-3 px-4">{t('compare_row1_newapi')}</td>
                 </tr>
                 <tr className="border-b border-border/50">
-                  <td className="py-3 px-4 text-muted-foreground">启动时间</td>
-                  <td className="py-3 px-4 font-medium">30 分钟</td>
-                  <td className="py-3 px-4">数天到数周 (拿 key + 配池子)</td>
+                  <td className="py-3 px-4 text-muted-foreground">{t('compare_row2_label')}</td>
+                  <td className="py-3 px-4 font-medium">{t('compare_row2_3api')}</td>
+                  <td className="py-3 px-4">{t('compare_row2_newapi')}</td>
                 </tr>
                 <tr className="border-b border-border/50">
-                  <td className="py-3 px-4 text-muted-foreground">上游挂了谁背锅</td>
-                  <td className="py-3 px-4 font-medium">平台兜底, 自动 failover</td>
-                  <td className="py-3 px-4">你自己背 (半夜起来切 base)</td>
+                  <td className="py-3 px-4 text-muted-foreground">{t('compare_row3_label')}</td>
+                  <td className="py-3 px-4 font-medium">{t('compare_row3_3api')}</td>
+                  <td className="py-3 px-4">{t('compare_row3_newapi')}</td>
                 </tr>
                 <tr>
-                  <td className="py-3 px-4 text-muted-foreground">多租户 / 子域开店</td>
-                  <td className="py-3 px-4 font-medium">✅ 内置 (Caddy on-demand TLS)</td>
-                  <td className="py-3 px-4">❌ 不支持 (单租户设计)</td>
+                  <td className="py-3 px-4 text-muted-foreground">{t('compare_row4_label')}</td>
+                  <td className="py-3 px-4 font-medium">{t('compare_row4_3api')}</td>
+                  <td className="py-3 px-4">{t('compare_row4_newapi')}</td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p className="mt-4 text-xs text-muted-foreground text-center">
-            BYOK 也支持 — 你可以同时挂 llmapi 批发 + 自己的 key, 走 priority + 自动 failover。
+            {t('compare_footnote')}
           </p>
         </div>
       </section>
 
       <section className="max-w-6xl mx-auto w-full px-6 py-16">
-        <h2 className="text-2xl font-semibold text-foreground">默认套餐（站长可自定义价格）</h2>
+        <h2 className="text-2xl font-semibold text-foreground">{t('plans_title')}</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          以下 4 档是平台的 face value（站长进货价）。站长在自己店铺设定的零售价 = 利润来源。
+          {t('plans_subtitle')}
         </p>
 
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -157,15 +160,15 @@ function MarketingPricing() {
             >
               {p.highlight && (
                 <div className="absolute -top-3 right-4 text-xs font-semibold rounded-full bg-brand-600 text-white px-2.5 py-0.5">
-                  最常售出
+                  {t('most_sold')}
                 </div>
               )}
               <div className="text-lg font-semibold text-foreground">{p.name}</div>
               <div className="mt-3 flex items-baseline gap-1">
                 <span className="text-3xl font-bold text-foreground">¥{p.monthly_cny}</span>
-                <span className="text-sm text-muted-foreground">/ 月</span>
+                <span className="text-sm text-muted-foreground">{t('per_month')}</span>
               </div>
-              <div className="mt-2 text-xs text-muted-foreground">站长进货价 ¥{p.face_value_cny}</div>
+              <div className="mt-2 text-xs text-muted-foreground">{t('face_value_prefix')}{p.face_value_cny}</div>
               <div className="mt-4 text-sm text-foreground">{p.tokens_label}</div>
               <div className="mt-2 text-xs text-muted-foreground">{p.notes}</div>
             </div>
@@ -173,9 +176,7 @@ function MarketingPricing() {
         </div>
 
         <div className="mt-6 text-sm text-muted-foreground">
-          站长加价 multiplexing 套利 = 利润源。
-          例：以 face ¥29 进货 Pro，自家店挂 ¥39 → 每卖一单赚 ¥10；
-          挂 ¥59 → 赚 ¥30。利润空间由站长自己决定。
+          {t('profit_explain')}
         </div>
       </section>
 
@@ -261,7 +262,7 @@ function MarketingPricing() {
 
       <footer className="border-t border-border bg-card mt-auto">
         <div className="max-w-6xl mx-auto px-6 py-6 text-sm text-muted-foreground text-center">
-          Powered by 3API Panel · Open source under MIT
+          {t('footer')}
         </div>
       </footer>
     </main>

@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { auth } from '@/lib/api';
 import { useHostMode } from '@/components/HostAware';
 import { StoreSignup } from '@/components/store/StoreSignup';
+import { useTranslations } from '@/lib/i18n';
 
 function MarketingSignup() {
   const router = useRouter();
@@ -16,6 +17,7 @@ function MarketingSignup() {
   const [name, setName] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const t = useTranslations('storefront.signup');
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,16 +35,16 @@ function MarketingSignup() {
   return (
     <main className="min-h-screen flex items-center justify-center px-4" data-marketing-signup>
       <div className="w-full max-w-md bg-card rounded-lg shadow-sm border border-border p-8">
-        <h1 className="text-2xl font-semibold mb-1">注册账号</h1>
-        <p className="text-sm text-muted-foreground mb-6">已有账号? <Link href="/login" className="text-brand-600">登录</Link></p>
+        <h1 className="text-2xl font-semibold mb-1">{t('title')}</h1>
+        <p className="text-sm text-muted-foreground mb-6">{t('have_account_prefix')} <Link href="/login" className="text-brand-600">{t('login_link')}</Link></p>
         <form onSubmit={onSubmit} className="space-y-4">
-          <Field label="邮箱" type="email" value={email} onChange={setEmail} required />
-          <Field label="密码 (≥6 位)" type="password" value={password} onChange={setPassword} required minLength={6} />
-          <Field label="昵称 (可选)" value={name} onChange={setName} />
+          <Field label={t('email_label')} type="email" value={email} onChange={setEmail} required />
+          <Field label={t('password_label')} type="password" value={password} onChange={setPassword} required minLength={6} />
+          <Field label={t('name_label')} value={name} onChange={setName} />
           {err && <div className="text-sm text-red-600">{err}</div>}
           <button type="submit" disabled={busy}
             className="w-full py-2.5 rounded-md bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50">
-            {busy ? '注册中…' : '注册'}
+            {busy ? t('submit_busy') : t('submit')}
           </button>
         </form>
       </div>

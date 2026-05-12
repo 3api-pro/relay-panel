@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { Modal } from '@/components/admin/Modal';
 import { api, safe, fmtCNY } from '@/lib/api';
+import { useTranslations } from '@/lib/i18n';
 
 interface Plan {
   id: number;
@@ -40,6 +41,8 @@ export default function PlansPage() {
   const [editing, setEditing] = useState<typeof EMPTY_FORM | null>(null);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<BillingType>('subscription');
+  const t = useTranslations('admin.plans');
+  const tCommon = useTranslations('common');
 
   async function refresh() {
     setLoading(true); setErr('');
@@ -108,19 +111,19 @@ export default function PlansPage() {
       setEditing(null);
       await refresh();
     } catch (e: any) {
-      alert(`保存失败：${e.message}`);
+      alert(t('save_failed_prefix') + e.message);
     } finally {
       setBusy(false);
     }
   }
 
   async function remove(p: Plan) {
-    if (!confirm(`下架套餐 "${p.name}"？已下架的套餐不影响存量订单。`)) return;
+    if (!confirm(t('remove_confirm', { name: p.name }))) return;
     try {
       await api(`/admin/plans/${p.id}`, { method: 'DELETE' });
       refresh();
     } catch (e: any) {
-      alert(`删除失败：${e.message}`);
+      alert(t('delete_failed_prefix') + e.message);
     }
   }
 
@@ -135,7 +138,7 @@ export default function PlansPage() {
     try {
       await api('/admin/plans/reorder', { method: 'POST', body: JSON.stringify({ ids }) });
     } catch (e: any) {
-      alert(`排序失败：${e.message}`);
+      alert(t('reorder_failed_prefix') + e.message);
       refresh();
     }
   }
@@ -148,34 +151,32 @@ export default function PlansPage() {
 
   return (
     <AdminShell
-      title="套餐管理"
-      subtitle="终端用户可下单的订阅 / Token 套餐（双轨计费）"
+      title={t('title')}
+      subtitle={t('subtitle')}
       actions={
         <button onClick={startCreate}
           className="px-4 py-1.5 rounded-md bg-brand-600 text-white text-sm hover:bg-brand-700">
-          + 新增套餐
+          {t('new_btn')}
         </button>
       }
     >
       {/* Tabs: 订阅 vs token pack */}
       <div className="flex gap-1 border-b border-border mb-6">
         <TabBtn active={tab === 'subscription'} onClick={() => setTab('subscription')}>
-          月度订阅 <span className="ml-1 text-xs text-muted-foreground">({subCount})</span>
+          {t('tab_subscription')} <span className="ml-1 text-xs text-muted-foreground">({subCount})</span>
         </TabBtn>
         <TabBtn active={tab === 'token_pack'} onClick={() => setTab('token_pack')}>
-          Token 套餐 <span className="ml-1 text-xs text-muted-foreground">({packCount})</span>
+          {t('tab_token_pack')} <span className="ml-1 text-xs text-muted-foreground">({packCount})</span>
         </TabBtn>
       </div>
 
       {err && <div className="mb-4 text-sm text-red-600">{err}</div>}
       {loading ? (
-        <div className="text-sm text-muted-foreground">加载中…</div>
+        <div className="text-sm text-muted-foreground">{tCommon('loading')}</div>
       ) : filteredPlans.length === 0 ? (
         <div className="bg-card rounded-lg border border-border p-12 text-center text-muted-foreground">
-          {tab === 'subscription'
-            ? '暂无月度订阅套餐 — 点 "+ 新增套餐" 创建，或先完成 '
-            : '暂无 Token 套餐 — 点 "+ 新增套餐" 创建（一次性余额，用完即止），或先完成 '}
-          <a href="/admin/onboarding" className="text-brand-700 underline">站长向导</a> seed 默认套餐。
+          {tab === 'subscription' ? t('empty_subscription') : t('empty_token_pack')}{' '}
+          <a href="/admin/onboarding" className="text-brand-700 underline">{t('empty_link')}</a> {t('empty_tail')}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -189,24 +190,24 @@ export default function PlansPage() {
                 <label className="text-xs flex items-center gap-1 cursor-pointer shrink-0">
                   <input type="checkbox" checked={p.enabled} onChange={() => toggle(p)} />
                   <span className={p.enabled ? 'text-emerald-700' : 'text-muted-foreground'}>
-                    {p.enabled ? '上架' : '下架'}
+                    {p.enabled ? tCommon('listed') : tCommon('unlisted')}
                   </span>
                 </label>
               </div>
               <div className="mt-2 mb-3">
                 <div className="text-3xl font-bold text-foreground">{fmtCNY(p.price_cents)}</div>
                 <div className="text-xs text-muted-foreground">
-                  {p.billing_type === 'token_pack' ? '一次性 · 永久有效' : `/ ${p.period_days} 天`}
+                  {p.billing_type === 'token_pack' ? t('lifetime') : t('period_days_suffix', { days: p.period_days })}
                 </div>
               </div>
               <ul className="text-sm text-muted-foreground space-y-1 flex-1">
                 <li>
                   {p.quota_tokens === -1
-                    ? '不限 Token'
-                    : `${(p.quota_tokens / 1_000_000).toFixed(1)}M Token`}
+                    ? t('unlimited_token')
+                    : `${(p.quota_tokens / 1_000_000).toFixed(1)}${t('tokens_m')}`}
                 </li>
                 <li className="text-xs text-muted-foreground">
-                  上游成本 {fmtCNY(p.wholesale_face_value_cents)}
+                  {t('upstream_cost')} {fmtCNY(p.wholesale_face_value_cents)}
                 </li>
               </ul>
               <div className="mt-4 flex items-center justify-between gap-2">
@@ -218,9 +219,9 @@ export default function PlansPage() {
                 </div>
                 <div className="flex gap-1">
                   <button onClick={() => startEdit(p)}
-                    className="px-2.5 py-1 rounded text-xs text-brand-700 hover:underline">编辑</button>
+                    className="px-2.5 py-1 rounded text-xs text-brand-700 hover:underline">{tCommon('edit')}</button>
                   <button onClick={() => remove(p)}
-                    className="px-2.5 py-1 rounded text-xs text-rose-600 hover:underline">下架</button>
+                    className="px-2.5 py-1 rounded text-xs text-rose-600 hover:underline">{tCommon('unlisted')}</button>
                 </div>
               </div>
             </div>
@@ -231,15 +232,15 @@ export default function PlansPage() {
       <Modal
         open={editing != null}
         onClose={() => setEditing(null)}
-        title={editing?.id ? `编辑 #${editing.id}` : '新增套餐'}
+        title={editing?.id ? `${t('modal_edit_prefix')}${editing.id}` : t('modal_new')}
         width="lg"
         footer={
           <>
             <button onClick={() => setEditing(null)}
-              className="px-4 py-1.5 rounded-md border border-input text-sm hover:bg-muted">取消</button>
+              className="px-4 py-1.5 rounded-md border border-input text-sm hover:bg-muted">{tCommon('cancel')}</button>
             <button onClick={save} disabled={busy}
               className="px-4 py-1.5 rounded-md bg-brand-600 text-white text-sm hover:bg-brand-700 disabled:opacity-50">
-              {busy ? '保存中…' : '保存'}
+              {busy ? tCommon('saving') : tCommon('save')}
             </button>
           </>
         }
@@ -247,7 +248,7 @@ export default function PlansPage() {
         {editing && (
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="col-span-2">
-              <div className="text-xs font-medium text-muted-foreground mb-1.5">计费类型</div>
+              <div className="text-xs font-medium text-muted-foreground mb-1.5">{t('billing_type_label')}</div>
               <div className="flex gap-2">
                 <label className={`flex-1 cursor-pointer px-3 py-2 rounded-md border ${editing.billing_type === 'subscription' ? 'border-brand-600 bg-brand-50' : 'border-input'}`}>
                   <input
@@ -258,8 +259,8 @@ export default function PlansPage() {
                     onChange={() => setEditing({ ...editing, billing_type: 'subscription' })}
                     className="mr-2"
                   />
-                  <span className="font-medium">月度订阅</span>
-                  <div className="text-xs text-muted-foreground mt-0.5">按周期续费，过期需续</div>
+                  <span className="font-medium">{t('billing_sub_title')}</span>
+                  <div className="text-xs text-muted-foreground mt-0.5">{t('billing_sub_desc')}</div>
                 </label>
                 <label className={`flex-1 cursor-pointer px-3 py-2 rounded-md border ${editing.billing_type === 'token_pack' ? 'border-brand-600 bg-brand-50' : 'border-input'}`}>
                   <input
@@ -270,49 +271,49 @@ export default function PlansPage() {
                     onChange={() => setEditing({ ...editing, billing_type: 'token_pack', period_days: TOKEN_PACK_PERIOD_DAYS })}
                     className="mr-2"
                   />
-                  <span className="font-medium">Token 套餐</span>
-                  <div className="text-xs text-muted-foreground mt-0.5">一次性余额，用完即止</div>
+                  <span className="font-medium">{t('billing_pack_title')}</span>
+                  <div className="text-xs text-muted-foreground mt-0.5">{t('billing_pack_desc')}</div>
                 </label>
               </div>
             </div>
-            <Field label="名称">
+            <Field label={t('field_name')}>
               <input className="w-full px-3 py-2 rounded-md border border-input"
                 value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
             </Field>
-            <Field label="Slug (URL 用)">
+            <Field label={t('field_slug')}>
               <input className="w-full px-3 py-2 rounded-md border border-input font-mono"
                 value={editing.slug} onChange={(e) => setEditing({ ...editing, slug: e.target.value })} />
             </Field>
             {editing.billing_type === 'subscription' ? (
-              <Field label="周期天数">
+              <Field label={t('field_period_days')}>
                 <input type="number" className="w-full px-3 py-2 rounded-md border border-input"
                   value={editing.period_days} onChange={(e) => setEditing({ ...editing, period_days: +e.target.value })} />
               </Field>
             ) : (
-              <Field label="有效期">
+              <Field label={t('field_validity')}>
                 <div className="px-3 py-2 rounded-md border border-input bg-muted text-muted-foreground">
-                  永久有效，用完即止
+                  {t('lifetime_inline')}
                 </div>
               </Field>
             )}
-            <Field label="Token 配额（-1 = 不限）">
+            <Field label={t('field_quota')}>
               <input type="number" className="w-full px-3 py-2 rounded-md border border-input"
                 value={editing.quota_tokens} onChange={(e) => setEditing({ ...editing, quota_tokens: +e.target.value })} />
             </Field>
-            <Field label="售价（分）">
+            <Field label={t('field_price')}>
               <input type="number" className="w-full px-3 py-2 rounded-md border border-input"
                 value={editing.price_cents} onChange={(e) => setEditing({ ...editing, price_cents: +e.target.value })} />
               <div className="text-xs text-muted-foreground mt-0.5">= {fmtCNY(editing.price_cents)}</div>
             </Field>
-            <Field label="上游成本（分）">
+            <Field label={t('field_wholesale')}>
               <input type="number" className="w-full px-3 py-2 rounded-md border border-input"
                 value={editing.wholesale_face_value_cents} onChange={(e) => setEditing({ ...editing, wholesale_face_value_cents: +e.target.value })} />
-              <div className="text-xs text-muted-foreground mt-0.5">= {fmtCNY(editing.wholesale_face_value_cents)}（毛利 {fmtCNY(editing.price_cents - editing.wholesale_face_value_cents)}）</div>
+              <div className="text-xs text-muted-foreground mt-0.5">= {fmtCNY(editing.wholesale_face_value_cents)} {t('profit_inline', { profit: fmtCNY(editing.price_cents - editing.wholesale_face_value_cents) })}</div>
             </Field>
             <label className="col-span-2 flex items-center gap-2 text-sm">
               <input type="checkbox" checked={editing.enabled}
                 onChange={(e) => setEditing({ ...editing, enabled: e.target.checked })} />
-              立即上架
+              {t('list_now')}
             </label>
           </div>
         )}

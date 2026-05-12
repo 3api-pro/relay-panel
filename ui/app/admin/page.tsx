@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { api, safe, fmtCNY, fmtDate } from '@/lib/api';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { OnboardingTour } from '@/components/OnboardingTour';
+import { useTranslations } from '@/lib/i18n';
 
 interface StatsSeries { date: string; cents?: number; value?: number }
 interface Stats {
@@ -38,6 +39,8 @@ function seriesValues(s?: StatsSeries[]): number[] {
 }
 
 export default function AdminHome() {
+  const t = useTranslations('admin.dashboard');
+  const tCommon = useTranslations('common');
   // Read ?tour=1 from window.location to avoid useSearchParams + Suspense.
   const [startTour, setStartTour] = useState(false);
   useEffect(() => {
@@ -85,46 +88,46 @@ export default function AdminHome() {
   const wholData    = useMemo(() => seriesValues(stats?.wholesale_series),   [stats]);
 
   return (
-    <AdminShell title="总览" subtitle="今日营收 / 用户活跃 / 上游余额一览">
+    <AdminShell title={t('title')} subtitle={t('subtitle')}>
       <OnboardingTour autoStart={startTour} force={startTour} />
       {lowBalance && (
         <div className="mb-5 rounded-md bg-amber-500/10 border border-amber-500/30 px-4 py-3 text-sm text-amber-700 dark:text-amber-300 flex items-center justify-between">
-          <span>⚠️ wholesale 余额低于 {fmtCNY(LOW_WHOLESALE_THRESHOLD)}（当前 {fmtCNY(stats!.wholesale_balance_cents)}），建议尽快充值避免用户付款后无法供给。</span>
-          <a href="/admin/finance" className="underline ml-4">去充值</a>
+          <span>{t('low_balance_warn', { threshold: fmtCNY(LOW_WHOLESALE_THRESHOLD), current: fmtCNY(stats!.wholesale_balance_cents) })}</span>
+          <a href="/admin/finance" className="underline ml-4">{t('go_topup')}</a>
         </div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="今日收入"
+          label={t('stat_revenue_today')}
           value={fmtCNY(stats?.revenue_today_cents ?? 0)}
           data={revenueData}
-          hint="实时"
+          hint={t('stat_revenue_hint')}
         />
         <StatCard
-          label="活跃订阅"
+          label={t('stat_active_subs')}
           value={stats?.active_subscriptions ?? 0}
           data={subData}
-          hint="未到期 + 未取消"
+          hint={t('stat_active_subs_hint')}
         />
         <StatCard
-          label="今日 Token 消耗"
+          label={t('stat_tokens_today')}
           value={(stats?.tokens_today ?? 0).toLocaleString()}
           data={tokData}
-          hint="input + output"
+          hint={t('stat_tokens_hint')}
         />
         <StatCard
-          label="上游余额"
+          label={t('stat_wholesale_balance')}
           value={fmtCNY(stats?.wholesale_balance_cents ?? 0)}
           data={wholData}
-          hint={lowBalance ? '余额偏低' : '正常'}
+          hint={lowBalance ? t('stat_wholesale_hint_low') : t('stat_wholesale_hint_ok')}
         />
       </div>
 
       <div className="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card className="xl:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle>收入趋势</CardTitle>
+            <CardTitle>{t('revenue_chart_title')}</CardTitle>
             <div className="flex gap-1">
               {(['7d', '30d'] as const).map((p) => (
                 <Button
@@ -134,23 +137,23 @@ export default function AdminHome() {
                   onClick={() => setPeriod(p)}
                   className="h-7 px-3 text-xs"
                 >
-                  {p === '7d' ? '7 天' : '30 天'}
+                  {p === '7d' ? t('period_7d') : t('period_30d')}
                 </Button>
               ))}
             </div>
           </CardHeader>
           <CardContent>
-            <RevenueChart series={stats?.revenue_series ?? []} />
+            <RevenueChart series={stats?.revenue_series ?? []} emptyText={t('no_chart_data')} />
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2"><CardTitle>最近订单</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle>{t('recent_orders')}</CardTitle></CardHeader>
           <CardContent>
             {loading ? (
-              <div className="text-sm text-muted-foreground py-8 text-center">加载中…</div>
+              <div className="text-sm text-muted-foreground py-8 text-center">{tCommon('loading')}</div>
             ) : orders.length === 0 ? (
-              <div className="text-sm text-muted-foreground py-8 text-center">暂无订单</div>
+              <div className="text-sm text-muted-foreground py-8 text-center">{t('no_orders')}</div>
             ) : (
               <ul className="space-y-2">
                 {orders.slice(0, 10).map((o) => (
@@ -175,11 +178,11 @@ export default function AdminHome() {
 }
 
 /** Theme-aware pure-SVG line chart. */
-function RevenueChart({ series }: { series: StatsSeries[] }) {
+function RevenueChart({ series, emptyText }: { series: StatsSeries[]; emptyText?: string }) {
   if (!series || series.length === 0) {
     return (
       <div className="h-48 flex items-center justify-center text-sm text-muted-foreground bg-muted/50 rounded-md">
-        暂无数据（待 /admin/stats 接口上线）
+        {emptyText || 'No data'}
       </div>
     );
   }

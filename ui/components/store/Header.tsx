@@ -4,12 +4,16 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useBrand } from './BrandContext';
 import { clearToken, hasToken } from '@/lib/store-api';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { useTranslations } from '@/lib/i18n';
 
 export function Header() {
   const brand = useBrand();
   const router = useRouter();
   const pathname = usePathname();
   const [authed, setAuthed] = useState(false);
+  const t = useTranslations('storefront.header');
+  const tCommon = useTranslations('common');
 
   useEffect(() => { setAuthed(hasToken()); }, [pathname]);
 
@@ -32,7 +36,7 @@ export function Header() {
           role="status"
           className="text-center text-sm py-2 px-4 border-b bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-100 border-amber-300 dark:border-amber-900"
         >
-          <span className="font-medium">维护中 ·</span> 服务维护中，部分功能不可用。
+          <span className="font-medium">{t('maintenance_prefix')}</span> {t('maintenance_body')}
         </div>
       )}
       <header className="border-b border-border bg-card sticky top-0 z-30">
@@ -54,44 +58,45 @@ export function Header() {
 
           <nav className="flex items-center gap-1 sm:gap-3 text-sm">
             <Link href="/pricing" className="px-2 py-1.5 text-muted-foreground hover:text-foreground hidden sm:inline">
-              价格
+              {t('pricing')}
             </Link>
             <Link href="/docs" className="px-2 py-1.5 text-muted-foreground hover:text-foreground hidden sm:inline">
-              文档
+              {t('docs')}
             </Link>
+            <LanguageSwitcher />
             {authed ? (
               <>
                 {!inDashboard && (
                   <Link href="/dashboard"
                     className="px-3 py-1.5 rounded-md text-sm text-white hover:opacity-90"
                     style={{ background: 'var(--brand-primary, #0e9486)' }}>
-                    控制台
+                    {t('dashboard')}
                   </Link>
                 )}
                 <button onClick={logout}
                   className="px-2 py-1.5 text-muted-foreground hover:text-red-600">
-                  退出
+                  {tCommon('logout_short')}
                 </button>
               </>
             ) : (
               <>
                 <Link href="/login" className="px-3 py-1.5 text-foreground hover:text-foreground">
-                  登录
+                  {t('login')}
                 </Link>
                 {signupOn ? (
                   <Link href="/signup"
                     className="px-3 py-1.5 rounded-md text-sm text-white hover:opacity-90"
                     style={{ background: 'var(--brand-primary, #0e9486)' }}>
-                    注册
+                    {t('signup')}
                   </Link>
                 ) : (
                   <span
                     data-signup-disabled
-                    title="店铺暂停注册"
+                    title={t('signup_paused_title')}
                     className="px-3 py-1.5 rounded-md text-sm bg-muted text-muted-foreground cursor-not-allowed"
                     aria-disabled="true"
                   >
-                    暂停注册
+                    {t('signup_paused')}
                   </span>
                 )}
               </>
