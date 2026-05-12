@@ -84,6 +84,11 @@ export interface Brand {
   announcement: string | null;
   footer_html: string | null;
   contact_email: string | null;
+  // System-level fields (v0.2): merged from system_setting by /storefront/brand.
+  system_announcement?: string | null;
+  system_announcement_level?: 'info' | 'warn' | 'error' | null;
+  maintenance_mode?: boolean;
+  signup_enabled?: boolean;
 }
 
 export interface Plan {
@@ -95,6 +100,35 @@ export interface Plan {
   price_cents: number;
   allowed_models: string[] | string | null;
   sort_order: number;
+}
+
+// --- Check-in (v0.2) ---------------------------------------------------------
+// Response shapes match src/routes/storefront/checkin.ts.
+export interface CheckInStatus {
+  enabled: boolean;
+  already_checked_in: boolean;
+  current_streak: number;
+  next_reward_tokens: number;
+  next_is_bonus: boolean;
+  config: {
+    reward_tokens_per_day: number;
+    streak_bonus_tokens: number;
+    bonus_every_n_days: number;
+  };
+}
+export interface CheckInResult {
+  ok: true;
+  reward_tokens: number;
+  streak_days: number;
+  is_bonus_day: boolean;
+  subscription_id: number | null;
+  remaining_tokens: number | null;
+}
+export interface CheckInHistoryRow {
+  check_date: string;
+  reward_tokens: number;
+  streak_days: number;
+  is_bonus_day: boolean;
 }
 
 export const store = {
@@ -151,6 +185,13 @@ export const store = {
     storeFetch(`/payments/usdt/check`, {
       method: 'POST', body: JSON.stringify({ order_id: orderId }),
     }),
+
+  // --- Check-in (v0.2) -----------------------------------------------------
+  checkin: {
+    status: () => storeFetch<CheckInStatus>('/checkin/status'),
+    doCheckin: () => storeFetch<CheckInResult>('/checkin', { method: 'POST' }),
+    history: (days = 30) => storeFetch<{ data: CheckInHistoryRow[] }>(`/checkin/history?days=${days}`),
+  },
 };
 
 export function fmtCents(n: number | null | undefined): string {
