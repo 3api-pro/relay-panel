@@ -526,3 +526,15 @@ export function extractUsageFromSse(buffer: string): { input: number; output: nu
   }
   return { input, output };
 }
+
+// =========================================================================
+// v0.5 — healthCheck re-export
+// =========================================================================
+
+/**
+ * Re-export of channel-test.ts/healthCheckChannel so callers that already
+ * pull the upstream HTTP client don't need a second import. Same signature,
+ * no persistence — just runs the provider-specific probe and returns
+ * { ok, latency_ms, status, models_count, sample_models, error }.
+ */
+export { healthCheckChannel } from './channel-test';

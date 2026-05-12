@@ -12,6 +12,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { withTransaction, query } from '../services/database';
 import { createAdminForTenant } from '../services/auth';
 import { seedPlansForTenant, seedBrandConfigForTenant, ensureWholesaleBalance } from '../services/plans-seed';
+import { upgradeTenantToShadowSk } from '../services/signup-provisioner';
 import { config } from '../config';
 import { logger } from '../services/logger';
 
@@ -193,3 +194,86 @@ async function setTenantStatus(req: Request, res: Response, status: string): Pro
   logger.info({ tenantId: id, status }, 'platform:tenant_status_changed');
   res.json(rows[0]);
 }
+
+/**
+ * POST /platform/tenants/:id/upgrade-shadow
+ * Body: { plan?: 'pro' | 'max5x' | …, cycle?: 'monthly' | 'quarterly' | 'annual' }
+ *
+ * Phase-2 manual upgrade — mints a per-tenant sk-relay-* against llmapi.pro
+ * /v1/wholesale/purchase using the platform wsk-* and replaces the
+ * tenant's recommended upstream_channel.api_key with it.
+ *
+ * COSTS the platform wholesale_balance (currently ~¥29 for pro/monthly).
+ * Use this for paying tenants who justify the spend; cheap / spam signups
+ * stay on the shared phase-1 key.
+ *
+ * Idempotency: each call mints a *new* purchase (request_id varies by ms).
+ * The caller is responsible for not double-spending — typically you'd
+ * call this from an admin "upgrade tenant" button, not in a loop.
+ */
+platformRouter.post('/tenants/:id/upgrade-shadow', async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id) {
+    res.status(400).json({ error: { type: 'invalid_request_error', message: 'invalid tenant id' } });
+    return;
+  }
+  const plan = typeof req.body?.plan === 'string' ? req.body.plan : undefined;
+  const cycle = typeof req.body?.cycle === 'string' ? req.body.cycle : undefined;
+
+  // Confirm tenant exists before debiting wholesale_balance.
+  const existing = await query<{ id: number; slug: string; status: string }>(
+    `SELECT id, slug, status FROM tenant WHERE id = $1`,
+    [id],
+  );
+  if (existing.length === 0) {
+    res.status(404).json({ error: { type: 'not_found', message: 'tenant not found' } });
+    return;
+  }
+
+  try {
+    const result = await withTransaction(async (client) => {
+      return upgradeTenantToShadowSk(client, id, { plan, cycle });
+    });
+    if (!result.ok) {
+      // Don't 500 — return the structured failure so the operator UI can
+      // surface "insufficient balance" / "402" / network without an alarm.
+      logger.warn(
+        { tenantId: id, reason: result.reason, purchase: result.purchase },
+        'platform:upgrade_shadow:failed',
+      );
+      res.status(502).json({
+        error: { type: 'upstream_error', message: result.reason },
+        purchase: result.purchase,
+      });
+      return;
+    }
+    logger.info(
+      {
+        tenantId: id, channelId: result.channel_id,
+        purchase: result.purchase ? {
+          purchase_id: result.purchase.purchase_id,
+          amount_cents: result.purchase.amount_cents,
+          remaining_balance_cents: result.purchase.remaining_balance_cents,
+        } : null,
+      },
+      'platform:upgrade_shadow:ok',
+    );
+    res.json({
+      ok: true,
+      tenant: { id, slug: existing[0].slug },
+      channel_id: result.channel_id,
+      phase: result.phase,
+      purchase: result.purchase
+        ? {
+          purchase_id: result.purchase.purchase_id,
+          expires_at: result.purchase.expires_at,
+          amount_cents: result.purchase.amount_cents,
+          remaining_balance_cents: result.purchase.remaining_balance_cents,
+        }
+        : null,
+    });
+  } catch (err: any) {
+    logger.error({ err: err?.message ?? String(err), tenantId: id }, 'platform:upgrade_shadow:error');
+    res.status(500).json({ error: { type: 'internal_error', message: 'Internal error' } });
+  }
+});

@@ -223,6 +223,7 @@ signupTenantRouter.post('/', async (req: Request, res: Response) => {
         ip, autoSlug: !maybeSlug,
         provisionedChannelId: result.provision.channel_id,
         provisionReason: result.provision.reason,
+        provisionPhase: result.provision.phase ?? null,
         referralRecorded,
       },
       'tenant:self_signup',
@@ -237,7 +238,13 @@ signupTenantRouter.post('/', async (req: Request, res: Response) => {
       expires_in_seconds: ADMIN_TTL_SECONDS,
       slug_was_auto: !maybeSlug,
       upstream_channel: result.provision.ok
-        ? { id: result.provision.channel_id, reason: result.provision.reason }
+        ? {
+          id: result.provision.channel_id,
+          reason: result.provision.reason,
+          // v0.5 — phase ('phase1' shared wsk / 'phase2' per-tenant sk-)
+          // surfaced so the admin UI can show an "isolated upstream" badge.
+          phase: result.provision.phase ?? 'phase1',
+        }
         : null,
       referral_recorded: referralRecorded,
     });
