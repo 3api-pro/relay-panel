@@ -6,6 +6,7 @@ import {
   LayoutDashboard, BarChart3, Package, ShoppingCart, Users,
   Plug, Wallet, Palette, CreditCard, Settings, SlidersHorizontal,
   ChevronDown, ChevronLeft, ChevronRight, Share2, Webhook, X,
+  ScrollText, Ticket,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -20,15 +21,17 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: '/admin',       labelKey: 'dashboard', Icon: LayoutDashboard },
       { href: '/admin/stats', labelKey: 'stats',     Icon: BarChart3 },
+      { href: '/admin/logs',  labelKey: 'logs',      Icon: ScrollText },
     ],
   },
   {
     id: 'sales', titleKey: 'sales',
     items: [
-      { href: '/admin/plans',     labelKey: 'plans',     Icon: Package },
-      { href: '/admin/orders',    labelKey: 'orders',    Icon: ShoppingCart },
-      { href: '/admin/users',     labelKey: 'users',     Icon: Users },
-      { href: '/admin/affiliate', labelKey: 'affiliate', Icon: Share2 },
+      { href: '/admin/plans',      labelKey: 'plans',      Icon: Package },
+      { href: '/admin/orders',     labelKey: 'orders',     Icon: ShoppingCart },
+      { href: '/admin/users',      labelKey: 'users',      Icon: Users },
+      { href: '/admin/redemption', labelKey: 'redemption', Icon: Ticket },
+      { href: '/admin/affiliate',  labelKey: 'affiliate',  Icon: Share2 },
     ],
   },
   {

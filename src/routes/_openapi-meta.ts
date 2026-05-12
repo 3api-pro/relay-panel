@@ -26,7 +26,7 @@ export interface ApiEndpoint {
 
 export const OPENAPI_INFO = {
   title: '3API Relay Panel',
-  version: '0.5.1',
+  version: '0.7.0',
   description:
     'Anthropic-compatible LLM relay with multi-tenant storefront, ' +
     'reseller admin, plans / orders / subscriptions, webhook delivery, ' +
@@ -299,6 +299,41 @@ export const ENDPOINTS: ApiEndpoint[] = [
     tags: ['admin'], auth: 'bearer_admin',
     requestBody: { example: { old_password: 'old', new_password: 'new-secret-123' } },
     responses: { '200': { description: 'Changed' }, '401': { description: 'old password wrong' } },
+  },
+
+  // -------------------------------------------------------------------
+  // Logs + Redemption (v0.7)
+  // -------------------------------------------------------------------
+  {
+    method: 'GET', path: '/admin/logs', summary: 'Paginated per-request usage logs',
+    description:
+      'Returns usage_log rows scoped to the admin tenant. Filters: status (success | failure | all), ' +
+      'model (ILIKE substring), end_user_id, from / to (ISO-8601), limit (default 50, max 200), offset.',
+    tags: ['admin'], auth: 'bearer_admin',
+    responses: { '200': { description: 'Rows + total for the chosen filter' } },
+  },
+  {
+    method: 'GET', path: '/admin/redemption', summary: 'List redemption codes',
+    description:
+      'Lists codes scoped to the admin tenant. Filter status=unused | redeemed | revoked | all (default all). ' +
+      'Response includes `counts` keyed by status for filter chips.',
+    tags: ['admin'], auth: 'bearer_admin',
+    responses: { '200': { description: 'Rows + counts tally' } },
+  },
+  {
+    method: 'POST', path: '/admin/redemption', summary: 'Batch-generate redemption codes',
+    description:
+      'Creates `count` random codes (1-1000) of the given face value. Returns codes in plaintext exactly once. ' +
+      'Optional prefix (≤16 chars) is concatenated in front and helps organize batches.',
+    tags: ['admin'], auth: 'bearer_admin',
+    requestBody: { example: { count: 100, quota_cents: 1000, prefix: '2026Q2-', expires_at: '2026-12-31T23:59:59Z' } },
+    responses: { '201': { description: '{ count, codes[], quota_cents_each }' }, '400': { description: 'invalid quota_cents' } },
+  },
+  {
+    method: 'POST', path: '/admin/redemption/{id}/revoke', summary: 'Revoke an unused redemption code',
+    description: 'Marks `status = revoked` on an unused code. Returns 409 if already redeemed or already revoked.',
+    tags: ['admin'], auth: 'bearer_admin',
+    responses: { '200': { description: 'Revoked' }, '409': { description: 'code not in unused state' } },
   },
 
   // -------------------------------------------------------------------

@@ -273,19 +273,135 @@ adminRouter.post('/redemption', async (req: Request, res: Response) => {
  */
 adminRouter.get('/redemption', async (req: Request, res: Response) => {
   const tenantId = req.resellerAdmin!.tenantId;
-  const status = String(req.query.status ?? 'unused');
+  const status = String(req.query.status ?? 'all');
   const limit = Math.min(parseInt(String(req.query.limit ?? '100'), 10), 500);
+
+  const where: string[] = ['tenant_id = $1'];
+  const params: any[] = [tenantId];
+  if (status !== 'all') {
+    params.push(status);
+    where.push(`status = $${params.length}`);
+  }
+  params.push(limit);
+
   const rows = await query<any>(
     `SELECT id, code, quota_cents, status, redeemed_by, redeemed_at, expires_at, created_at
        FROM redemption
-      WHERE tenant_id = $1 AND status = $2
-      ORDER BY id DESC LIMIT $3`,
-    [tenantId, status, limit],
+      WHERE ${where.join(' AND ')}
+      ORDER BY id DESC LIMIT $${params.length}`,
+    params,
   );
-  res.json({ data: rows });
+
+  // Counts by status for the filter chips (so the UI can show "unused 42 / redeemed 11 / revoked 3").
+  const counts = await query<{ status: string; n: string }>(
+    `SELECT status, COUNT(*)::text AS n
+       FROM redemption WHERE tenant_id = $1 GROUP BY status`,
+    [tenantId],
+  );
+  const tally = counts.reduce<Record<string, number>>((m, r) => { m[r.status] = parseInt(r.n, 10); return m; }, {});
+
+  res.json({ data: rows, counts: tally });
+});
+
+/**
+ * POST /admin/redemption/:id/revoke
+ *
+ * Reseller-side recall of an unused code. No-op (returns 409) on
+ * already-redeemed codes — once a customer redeemed, the value left
+ * their account.
+ */
+adminRouter.post('/redemption/:id/revoke', async (req: Request, res: Response) => {
+  const tenantId = req.resellerAdmin!.tenantId;
+  const id = parseInt(req.params.id, 10);
+  if (!id) {
+    res.status(400).json({ error: { type: 'invalid_request_error', message: 'invalid id' } });
+    return;
+  }
+  const result = await query<{ status: string }>(
+    `UPDATE redemption
+        SET status = 'revoked'
+      WHERE id = $1 AND tenant_id = $2 AND status = 'unused'
+      RETURNING status`,
+    [id, tenantId],
+  );
+  if (result.length === 0) {
+    res.status(409).json({ error: { type: 'conflict', message: 'code not found or already redeemed/revoked' } });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 // =============== Usage / stats ===============
+
+/**
+ * GET /admin/logs
+ *
+ * Paginated list of usage_log rows scoped to the admin's tenant.
+ * Supported filters:
+ *   - status       success / failure / 'all' (default)
+ *   - model        model_name partial match (LIKE)
+ *   - end_user_id  exact match
+ *   - from / to    ISO-8601 timestamps (inclusive)
+ *   - limit        1-200, default 50
+ *   - offset       default 0
+ *
+ * Response also includes `total` for the chosen filter so the table
+ * can render a sane pager. Use a separate stats endpoint if you need
+ * unfiltered totals across the tenant.
+ */
+adminRouter.get('/logs', async (req: Request, res: Response) => {
+  const tenantId = req.resellerAdmin!.tenantId;
+  const status = String(req.query.status ?? 'all');
+  const model = req.query.model ? String(req.query.model).trim() : '';
+  const endUserId = req.query.end_user_id ? parseInt(String(req.query.end_user_id), 10) : 0;
+  const from = req.query.from ? String(req.query.from) : '';
+  const to = req.query.to ? String(req.query.to) : '';
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '50'), 10), 1), 200);
+  const offset = Math.max(parseInt(String(req.query.offset ?? '0'), 10), 0);
+
+  const where: string[] = ['tenant_id = $1'];
+  const params: any[] = [tenantId];
+  if (status === 'success' || status === 'failure') {
+    params.push(status);
+    where.push(`status = $${params.length}`);
+  }
+  if (model) {
+    params.push(`%${model}%`);
+    where.push(`model_name ILIKE $${params.length}`);
+  }
+  if (endUserId) {
+    params.push(endUserId);
+    where.push(`end_user_id = $${params.length}`);
+  }
+  if (from) {
+    params.push(from);
+    where.push(`created_at >= $${params.length}`);
+  }
+  if (to) {
+    params.push(to);
+    where.push(`created_at <= $${params.length}`);
+  }
+
+  const totalRow = await query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM usage_log WHERE ${where.join(' AND ')}`,
+    params,
+  );
+  const total = parseInt(totalRow[0]?.n ?? '0', 10);
+
+  params.push(limit, offset);
+  const rows = await query<any>(
+    `SELECT id, end_user_id, end_token_id, channel_id, model_name,
+            prompt_tokens, completion_tokens, quota_charged_cents,
+            request_id, elapsed_ms, is_stream, status, created_at
+       FROM usage_log
+      WHERE ${where.join(' AND ')}
+      ORDER BY id DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params,
+  );
+
+  res.json({ data: rows, total, limit, offset });
+});
 
 /**
  * GET /admin/usage/summary?days=7
