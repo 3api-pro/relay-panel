@@ -10,6 +10,13 @@
 import { Router, Request, Response } from 'express';
 import { query, withTransaction } from '../services/database';
 import { logger } from '../services/logger';
+import {
+  addKey,
+  removeKey,
+  replaceKeys,
+  maskKey,
+  ChannelKeyEntry,
+} from '../services/channel-keys';
 
 export const channelsRouter = Router();
 
@@ -77,10 +84,21 @@ channelsRouter.post('/', async (req: Request, res: Response) => {
     return;
   }
 
+  // New rows: seed keys[0] = api_key so the multi-key picker has at least
+  // one entry. Admin can later add more via POST /:id/keys.
+  const seedKeys = JSON.stringify([
+    {
+      key: body.api_key,
+      status: 'active',
+      added_at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      cooled_until: null,
+      last_error: null,
+    },
+  ]);
   const rows = await query<any>(
     `INSERT INTO upstream_channel
-       (tenant_id, name, base_url, api_key, type, status, weight, priority, models, group_access)
-     VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, $8, $9)
+       (tenant_id, name, base_url, api_key, type, status, weight, priority, models, group_access, keys, current_key_idx)
+     VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, $8, $9, $10::jsonb, 0)
      RETURNING ${SAFE_COLS}`,
     [
       tenantId,
@@ -92,6 +110,7 @@ channelsRouter.post('/', async (req: Request, res: Response) => {
       Number(body.priority ?? 100),
       body.models ?? null,
       body.group_access ?? 'default',
+      seedKeys,
     ],
   );
   res.status(201).json(rows[0]);
@@ -99,7 +118,10 @@ channelsRouter.post('/', async (req: Request, res: Response) => {
 
 /**
  * GET /admin/channels
- * Returns the channel list WITHOUT api_key (only key_preview = first 6 chars + ...).
+ * Returns the channel list WITHOUT api_key. Each row also includes:
+ *   - key_preview:  masked preview of the legacy api_key column
+ *   - keys:         masked array — { preview, status, added_at, cooled_until, last_error }
+ *   - keys_total / keys_active counts for quick UI display.
  */
 channelsRouter.get('/', async (req: Request, res: Response) => {
   const tenantId = req.resellerAdmin!.tenantId;
@@ -109,13 +131,32 @@ channelsRouter.get('/', async (req: Request, res: Response) => {
               WHEN length(api_key) > 12 THEN substr(api_key, 1, 6) || '…' || substr(api_key, -4)
               WHEN length(api_key) > 0  THEN '…'
               ELSE NULL
-            END AS key_preview
+            END AS key_preview,
+            COALESCE(keys, '[]'::jsonb) AS keys,
+            current_key_idx
        FROM upstream_channel
       WHERE tenant_id = $1
       ORDER BY is_default DESC, weight DESC, id ASC`,
     [tenantId],
   );
-  res.json({ data: rows });
+  const data = rows.map((r) => {
+    const arr: ChannelKeyEntry[] = Array.isArray(r.keys) ? r.keys : [];
+    const masked = arr.map((e) => ({
+      preview: maskKey(e.key || ''),
+      status: e.status || 'active',
+      added_at: e.added_at || null,
+      cooled_until: e.cooled_until || null,
+      last_error: e.last_error || null,
+    }));
+    const keys_active = arr.filter((e) => (e.status || 'active') === 'active').length;
+    return {
+      ...r,
+      keys: masked,
+      keys_total: arr.length,
+      keys_active,
+    };
+  });
+  res.json({ data });
 });
 
 /**
@@ -152,22 +193,130 @@ channelsRouter.patch('/:id', async (req: Request, res: Response) => {
   if (body.models      != null) push('models', body.models);
   if (body.group_access!= null) push('group_access', body.group_access);
 
-  if (sets.length === 0) {
+  // Bulk-replace keys[] if the caller supplied a 'keys' array. We accept
+  // an array of strings (raw keys) or { key, status } objects.
+  const rawKeys = (req.body as any)?.keys;
+  let keysReplaced: ChannelKeyEntry[] | null = null;
+  if (Array.isArray(rawKeys)) {
+    keysReplaced = await replaceKeys(id, tenantId, rawKeys);
+    if (keysReplaced === null) {
+      res.status(404).json({ error: { type: 'not_found', message: 'channel not found' } });
+      return;
+    }
+  }
+
+  if (sets.length === 0 && keysReplaced === null) {
     res.status(400).json({ error: { type: 'invalid_request_error', message: 'no fields to update' } });
     return;
   }
-  vals.push(id, tenantId);
-  const rows = await query<any>(
-    `UPDATE upstream_channel SET ${sets.join(', ')}
-       WHERE id = $${vals.length - 1} AND tenant_id = $${vals.length}
-     RETURNING ${SAFE_COLS}`,
-    vals,
-  );
-  if (rows.length === 0) {
+
+  let rows: any[];
+  if (sets.length > 0) {
+    vals.push(id, tenantId);
+    rows = await query<any>(
+      `UPDATE upstream_channel SET ${sets.join(', ')}
+         WHERE id = $${vals.length - 1} AND tenant_id = $${vals.length}
+       RETURNING ${SAFE_COLS}`,
+      vals,
+    );
+    if (rows.length === 0) {
+      res.status(404).json({ error: { type: 'not_found', message: 'channel not found' } });
+      return;
+    }
+  } else {
+    rows = await query<any>(
+      `SELECT ${SAFE_COLS} FROM upstream_channel WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId],
+    );
+  }
+  // Echo masked keys[] for the convenience of the admin UI.
+  const echo = keysReplaced ?? null;
+  res.json({
+    ...rows[0],
+    ...(echo
+      ? {
+          keys: echo.map((e) => ({
+            preview: maskKey(e.key),
+            status: e.status,
+            added_at: e.added_at,
+            cooled_until: e.cooled_until,
+            last_error: e.last_error,
+          })),
+          keys_total: echo.length,
+          keys_active: echo.filter((e) => (e.status || 'active') === 'active').length,
+        }
+      : {}),
+  });
+});
+
+// =========================================================================
+// Multi-key sub-routes (P1 #14) — add / remove individual keys without
+// having to PATCH the whole row.
+// =========================================================================
+
+/**
+ * POST /admin/channels/:id/keys
+ * Body: { key: string }
+ * Appends one key to keys[]. Status defaults to 'active'.
+ * Returns the full masked keys[] array.
+ */
+channelsRouter.post('/:id/keys', async (req: Request, res: Response) => {
+  const tenantId = req.resellerAdmin!.tenantId;
+  const id = parseInt(req.params.id, 10);
+  const key = String((req.body as any)?.key ?? '');
+  if (!id) {
+    res.status(400).json({ error: { type: 'invalid_request_error', message: 'invalid id' } });
+    return;
+  }
+  if (!key || key.length < 8) {
+    res.status(400).json({ error: { type: 'invalid_request_error', message: 'key must be ≥8 chars' } });
+    return;
+  }
+  const out = await addKey(id, tenantId, key);
+  if (out === null) {
     res.status(404).json({ error: { type: 'not_found', message: 'channel not found' } });
     return;
   }
-  res.json(rows[0]);
+  res.status(201).json({
+    keys: out.map((e) => ({
+      preview: maskKey(e.key),
+      status: e.status,
+      added_at: e.added_at,
+      cooled_until: e.cooled_until,
+      last_error: e.last_error,
+    })),
+    keys_total: out.length,
+  });
+});
+
+/**
+ * DELETE /admin/channels/:id/keys/:idx
+ * Removes the key at the supplied index. Always returns the new keys[]
+ * even if the index was out of range (no-op then).
+ */
+channelsRouter.delete('/:id/keys/:idx', async (req: Request, res: Response) => {
+  const tenantId = req.resellerAdmin!.tenantId;
+  const id = parseInt(req.params.id, 10);
+  const idx = parseInt(req.params.idx, 10);
+  if (!id || Number.isNaN(idx) || idx < 0) {
+    res.status(400).json({ error: { type: 'invalid_request_error', message: 'invalid id or idx' } });
+    return;
+  }
+  const out = await removeKey(id, tenantId, idx);
+  if (out === null) {
+    res.status(404).json({ error: { type: 'not_found', message: 'channel not found' } });
+    return;
+  }
+  res.json({
+    keys: out.map((e) => ({
+      preview: maskKey(e.key),
+      status: e.status,
+      added_at: e.added_at,
+      cooled_until: e.cooled_until,
+      last_error: e.last_error,
+    })),
+    keys_total: out.length,
+  });
 });
 
 /**

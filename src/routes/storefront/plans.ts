@@ -10,6 +10,7 @@ import { query } from '../../services/database';
 import { authCustomer } from '../../middleware/auth-customer';
 import { createOrder, confirmPaid } from '../../services/order-engine';
 import { logger } from '../../services/logger';
+import { getForTenant as getSystemSetting } from '../../services/system-setting';
 
 export const storefrontPlansRouter = Router();
 
@@ -27,15 +28,29 @@ storefrontPlansRouter.get('/plans', async (req: Request, res: Response) => {
   res.json({ data: rows });
 });
 
-// --- public: brand info ----------------------------------------------------
+// --- public: brand info + system announcement ------------------------------
+// Combines brand_config (logo / colors / footer) with the system_setting
+// announcement so the storefront only needs one fetch to render the banner.
 storefrontPlansRouter.get('/brand', async (req: Request, res: Response) => {
   const tenantId = req.tenantId!;
-  const rows = await query<any>(
-    `SELECT store_name, logo_url, primary_color, announcement, footer_html, contact_email
-       FROM brand_config WHERE tenant_id = $1 LIMIT 1`,
-    [tenantId],
-  );
-  res.json(rows[0] ?? { store_name: null, primary_color: '#6366f1' });
+  const [brandRows, ss] = await Promise.all([
+    query<any>(
+      `SELECT store_name, logo_url, primary_color, announcement, footer_html, contact_email
+         FROM brand_config WHERE tenant_id = $1 LIMIT 1`,
+      [tenantId],
+    ),
+    getSystemSetting(tenantId).catch(() => null),
+  ]);
+  const base = brandRows[0] ?? { store_name: null, primary_color: '#6366f1' };
+  res.json({
+    ...base,
+    // Surface system_setting announcement alongside brand. UI can pick the
+    // system one (admin-controlled, latest) over brand.announcement.
+    system_announcement: ss?.announcement ?? null,
+    system_announcement_level: ss?.announcement_level ?? 'info',
+    maintenance_mode: ss?.maintenance_mode ?? false,
+    signup_enabled: ss?.signup_enabled ?? true,
+  });
 });
 
 // --- authed: create order --------------------------------------------------

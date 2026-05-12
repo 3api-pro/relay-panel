@@ -11,6 +11,7 @@ import { channelsRouter } from "./admin-channels";
 import { adminPlansRouter } from "./admin/plans";
 import { adminWholesaleRouter } from "./admin/wholesale";
 import { adminExtrasRouter } from "./admin/extras";
+import { adminSystemSettingRouter } from "./admin/system-setting";
 
 export const adminRouter = Router();
 
@@ -18,6 +19,8 @@ export const adminRouter = Router();
 adminRouter.use('/channels', channelsRouter);
 adminRouter.use('/plans', adminPlansRouter);
 adminRouter.use('/wholesale', adminWholesaleRouter);
+// /admin/system-setting — per-tenant runtime switches (P1 #10)
+adminRouter.use('/system-setting', adminSystemSettingRouter);
 // Extras (me / brand / orders / refund / stats / change-password / payment-config).
 // Mounted BEFORE the legacy '/me' below so the richer payload wins.
 adminRouter.use('/', adminExtrasRouter);

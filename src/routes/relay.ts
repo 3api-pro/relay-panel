@@ -13,6 +13,12 @@ import { recordUsage as recordSubscriptionUsage } from '../services/order-engine
 import { query } from '../services/database';
 import { config } from '../config';
 import { logger } from '../services/logger';
+import {
+  pickKey,
+  reportKeyFailure,
+  classifyHttpFailure,
+} from '../services/channel-keys';
+import { isMaintenanceMode } from '../services/system-setting';
 
 
 function modelMatchesAllowlist(model: string, allow: string[]): boolean {
@@ -58,12 +64,29 @@ async function recordUsageRouted(req: any, input: any): Promise<{ chargedCents?:
  * Pick the active default channel for the tenant, falling back to env in
  * single-tenant deploys. Returns null + an error response if neither is
  * available.
+ *
+ * Multi-key (P1 #14): when the resolved channel has a non-empty `keys[]`
+ * JSONB array, round-robin one usable key via channel-keys.pickKey and
+ * return it as `channel.api_key` along with `keyIndex` so failure
+ * reports can mark it dead/cooled. Legacy single-key rows (empty keys[])
+ * fall through to the `api_key` column as before.
  */
 async function resolveChannel(
   tenantId: number,
-): Promise<{ channel: UpstreamChannel | null; channelId: number | null; error?: string }> {
-  const rows = await query<{ id: number; base_url: string; api_key: string }>(
-    `SELECT id, base_url, api_key
+): Promise<{
+  channel: UpstreamChannel | null;
+  channelId: number | null;
+  keyIndex: number | null;
+  error?: string;
+}> {
+  const rows = await query<{
+    id: number;
+    base_url: string;
+    api_key: string;
+    keys_n: number;
+  }>(
+    `SELECT id, base_url, api_key,
+            jsonb_array_length(COALESCE(keys, '[]'::jsonb)) AS keys_n
        FROM upstream_channel
       WHERE tenant_id = $1 AND status = 'active'
       ORDER BY is_default DESC, weight DESC, priority ASC, id ASC
@@ -71,18 +94,41 @@ async function resolveChannel(
     [tenantId],
   );
   if (rows.length > 0) {
+    const row = rows[0];
+    if (Number(row.keys_n) > 0) {
+      // Multi-key path — rotate.
+      const picked = await pickKey(row.id);
+      if (!picked) {
+        // Every key is dead or cooled. Hard 503: caller must replenish
+        // keys / wait for cooldowns to lapse.
+        return {
+          channel: null,
+          channelId: row.id,
+          keyIndex: null,
+          error: 'all keys for the default upstream channel are currently unavailable — add a new key or wait for cooldown',
+        };
+      }
+      return {
+        channel: { id: row.id, base_url: row.base_url, api_key: picked.key },
+        channelId: row.id,
+        keyIndex: picked.index,
+      };
+    }
+    // Legacy single-key row.
     return {
-      channel: { id: rows[0].id, base_url: rows[0].base_url, api_key: rows[0].api_key },
-      channelId: rows[0].id,
+      channel: { id: row.id, base_url: row.base_url, api_key: row.api_key },
+      channelId: row.id,
+      keyIndex: null,
     };
   }
   // Fallback: env (single-tenant or pre-channel deploy)
   if (config.upstreamKey && config.upstreamBaseUrl) {
-    return { channel: null, channelId: null };
+    return { channel: null, channelId: null, keyIndex: null };
   }
   return {
     channel: null,
     channelId: null,
+    keyIndex: null,
     error: 'no upstream channel configured for this tenant — admin must add one in /admin/channels',
   };
 }
@@ -91,6 +137,19 @@ relayRouter.post('/messages', async (req: Request, res: Response) => {
   const start = Date.now();
   const tok = req.endToken!;
   const requestedModel = String(req.body?.model || 'claude-sonnet-4-7');
+
+  // System-setting gate: maintenance_mode (P1 #10) returns 503 before we
+  // hit the upstream at all. Service caches per-tenant for 30s — failure
+  // to read the setting falls back to "service open".
+  if (await isMaintenanceMode(tok.tenantId)) {
+    res.status(503).json({
+      error: {
+        type: 'maintenance',
+        message: 'The service is under maintenance, please try again later.',
+      },
+    });
+    return;
+  }
 
   // Allow exact match OR glob wildcard ("claude-*" / "claude-sonnet-*").
   // Plan-derived allow lists are typically wildcards; the legacy admin-issued
@@ -115,9 +174,9 @@ relayRouter.post('/messages', async (req: Request, res: Response) => {
     String(req.headers['accept'] ?? '').includes('text/event-stream');
 
   if (wantsStream) {
-    return handleStream(req, res, requestedModel, start, resolved.channel, resolved.channelId);
+    return handleStream(req, res, requestedModel, start, resolved.channel, resolved.channelId, resolved.keyIndex);
   }
-  return handleJson(req, res, requestedModel, start, resolved.channel, resolved.channelId);
+  return handleJson(req, res, requestedModel, start, resolved.channel, resolved.channelId, resolved.keyIndex);
 });
 
 async function handleJson(
@@ -127,6 +186,7 @@ async function handleJson(
   start: number,
   channel: UpstreamChannel | null,
   channelId: number | null,
+  keyIndex: number | null,
 ): Promise<void> {
   const tok = req.endToken!;
   const usr = req.endUser!;
@@ -140,6 +200,11 @@ async function handleJson(
     });
   } catch (err: any) {
     logger.error({ err: err.message }, 'relay:upstream_error');
+    // Network-style failure: 90s cooldown on the picked key so the next
+    // request rotates away. Always advisory — never throws.
+    if (channelId != null && keyIndex != null) {
+      reportKeyFailure(channelId, keyIndex, 'cool', `network: ${err.message}`).catch(() => {});
+    }
     await recordUsageRouted(req, {
       tenantId: tok.tenantId, endUserId: usr.id, endTokenId: tok.id,
       modelName: model, promptTokens: 0, completionTokens: 0,
@@ -148,6 +213,19 @@ async function handleJson(
     }).catch(() => {});
     res.status(502).json({ error: { type: 'upstream_error', message: 'Upstream unavailable' } });
     return;
+  }
+
+  // HTTP-status failure classifier: 401/403 → dead, 429/5xx → cooled.
+  if (channelId != null && keyIndex != null) {
+    const mode = classifyHttpFailure(upstreamJson.status);
+    if (mode) {
+      reportKeyFailure(
+        channelId,
+        keyIndex,
+        mode,
+        `http ${upstreamJson.status}`,
+      ).catch(() => {});
+    }
   }
 
   const promptTokens =
@@ -182,6 +260,7 @@ async function handleStream(
   start: number,
   channel: UpstreamChannel | null,
   channelId: number | null,
+  keyIndex: number | null,
 ): Promise<void> {
   const tok = req.endToken!;
   const usr = req.endUser!;
@@ -195,11 +274,20 @@ async function handleStream(
     });
   } catch (err: any) {
     logger.error({ err: err.message }, 'relay:upstream_stream_error');
+    if (channelId != null && keyIndex != null) {
+      reportKeyFailure(channelId, keyIndex, 'cool', `stream-network: ${err.message}`).catch(() => {});
+    }
     res.status(502).json({ error: { type: 'upstream_error', message: 'Upstream unavailable' } });
     return;
   }
 
   if (upstreamHttp.status !== 200) {
+    if (channelId != null && keyIndex != null) {
+      const mode = classifyHttpFailure(upstreamHttp.status);
+      if (mode) {
+        reportKeyFailure(channelId, keyIndex, mode, `stream-http ${upstreamHttp.status}`).catch(() => {});
+      }
+    }
     const errText = await upstreamHttp.text();
     res.status(upstreamHttp.status).type('application/json').send(errText);
     await recordUsageRouted(req, {

@@ -16,9 +16,18 @@
 import { Router } from 'express';
 import { storefrontAuthRouter } from './auth';
 import { storefrontPlansRouter } from './plans';
+import { storefrontCheckinRouter } from './checkin';
+import { maintenanceGuard, signupEnabledGuard } from '../../middleware/system-setting-guard';
 
 export const storefrontRouter = Router();
 
-storefrontRouter.use('/auth', storefrontAuthRouter);
+// Maintenance gate — when system_setting.maintenance_mode = true for the
+// resolved tenant, ALL storefront routes return 503. /auth/signup also
+// honours signup_enabled (signupEnabledGuard applied inside storefrontAuthRouter).
+storefrontRouter.use(maintenanceGuard);
+
+storefrontRouter.use('/auth', signupEnabledGuard, storefrontAuthRouter);
 // /plans and /brand are public; /orders + /subscriptions inline authCustomer.
 storefrontRouter.use('/', storefrontPlansRouter);
+// /checkin{,/status,/history} — all routes require authCustomer.
+storefrontRouter.use('/', storefrontCheckinRouter);
