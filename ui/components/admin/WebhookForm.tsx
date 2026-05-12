@@ -3,12 +3,13 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useTranslations } from '@/lib/i18n';
 
-const EVENT_TYPES: { value: string; label: string; hint: string }[] = [
-  { value: 'order.paid',           label: 'order.paid',           hint: '订单支付成功' },
-  { value: 'subscription.expired', label: 'subscription.expired', hint: '订阅到期' },
-  { value: 'refund.processed',     label: 'refund.processed',     hint: '退款已处理' },
-  { value: 'wholesale.low',        label: 'wholesale.low',        hint: '批发余额低' },
+const EVENT_DEFS: { value: string; hintKey: string }[] = [
+  { value: 'order.paid',           hintKey: 'event_order_paid_hint' },
+  { value: 'subscription.expired', hintKey: 'event_subscription_expired_hint' },
+  { value: 'refund.processed',     hintKey: 'event_refund_processed_hint' },
+  { value: 'wholesale.low',        hintKey: 'event_wholesale_low_hint' },
 ];
 
 export interface WebhookFormValues {
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export function WebhookForm({ initial, onSubmit, submitting, submitLabel }: Props) {
+  const t = useTranslations('admin.webhooks');
   const [url, setUrl] = useState(initial?.url ?? '');
   const [events, setEvents] = useState<string[]>(initial?.events ?? []);
   const [err, setErr] = useState('');
@@ -33,14 +35,14 @@ export function WebhookForm({ initial, onSubmit, submitting, submitLabel }: Prop
   }
 
   function validate(): string | null {
-    if (!url.trim()) return 'URL 不能为空';
+    if (!url.trim()) return t('validation_url_empty');
     try {
       const u = new URL(url.trim());
-      if (u.protocol !== 'http:' && u.protocol !== 'https:') return 'URL 必须是 http(s)';
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return t('validation_url_protocol');
     } catch {
-      return 'URL 格式无效';
+      return t('validation_url_invalid');
     }
-    if (events.length === 0) return '至少选择一个事件';
+    if (events.length === 0) return t('validation_no_event');
     return null;
   }
 
@@ -58,26 +60,23 @@ export function WebhookForm({ initial, onSubmit, submitting, submitLabel }: Prop
   return (
     <form onSubmit={handle} className="space-y-5">
       <div className="space-y-1.5">
-        <Label htmlFor="webhook-url">URL</Label>
+        <Label htmlFor="webhook-url">{t('form_url_label')}</Label>
         <Input
           id="webhook-url"
           type="url"
-          placeholder="https://example.com/3api-webhook"
+          placeholder={t('form_url_placeholder')}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           autoComplete="off"
           required
         />
-        <p className="text-xs text-muted-foreground">
-          收到事件时, 我们会以 POST + JSON body 调用此 URL, 并附带 X-3api-Signature
-          (HMAC-SHA256) 与 X-3api-Event 头。
-        </p>
+        <p className="text-xs text-muted-foreground">{t('form_url_help')}</p>
       </div>
 
       <div className="space-y-2">
-        <Label>订阅事件</Label>
+        <Label>{t('form_events_label')}</Label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {EVENT_TYPES.map((e) => (
+          {EVENT_DEFS.map((e) => (
             <label
               key={e.value}
               className="flex items-start gap-2 p-2.5 rounded-md border border-border hover:bg-muted/40 cursor-pointer"
@@ -89,8 +88,8 @@ export function WebhookForm({ initial, onSubmit, submitting, submitLabel }: Prop
                 className="mt-0.5"
               />
               <div className="flex flex-col">
-                <code className="text-xs">{e.label}</code>
-                <span className="text-xs text-muted-foreground">{e.hint}</span>
+                <code className="text-xs">{e.value}</code>
+                <span className="text-xs text-muted-foreground">{t(e.hintKey)}</span>
               </div>
             </label>
           ))}
@@ -105,7 +104,7 @@ export function WebhookForm({ initial, onSubmit, submitting, submitLabel }: Prop
 
       <div className="flex justify-end">
         <Button type="submit" disabled={!!submitting}>
-          {submitting ? '提交中…' : submitLabel ?? '保存'}
+          {submitting ? t('form_submit_busy') : (submitLabel ?? t('form_submit_default'))}
         </Button>
       </div>
     </form>

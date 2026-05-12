@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/table';
 import { Modal } from '@/components/admin/Modal';
 import { api, safe, fmtDate } from '@/lib/api';
+import { useTranslations } from '@/lib/i18n';
 import { useRouter } from 'next/navigation';
 
 interface Webhook {
@@ -50,6 +51,7 @@ function statusBadge(s: string) {
 }
 
 export default function WebhooksPage() {
+  const t = useTranslations('admin.webhooks');
   const router = useRouter();
   const [rows, setRows] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,7 +85,7 @@ export default function WebhooksPage() {
       });
       refresh();
     } catch (e: any) {
-      alert(`更新失败: ${e.message}`);
+      alert(`${t('alert_update_failed_prefix')}${e.message}`);
     }
   }
 
@@ -96,13 +98,19 @@ export default function WebhooksPage() {
       });
       const d = r.delivery;
       if (d.status === 'success') {
-        setTestResult(`✔ 测试成功 (HTTP ${d.http_status})`);
+        setTestResult(t('test_ok', { http: d.http_status ?? '—' }));
       } else {
-        setTestResult(`✘ 测试失败 (status=${d.status}, http=${d.http_status ?? '—'}, ${d.response_excerpt ?? ''})`);
+        setTestResult(
+          t('test_failed', {
+            status: d.status,
+            http: d.http_status ?? '—',
+            body: d.response_excerpt ?? '',
+          }),
+        );
       }
       refresh();
     } catch (e: any) {
-      setTestResult(`✘ 错误: ${e.message}`);
+      setTestResult(`${t('test_error_prefix')}${e.message}`);
     } finally {
       setTesting(null);
     }
@@ -115,7 +123,7 @@ export default function WebhooksPage() {
       setConfirmDel(null);
       refresh();
     } catch (e: any) {
-      alert(`删除失败: ${e.message}`);
+      alert(`${t('alert_delete_failed_prefix')}${e.message}`);
     }
   }
 
@@ -127,7 +135,7 @@ export default function WebhooksPage() {
       setHistory({ hook: w, data: r.data || [] });
     } catch (e: any) {
       setHistory({ hook: w, data: [] });
-      alert(`读取历史失败: ${e.message}`);
+      alert(`${t('alert_history_failed_prefix')}${e.message}`);
     } finally {
       setHistoryLoading(false);
     }
@@ -138,19 +146,16 @@ export default function WebhooksPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Webhooks</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              订阅事件 (order.paid / subscription.expired / refund.processed / wholesale.low)
-              到指定 URL。每条请求带 HMAC SHA256 签名 (X-3api-Signature)。
-            </p>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">{t('title')}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t('subtitle')}</p>
           </div>
-          <Button onClick={() => router.push('/admin/webhooks/new')}>+ 添加 Webhook</Button>
+          <Button onClick={() => router.push('/admin/webhooks/new')}>{t('add_button')}</Button>
         </div>
 
         {testResult && (
           <div className="text-sm bg-card border border-border rounded-md px-3 py-2 flex items-center justify-between">
             <span>{testResult}</span>
-            <button className="text-xs text-muted-foreground" onClick={() => setTestResult(null)}>关闭</button>
+            <button className="text-xs text-muted-foreground" onClick={() => setTestResult(null)}>{t('close')}</button>
           </div>
         )}
 
@@ -164,21 +169,21 @@ export default function WebhooksPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-12">#</TableHead>
-                <TableHead>URL</TableHead>
-                <TableHead>事件</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>最近触发</TableHead>
-                <TableHead>统计</TableHead>
-                <TableHead className="w-72 text-right">操作</TableHead>
+                <TableHead className="w-12">{t('col_id')}</TableHead>
+                <TableHead>{t('col_url')}</TableHead>
+                <TableHead>{t('col_events')}</TableHead>
+                <TableHead>{t('col_status')}</TableHead>
+                <TableHead>{t('col_last_triggered')}</TableHead>
+                <TableHead>{t('col_stats')}</TableHead>
+                <TableHead className="w-72 text-right">{t('col_actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">加载中...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">{t('loading')}</TableCell></TableRow>
               )}
               {!loading && rows.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">还没有 webhook, 点上方按钮添加。</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">{t('empty_rows')}</TableCell></TableRow>
               )}
               {rows.map((w) => (
                 <TableRow key={w.id}>
@@ -195,29 +200,29 @@ export default function WebhooksPage() {
                   </TableCell>
                   <TableCell>
                     {w.enabled ? (
-                      <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">启用</span>
+                      <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">{t('badge_enabled')}</span>
                     ) : (
-                      <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">已停用</span>
+                      <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">{t('badge_disabled')}</span>
                     )}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {w.last_triggered_at ? fmtDate(w.last_triggered_at) : '从未'}
+                    {w.last_triggered_at ? fmtDate(w.last_triggered_at) : t('last_triggered_never')}
                   </TableCell>
                   <TableCell className="text-xs">
-                    {w.success_count}/{w.delivery_count} 成功
+                    {w.success_count}/{w.delivery_count}{t('stats_success_suffix')}
                     {w.fail_count_total > 0 && (
-                      <div className="text-rose-600">失败 {w.fail_count_total}</div>
+                      <div className="text-rose-600">{t('stats_failed_prefix')}{w.fail_count_total}</div>
                     )}
                   </TableCell>
                   <TableCell className="text-right space-x-1">
                     <Button size="sm" variant="outline" onClick={() => fireTest(w)} disabled={testing === w.id}>
-                      {testing === w.id ? '测试中…' : '测试'}
+                      {testing === w.id ? t('btn_test_busy') : t('btn_test')}
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => viewHistory(w)}>历史</Button>
+                    <Button size="sm" variant="outline" onClick={() => viewHistory(w)}>{t('btn_history')}</Button>
                     <Button size="sm" variant="outline" onClick={() => toggleEnabled(w)}>
-                      {w.enabled ? '停用' : '启用'}
+                      {w.enabled ? t('btn_disable') : t('btn_enable')}
                     </Button>
-                    <Button size="sm" variant="destructive" onClick={() => setConfirmDel(w)}>删除</Button>
+                    <Button size="sm" variant="destructive" onClick={() => setConfirmDel(w)}>{t('btn_delete')}</Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -228,16 +233,15 @@ export default function WebhooksPage() {
         <Modal
           open={!!confirmDel}
           onClose={() => setConfirmDel(null)}
-          title="删除 Webhook"
+          title={t('delete_modal_title')}
         >
           <div className="space-y-4">
             <p className="text-sm">
-              确认删除? URL <code className="text-xs">{confirmDel?.url}</code>。
-              历史投递记录也会一并删除 (CASCADE)。
+              {t('delete_confirm_prefix')}<code className="text-xs">{confirmDel?.url}</code>{t('delete_confirm_suffix')}
             </p>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setConfirmDel(null)}>取消</Button>
-              <Button variant="destructive" onClick={doDelete}>确认删除</Button>
+              <Button variant="outline" onClick={() => setConfirmDel(null)}>{t('delete_cancel')}</Button>
+              <Button variant="destructive" onClick={doDelete}>{t('delete_confirm')}</Button>
             </div>
           </div>
         </Modal>
@@ -245,22 +249,22 @@ export default function WebhooksPage() {
         <Modal
           open={!!history}
           onClose={() => setHistory(null)}
-          title={`历史投递 — ${history?.hook.url ?? ''}`}
+          title={`${t('history_modal_title_prefix')}${history?.hook.url ?? ''}`}
         >
           <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-            {historyLoading && <p className="text-sm text-muted-foreground">加载中...</p>}
+            {historyLoading && <p className="text-sm text-muted-foreground">{t('loading')}</p>}
             {!historyLoading && history && history.data.length === 0 && (
-              <p className="text-sm text-muted-foreground">暂无投递记录。</p>
+              <p className="text-sm text-muted-foreground">{t('empty_history')}</p>
             )}
             {!historyLoading && history && history.data.length > 0 && (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>事件</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead>HTTP</TableHead>
-                    <TableHead>尝试</TableHead>
-                    <TableHead>时间</TableHead>
+                    <TableHead>{t('col_events')}</TableHead>
+                    <TableHead>{t('col_status')}</TableHead>
+                    <TableHead>{t('col_http')}</TableHead>
+                    <TableHead>{t('col_attempts')}</TableHead>
+                    <TableHead>{t('col_time')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
