@@ -12,6 +12,11 @@ import { logger } from '../../services/logger';
 export const adminPlansRouter = Router();
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
+const BILLING_TYPES = ['subscription', 'token_pack'] as const;
+type BillingType = (typeof BILLING_TYPES)[number];
+// Token packs are conceptually permanent — fix period_days at 3650 (~10y)
+// so the auth gate's expiry check never bites unintentionally.
+const TOKEN_PACK_PERIOD_DAYS = 3650;
 
 interface PlanInput {
   name?: string;
@@ -23,6 +28,7 @@ interface PlanInput {
   allowed_models?: string[] | string;
   enabled?: boolean;
   sort_order?: number;
+  billing_type?: BillingType;
 }
 
 function validate(body: PlanInput, partial = false): string | null {
@@ -54,6 +60,9 @@ function validate(body: PlanInput, partial = false): string | null {
     (body.wholesale_face_value_cents != null &&
     (!Number.isInteger(body.wholesale_face_value_cents) || body.wholesale_face_value_cents < 0)
       ? 'wholesale_face_value_cents must be a non-negative integer'
+      : null) ||
+    (body.billing_type != null && !BILLING_TYPES.includes(body.billing_type)
+      ? `billing_type must be one of: ${BILLING_TYPES.join(', ')}`
       : null)
   );
 }
@@ -75,7 +84,8 @@ adminPlansRouter.get('/', async (req: Request, res: Response) => {
   const tenantId = req.resellerAdmin!.tenantId;
   const rows = await query<any>(
     `SELECT id, name, slug, period_days, quota_tokens, price_cents,
-            wholesale_face_value_cents, allowed_models, enabled, sort_order, created_at
+            wholesale_face_value_cents, allowed_models, enabled, sort_order,
+            billing_type, created_at
        FROM plans
       WHERE tenant_id = $1
       ORDER BY sort_order ASC, id ASC`,
@@ -94,26 +104,33 @@ adminPlansRouter.post('/', async (req: Request, res: Response) => {
     return;
   }
   const allowedModels = body.allowed_models == null ? [] : normalizeAllowedModels(body.allowed_models);
+  const billingType: BillingType = body.billing_type ?? 'subscription';
+  // Token packs are permanent — force period_days = 3650 regardless of input.
+  const effectivePeriodDays =
+    billingType === 'token_pack' ? TOKEN_PACK_PERIOD_DAYS : Number(body.period_days);
 
   try {
     const rows = await query<any>(
       `INSERT INTO plans
          (tenant_id, name, slug, period_days, quota_tokens, price_cents,
-          wholesale_face_value_cents, allowed_models, enabled, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
+          wholesale_face_value_cents, allowed_models, enabled, sort_order,
+          billing_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11)
        RETURNING id, name, slug, period_days, quota_tokens, price_cents,
-                 wholesale_face_value_cents, allowed_models, enabled, sort_order, created_at`,
+                 wholesale_face_value_cents, allowed_models, enabled, sort_order,
+                 billing_type, created_at`,
       [
         tenantId,
         body.name,
         body.slug,
-        body.period_days,
+        effectivePeriodDays,
         body.quota_tokens,
         body.price_cents,
         body.wholesale_face_value_cents,
         JSON.stringify(allowedModels),
         body.enabled != null ? !!body.enabled : true,
         Number(body.sort_order ?? 0),
+        billingType,
       ],
     );
     res.status(201).json(rows[0]);
@@ -150,13 +167,29 @@ adminPlansRouter.patch('/:id', async (req: Request, res: Response) => {
   };
   if (body.name != null) push('name', body.name);
   if (body.slug != null) push('slug', body.slug);
-  if (body.period_days != null) push('period_days', body.period_days);
+  // If billing_type is being changed to token_pack OR if period_days is being
+  // explicitly set on an existing token_pack plan, clamp to TOKEN_PACK_PERIOD_DAYS.
+  // The lookup-then-clamp lives outside the simple push() flow, so we handle
+  // period_days after the billing_type decision below.
   if (body.quota_tokens != null) push('quota_tokens', body.quota_tokens);
   if (body.price_cents != null) push('price_cents', body.price_cents);
   if (body.wholesale_face_value_cents != null) push('wholesale_face_value_cents', body.wholesale_face_value_cents);
   if (body.allowed_models != null) push('allowed_models', JSON.stringify(normalizeAllowedModels(body.allowed_models)));
   if (body.enabled != null) push('enabled', !!body.enabled);
   if (body.sort_order != null) push('sort_order', Number(body.sort_order));
+  if (body.billing_type != null) push('billing_type', body.billing_type);
+  // period_days: if billing_type is being set/already token_pack, clamp to 3650.
+  // Otherwise pass through.
+  if (body.period_days != null || body.billing_type === 'token_pack') {
+    let effective = body.period_days != null ? Number(body.period_days) : null;
+    if (body.billing_type === 'token_pack') {
+      effective = TOKEN_PACK_PERIOD_DAYS;
+    } else if (effective == null && body.billing_type == null) {
+      // PATCH only sent billing_type? Skip — but we never reach here because
+      // the outer guard checks period_days != null OR billing_type=token_pack.
+    }
+    if (effective != null) push('period_days', effective);
+  }
 
   if (sets.length === 0) {
     res.status(400).json({ error: { type: 'invalid_request_error', message: 'no fields to update' } });
@@ -172,7 +205,8 @@ adminPlansRouter.patch('/:id', async (req: Request, res: Response) => {
       `UPDATE plans SET ${setSql}
          WHERE id = $${vals.length - 1} AND tenant_id = $${vals.length}
          RETURNING id, name, slug, period_days, quota_tokens, price_cents,
-                   wholesale_face_value_cents, allowed_models, enabled, sort_order, created_at`,
+                   wholesale_face_value_cents, allowed_models, enabled, sort_order,
+                   billing_type, created_at`,
       vals,
     );
     if (rows.length === 0) {

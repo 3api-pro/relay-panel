@@ -8,24 +8,39 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../../services/database';
 import { authCustomer } from '../../middleware/auth-customer';
-import { createOrder, confirmPaid } from '../../services/order-engine';
+import { createOrder, confirmPaid, getEndUserTokenBalance } from '../../services/order-engine';
 import { logger } from '../../services/logger';
 import { getForTenant as getSystemSetting } from '../../services/system-setting';
 
 export const storefrontPlansRouter = Router();
 
 // --- public: list enabled plans for the tenant -----------------------------
+// v0.3 returns billing_type so storefront can split into "subscription" vs
+// "token_pack" sections. Old clients ignoring the field still get a flat list.
 storefrontPlansRouter.get('/plans', async (req: Request, res: Response) => {
   const tenantId = req.tenantId!;
   const rows = await query<any>(
     `SELECT id, name, slug, period_days, quota_tokens, price_cents,
-            allowed_models, sort_order
+            allowed_models, sort_order, billing_type
        FROM plans
       WHERE tenant_id = $1 AND enabled = TRUE
-      ORDER BY sort_order ASC, id ASC`,
+      ORDER BY billing_type ASC, sort_order ASC, id ASC`,
     [tenantId],
   );
   res.json({ data: rows });
+});
+
+// --- authed: aggregate token balance across subs + packs -------------------
+// Used by the end_user dashboard balance panel. Returns three numbers:
+//   subscription_tokens — sum of remaining_tokens across plans where
+//                         billing_type='subscription' (or NULL, legacy).
+//   token_pack_tokens   — sum of remaining_tokens across plans where
+//                         billing_type='token_pack'.
+//   total               — sum of both.
+storefrontPlansRouter.get('/balance', authCustomer, async (req: Request, res: Response) => {
+  const u = req.endUser!;
+  const bal = await getEndUserTokenBalance(u.tenantId, u.id);
+  res.json(bal);
 });
 
 // --- public: brand info + system announcement ------------------------------
@@ -117,8 +132,9 @@ storefrontPlansRouter.get('/subscriptions', authCustomer, async (req: Request, r
   const u = req.endUser!;
   const rows = await query<any>(
     `SELECT s.id, s.plan_id, s.plan_name, s.status, s.period_start, s.period_end,
-            s.expires_at, s.remaining_tokens, s.order_id,
+            s.expires_at, s.remaining_tokens, s.order_id, s.is_primary,
             p.quota_tokens AS plan_quota_tokens,
+            COALESCE(p.billing_type, 'subscription') AS billing_type,
             (SELECT id FROM end_token WHERE subscription_id = s.id LIMIT 1) AS end_token_id
        FROM subscription s
        LEFT JOIN plans p ON p.id = s.plan_id

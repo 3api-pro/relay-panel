@@ -242,11 +242,17 @@ export async function confirmPaid(
 
     // 2. Load plan (we need quota_tokens / wholesale_face_value)
     const planRow = await client.query<any>(
-      `SELECT id, name, period_days, quota_tokens, wholesale_face_value_cents, allowed_models
+      `SELECT id, name, period_days, quota_tokens, wholesale_face_value_cents,
+              allowed_models, billing_type
          FROM plans WHERE id = $1 LIMIT 1`,
       [order.plan_id],
     );
     const plan = planRow.rows[0];
+    // v0.3 dual-billing: token_pack overrides period_days regardless of what
+    // the row says (defensive — admin UI should already force it, but a
+    // direct SQL row edit shouldn't break the invariant).
+    const isTokenPack = plan.billing_type === 'token_pack';
+    const effectivePeriodDays = isTokenPack ? 3650 : plan.period_days;
 
     // 3. Debit wholesale_balance atomically (CTE upsert if missing first)
     await client.query(
@@ -291,7 +297,11 @@ export async function confirmPaid(
       };
     }
 
-    // 4. Create subscription
+    // 4. Create subscription. Both billing types use the same row layout;
+    //    /v1/messages debit logic sums all active subs and burns oldest-
+    //    expires-first, so subscriptions naturally drain before token packs.
+    //    is_primary=TRUE for subscription rows, FALSE for token_pack rows —
+    //    purely informational (the "main" plan shown in dashboard header).
     const subRow = await client.query<any>(
       `INSERT INTO subscription
          (tenant_id, end_user_id, plan_name, plan_id, order_id, status,
@@ -299,7 +309,7 @@ export async function confirmPaid(
        VALUES ($1, $2, $3, $4, $5, 'active', NOW(),
                NOW() + ($6::int || ' days')::interval,
                NOW() + ($6::int || ' days')::interval,
-               $7, TRUE)
+               $7, $8)
        RETURNING *`,
       [
         order.tenant_id,
@@ -307,8 +317,9 @@ export async function confirmPaid(
         plan.name,
         plan.id,
         order.id,
-        plan.period_days,
+        effectivePeriodDays,
         plan.quota_tokens,
+        !isTokenPack, // subscriptions are primary, token packs are addons
       ],
     );
     const subscription = subRow.rows[0];
@@ -369,11 +380,22 @@ export async function confirmPaid(
 }
 
 /**
- * Charge tokens against a subscription. Atomic — never goes negative.
- * Also writes a usage_log row for audit.
+ * Charge tokens against a user's active subscriptions — FIFO debit across
+ * all active rows (oldest expires_at first). Atomic — never goes negative.
  *
- * Returns the post-charge remaining_tokens or null if the subscription
- * is missing/inactive. Caller decides whether to 402.
+ * v0.3 dual-billing: a single end_user can hold a monthly subscription AND
+ * one or more token packs in parallel. Subscriptions naturally expire
+ * sooner (30d vs 3650d for packs), so oldest-expires-first burns the
+ * subscription's allowance first then drains pack(s). All within one
+ * transaction with FOR UPDATE so concurrent /v1/messages don't double-bill.
+ *
+ * input.subscriptionId is the sub the token was originally minted against
+ * — used purely for the usage_log row (audit). The debit itself looks at
+ * the whole active set for input.endUserId. If the originating sub is the
+ * only one left active and dry, debit fails and the caller 402s.
+ *
+ * Returns the post-charge remaining_tokens for the originating sub (for
+ * the legacy single-sub response shape) and total across all subs.
  */
 export async function recordUsage(input: {
   tenantId: number;
@@ -389,21 +411,79 @@ export async function recordUsage(input: {
   elapsedMs: number;
   isStream: boolean;
   status: 'success' | 'failure';
-}): Promise<{ remaining_tokens: number | null; charged_tokens: number }> {
+}): Promise<{ remaining_tokens: number | null; charged_tokens: number; total_remaining_tokens?: number }> {
   const chargedTokens = Math.max(0, input.promptTokens + input.completionTokens);
 
   return withTransaction(async (client) => {
-    let remaining: number | null = null;
-    if (input.subscriptionId && chargedTokens > 0 && input.status === 'success') {
-      const r = await client.query<{ remaining_tokens: string }>(
-        `UPDATE subscription
-            SET remaining_tokens = GREATEST(0, remaining_tokens - $1)
-          WHERE id = $2 AND status = 'active'
-          RETURNING remaining_tokens`,
-        [chargedTokens, input.subscriptionId],
+    let originRemaining: number | null = null;
+    let totalRemaining = 0;
+
+    if (chargedTokens > 0 && input.status === 'success') {
+      // Lock all active subs for this end_user (FOR UPDATE so concurrent
+      // billing on the same user serializes). Order: oldest expires first,
+      // then id ASC for tie-breaking. Subscriptions (30d expiry) drain
+      // before token_packs (3650d expiry) naturally.
+      const subs = await client.query<{ id: number; remaining_tokens: string }>(
+        `SELECT id, remaining_tokens
+           FROM subscription
+          WHERE tenant_id = $1
+            AND end_user_id = $2
+            AND status = 'active'
+            AND (expires_at IS NULL OR expires_at > NOW())
+            AND remaining_tokens > 0
+          ORDER BY expires_at ASC NULLS LAST, id ASC
+          FOR UPDATE`,
+        [input.tenantId, input.endUserId],
       );
-      if (r.rows.length > 0) remaining = Number(r.rows[0].remaining_tokens);
+
+      let need = chargedTokens;
+      for (const s of subs.rows) {
+        if (need <= 0) break;
+        const have = Number(s.remaining_tokens);
+        const take = Math.min(need, have);
+        const r = await client.query<{ remaining_tokens: string }>(
+          `UPDATE subscription
+              SET remaining_tokens = GREATEST(0, remaining_tokens - $1)
+            WHERE id = $2 AND status = 'active'
+            RETURNING remaining_tokens`,
+          [take, s.id],
+        );
+        if (r.rows.length > 0) {
+          need -= take;
+          if (s.id === input.subscriptionId) {
+            originRemaining = Number(r.rows[0].remaining_tokens);
+          }
+        }
+      }
+
+      // If the origin sub wasn't in the active set (e.g. expired since
+      // auth-token check), report its row's current state for the response.
+      if (originRemaining == null && input.subscriptionId != null) {
+        const cur = await client.query<{ remaining_tokens: string }>(
+          `SELECT remaining_tokens FROM subscription WHERE id = $1`,
+          [input.subscriptionId],
+        );
+        if (cur.rows.length > 0) originRemaining = Number(cur.rows[0].remaining_tokens);
+      }
+    } else if (input.subscriptionId != null) {
+      // Status=failure or 0 tokens — still surface origin sub's remaining.
+      const cur = await client.query<{ remaining_tokens: string }>(
+        `SELECT remaining_tokens FROM subscription WHERE id = $1`,
+        [input.subscriptionId],
+      );
+      if (cur.rows.length > 0) originRemaining = Number(cur.rows[0].remaining_tokens);
     }
+
+    // Total remaining across active subs (post-debit) — surfaces in API
+    // response & dashboard so the user can see token_pack reserves.
+    const tot = await client.query<{ total: string }>(
+      `SELECT COALESCE(SUM(remaining_tokens), 0)::text AS total
+         FROM subscription
+        WHERE tenant_id = $1 AND end_user_id = $2 AND status = 'active'
+          AND (expires_at IS NULL OR expires_at > NOW())`,
+      [input.tenantId, input.endUserId],
+    );
+    totalRemaining = Number(tot.rows[0]?.total ?? 0);
 
     await client.query(
       `INSERT INTO usage_log
@@ -428,8 +508,42 @@ export async function recordUsage(input: {
       ],
     );
 
-    return { remaining_tokens: remaining, charged_tokens: chargedTokens };
+    return {
+      remaining_tokens: originRemaining,
+      charged_tokens: chargedTokens,
+      total_remaining_tokens: totalRemaining,
+    };
   });
+}
+
+/**
+ * Read total active tokens across a user's subscriptions split by billing
+ * type. Backs /storefront/balance and end_user dashboard panel.
+ */
+export async function getEndUserTokenBalance(
+  tenantId: number,
+  endUserId: number,
+): Promise<{ subscription_tokens: number; token_pack_tokens: number; total: number }> {
+  const rows = await query<{ billing_type: string | null; sum: string }>(
+    `SELECT COALESCE(p.billing_type, 'subscription') AS billing_type,
+            COALESCE(SUM(s.remaining_tokens), 0)::text AS sum
+       FROM subscription s
+       LEFT JOIN plans p ON p.id = s.plan_id
+      WHERE s.tenant_id = $1
+        AND s.end_user_id = $2
+        AND s.status = 'active'
+        AND (s.expires_at IS NULL OR s.expires_at > NOW())
+      GROUP BY COALESCE(p.billing_type, 'subscription')`,
+    [tenantId, endUserId],
+  );
+  let sub = 0;
+  let pack = 0;
+  for (const r of rows) {
+    const v = Number(r.sum);
+    if (r.billing_type === 'token_pack') pack += v;
+    else sub += v;
+  }
+  return { subscription_tokens: sub, token_pack_tokens: pack, total: sub + pack };
 }
 
 /**

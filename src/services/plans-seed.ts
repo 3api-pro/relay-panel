@@ -19,13 +19,23 @@ interface PlanSeed {
   price_cents: number;
   wholesale_face_value_cents: number;
   sort_order: number;
+  // v0.3 dual-billing. Default 'subscription' so existing call sites keep
+  // working unchanged.
+  billing_type?: 'subscription' | 'token_pack';
 }
 
+// 4 monthly subscriptions (v0.2 default lineup) + 2 token packs (v0.3).
+// Token packs use period_days = 3650 (~10y) — semantically "permanent",
+// drains via remaining_tokens countdown.
 const DEFAULT_PLANS: PlanSeed[] = [
-  { name: 'Pro',     slug: 'pro',    period_days: 30, quota_tokens:   5_000_000, price_cents:  2900, wholesale_face_value_cents:  2900, sort_order: 10 },
-  { name: 'Max 5x',  slug: 'max5x',  period_days: 30, quota_tokens:  25_000_000, price_cents: 14900, wholesale_face_value_cents: 14900, sort_order: 20 },
-  { name: 'Max 20x', slug: 'max20x', period_days: 30, quota_tokens: 100_000_000, price_cents: 29900, wholesale_face_value_cents: 29900, sort_order: 30 },
-  { name: 'Ultra',   slug: 'ultra',  period_days: 30, quota_tokens: 300_000_000, price_cents: 59900, wholesale_face_value_cents: 59900, sort_order: 40 },
+  // --- subscription (monthly recurring, period resets each order) ---------
+  { name: 'Pro',     slug: 'pro',    period_days: 30,   quota_tokens:   5_000_000, price_cents:  2900, wholesale_face_value_cents:  2900, sort_order: 10, billing_type: 'subscription' },
+  { name: 'Max 5x',  slug: 'max5x',  period_days: 30,   quota_tokens:  25_000_000, price_cents: 14900, wholesale_face_value_cents: 14900, sort_order: 20, billing_type: 'subscription' },
+  { name: 'Max 20x', slug: 'max20x', period_days: 30,   quota_tokens: 100_000_000, price_cents: 29900, wholesale_face_value_cents: 29900, sort_order: 30, billing_type: 'subscription' },
+  { name: 'Ultra',   slug: 'ultra',  period_days: 30,   quota_tokens: 300_000_000, price_cents: 59900, wholesale_face_value_cents: 59900, sort_order: 40, billing_type: 'subscription' },
+  // --- token_pack (one-shot, no monthly cap; ~10y "permanent" expiry) ----
+  { name: '10M Tokens 体验包', slug: 'pack-10m', period_days: 3650, quota_tokens:  10_000_000, price_cents: 1000, wholesale_face_value_cents: 1000, sort_order: 110, billing_type: 'token_pack' },
+  { name: '50M Tokens 套餐',   slug: 'pack-50m', period_days: 3650, quota_tokens:  50_000_000, price_cents: 4500, wholesale_face_value_cents: 4500, sort_order: 120, billing_type: 'token_pack' },
 ];
 
 const DEFAULT_ALLOWED_MODELS = ['claude-*', 'claude-sonnet-*', 'claude-opus-*', 'claude-haiku-*'];
@@ -39,8 +49,9 @@ export async function seedPlansForTenant(
     const r = await client.query<{ id: number }>(
       `INSERT INTO plans
          (tenant_id, name, slug, period_days, quota_tokens, price_cents,
-          wholesale_face_value_cents, allowed_models, enabled, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, TRUE, $9)
+          wholesale_face_value_cents, allowed_models, enabled, sort_order,
+          billing_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, TRUE, $9, $10)
        ON CONFLICT (tenant_id, slug) DO NOTHING
        RETURNING id`,
       [
@@ -53,6 +64,7 @@ export async function seedPlansForTenant(
         p.wholesale_face_value_cents,
         JSON.stringify(DEFAULT_ALLOWED_MODELS),
         p.sort_order,
+        p.billing_type ?? 'subscription',
       ],
     );
     if (r.rows.length > 0) inserted++;

@@ -100,6 +100,13 @@ export interface Plan {
   price_cents: number;
   allowed_models: string[] | string | null;
   sort_order: number;
+  billing_type?: 'subscription' | 'token_pack';
+}
+
+export interface Balance {
+  subscription_tokens: number;
+  token_pack_tokens: number;
+  total: number;
 }
 
 // --- Check-in (v0.2) ---------------------------------------------------------
@@ -165,6 +172,7 @@ export const store = {
   listOrders: () => storeFetch<{ data: any[] }>('/orders'),
   getOrder:   (id: string | number) => storeFetch(`/orders/${id}`),
   subscriptions: () => storeFetch<any>('/subscriptions'),
+  balance: () => storeFetch<Balance>('/balance'),
 
   listKeys: () => storeFetch<{ data: any[] }>('/keys'),
   createKey: (name: string, model_allowlist?: string[]) =>

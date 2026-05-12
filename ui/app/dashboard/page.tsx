@@ -181,12 +181,23 @@ function Card({ label, value }: { label: string; value: string }) {
 function StoreDashboardHome() {
   const [sub, setSub] = useState<any>(null);
   const [subErr, setSubErr] = useState<string | null>(null);
+  const [bal, setBal] = useState<{ subscription_tokens: number; token_pack_tokens: number; total: number } | null>(null);
 
   useEffect(() => {
     store.subscriptions()
       .then((r) => setSub(r))
       .catch((e) => setSubErr(e?.message || '加载失败'));
+    // v0.3 dual-billing balance — fire-and-forget; failure leaves bal=null
+    // and falls back to the legacy single-sub remaining_tokens panel.
+    store.balance()
+      .then((b) => setBal(b))
+      .catch(() => {});
   }, []);
+
+  // Surface the primary subscription (sub_type) and aggregate balance (bal).
+  // If we have bal, show the 3-card dual-billing panel; otherwise legacy 3-card.
+  const subs: any[] = Array.isArray(sub?.data) ? sub.data : [];
+  const primarySub = subs.find((s) => s.is_primary) || subs[0] || null;
 
   return (
     <AuthGuard>
@@ -195,24 +206,57 @@ function StoreDashboardHome() {
         <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6">
           <DashboardNav />
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <SummaryCard
-                label="当前套餐"
-                value={sub?.subscription?.plan_name ? String(sub.subscription.plan_name) : (sub === null ? '加载中…' : '未订阅')}
-              />
-              <SummaryCard
-                label="剩余 tokens"
-                value={sub?.subscription?.remaining_tokens != null
-                  ? fmtTokens(Number(sub.subscription.remaining_tokens))
-                  : '—'}
-              />
-              <SummaryCard
-                label="到期时间"
-                value={sub?.subscription?.expires_at
-                  ? new Date(sub.subscription.expires_at).toLocaleDateString('zh-CN')
-                  : '—'}
-              />
-            </div>
+            {bal ? (
+              // v0.3 dual-billing balance panel
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-medium text-muted-foreground">Token 余额</h2>
+                  <Link href="/pricing" className="text-xs text-brand-700 hover:underline">
+                    + 购买更多
+                  </Link>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <BalanceCard
+                    label="订阅余额"
+                    tone="emerald"
+                    value={fmtTokens(bal.subscription_tokens)}
+                    sub={primarySub?.plan_name ? `当前: ${primarySub.plan_name}` : '未订阅'}
+                  />
+                  <BalanceCard
+                    label="Token 套餐"
+                    tone="amber"
+                    value={fmtTokens(bal.token_pack_tokens)}
+                    sub={bal.token_pack_tokens > 0 ? '永久有效' : '无 Token 包'}
+                  />
+                  <BalanceCard
+                    label="可用总额"
+                    tone="brand"
+                    value={fmtTokens(bal.total)}
+                    sub={`订阅 + 套餐`}
+                  />
+                </div>
+              </div>
+            ) : (
+              // legacy fallback (no bal endpoint yet)
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <SummaryCard
+                  label="当前套餐"
+                  value={primarySub?.plan_name ? String(primarySub.plan_name) : (sub === null ? '加载中…' : '未订阅')}
+                />
+                <SummaryCard
+                  label="剩余 tokens"
+                  value={primarySub?.remaining_tokens != null
+                    ? fmtTokens(Number(primarySub.remaining_tokens))
+                    : '—'}
+                />
+                <SummaryCard
+                  label="到期时间"
+                  value={primarySub?.expires_at
+                    ? new Date(primarySub.expires_at).toLocaleDateString('zh-CN')
+                    : '—'}
+                />
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <CheckInWidget />
@@ -226,6 +270,40 @@ function StoreDashboardHome() {
         </div>
       </div>
     </AuthGuard>
+  );
+}
+
+function BalanceCard({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  tone: 'emerald' | 'amber' | 'brand';
+}) {
+  const ring =
+    tone === 'emerald'
+      ? 'ring-1 ring-emerald-200 bg-emerald-50/40'
+      : tone === 'amber'
+      ? 'ring-1 ring-amber-200 bg-amber-50/40'
+      : 'ring-1 ring-brand-200 bg-brand-50/40';
+  const accent =
+    tone === 'emerald'
+      ? 'text-emerald-700'
+      : tone === 'amber'
+      ? 'text-amber-700'
+      : 'text-brand-700';
+  return (
+    <div className={`bg-card rounded-lg border border-border p-4 ${ring}`}>
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-muted-foreground">{label}</div>
+      </div>
+      <div className={`text-2xl font-semibold mt-1 ${accent}`}>{value}</div>
+      <div className="text-xs text-muted-foreground mt-1 truncate" title={sub}>{sub}</div>
+    </div>
   );
 }
 

@@ -64,22 +64,30 @@ export async function authToken(
 
     // Subscription-bound token: check remaining_tokens + expiry.
     // Legacy token (no subscription_id): fall back to cents-based check.
+    //
+    // v0.3 dual-billing: a token may be minted against a (now-empty)
+    // monthly subscription while the user also holds a non-empty token
+    // pack. So the pre-debit gate sums remaining_tokens across ALL active
+    // non-expired subs for the end_user instead of inspecting only the
+    // bound row. Debit logic in order-engine.recordUsage walks the same
+    // set FIFO-by-expiry.
     if (tok.subscription_id) {
-      if (tok.sub_status !== 'active') {
+      const aggRow = await query<{ total_remaining: string; any_active: string }>(
+        `SELECT COALESCE(SUM(remaining_tokens), 0)::text AS total_remaining,
+                COUNT(*)::text AS any_active
+           FROM subscription
+          WHERE tenant_id = $1
+            AND end_user_id = $2
+            AND status = 'active'
+            AND (expires_at IS NULL OR expires_at > NOW())
+            AND remaining_tokens > 0`,
+        [req.tenantId, tok.end_user_id],
+      );
+      const totalRemaining = Number(aggRow[0]?.total_remaining ?? 0);
+      const anyActive = Number(aggRow[0]?.any_active ?? 0);
+      if (anyActive === 0 || totalRemaining <= 0) {
         res.status(402).json({
-          error: { type: 'insufficient_quota', message: 'Subscription is not active' },
-        });
-        return;
-      }
-      if (tok.sub_expires_at && new Date(tok.sub_expires_at).getTime() < Date.now()) {
-        res.status(402).json({
-          error: { type: 'insufficient_quota', message: 'Subscription expired' },
-        });
-        return;
-      }
-      if (Number(tok.sub_remaining_tokens ?? 0) <= 0) {
-        res.status(402).json({
-          error: { type: 'insufficient_quota', message: 'Subscription token quota exhausted' },
+          error: { type: 'insufficient_quota', message: 'No active subscription or token pack with remaining quota' },
         });
         return;
       }

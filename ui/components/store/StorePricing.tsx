@@ -18,19 +18,26 @@ export function StorePricing() {
       .catch((e) => setErr(e.message));
   }, []);
 
-  // Pick a "recommended" plan: roughly the middle one for visual centering.
-  const recommendedIdx = (() => {
-    if (!plans || plans.length === 0) return -1;
-    if (plans.length === 1) return 0;
-    if (plans.length >= 4) return 1;
-    return Math.floor(plans.length / 2);
+  // v0.3 dual-billing: split by billing_type.
+  const subPlans = (plans || []).filter(
+    (p) => (p.billing_type ?? 'subscription') === 'subscription',
+  );
+  const packPlans = (plans || []).filter((p) => p.billing_type === 'token_pack');
+
+  // "Recommended": middle-ish of subscription tier (token packs don't tag a
+  // recommended — they're add-ons).
+  const subRecommendedIdx = (() => {
+    if (subPlans.length === 0) return -1;
+    if (subPlans.length === 1) return 0;
+    if (subPlans.length >= 4) return 1;
+    return Math.floor(subPlans.length / 2);
   })();
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
       <div className="text-center max-w-2xl mx-auto">
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">选择你的套餐</h1>
-        <p className="mt-3 text-muted-foreground">按月订阅, 无隐藏费用。可随时升级 / 取消。</p>
+        <p className="mt-3 text-muted-foreground">月度订阅或一次性 Token 套餐，按需选择。</p>
       </div>
 
       {err && (
@@ -51,12 +58,34 @@ export function StorePricing() {
         </div>
       )}
 
-      {plans && plans.length > 0 && (
-        <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {plans.map((p, i) => (
-            <PlanCard key={p.id} plan={p} recommended={i === recommendedIdx} />
-          ))}
-        </div>
+      {/* --- 月度订阅 -------------------------------------------------- */}
+      {subPlans.length > 0 && (
+        <section className="mt-12">
+          <div className="flex items-baseline justify-between mb-5">
+            <h2 className="text-xl font-semibold text-foreground">月度订阅</h2>
+            <p className="text-sm text-muted-foreground hidden sm:block">按周期续费 · 适合日常稳定使用</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {subPlans.map((p, i) => (
+              <PlanCard key={p.id} plan={p} recommended={i === subRecommendedIdx} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* --- Token 套餐 ------------------------------------------------ */}
+      {packPlans.length > 0 && (
+        <section className="mt-12">
+          <div className="flex items-baseline justify-between mb-5">
+            <h2 className="text-xl font-semibold text-foreground">Token 套餐</h2>
+            <p className="text-sm text-muted-foreground hidden sm:block">一次购买 · 灵活按需 · 用完即止</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {packPlans.map((p) => (
+              <PlanCard key={p.id} plan={p} />
+            ))}
+          </div>
+        </section>
       )}
 
       <div className="mt-16 max-w-3xl mx-auto">
