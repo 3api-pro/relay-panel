@@ -17,6 +17,7 @@ import { Footer } from '@/components/store/Footer';
 import { AnnouncementBar } from '@/components/store/AnnouncementBar';
 import { StorePricing } from '@/components/store/StorePricing';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { useTranslations } from '@/lib/i18n';
 
 /* ------------------------------------------------------------------ */
@@ -68,14 +69,22 @@ function MarketingPricing() {
   const t = useTranslations('storefront.marketing_pricing');
   return (
     <main className="min-h-screen flex flex-col bg-background" data-marketing-pricing>
-      <header className="border-b border-border bg-card">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="text-xl font-semibold text-brand-700">3API Panel</Link>
-          <nav className="flex items-center gap-4 text-sm">
-            <Link href="/pricing" className="text-brand-700 font-medium">{t('nav_pricing')}</Link>
-            <Link href="/login"   className="hover:text-brand-700">{t('nav_login')}</Link>
-            <Link href="/signup"  className="px-3 py-1.5 rounded-md bg-brand-600 text-white hover:bg-brand-700">{t('nav_signup')}</Link>
-            <LanguageSwitcher />
+      <header className="sticky top-0 z-50 border-b border-border bg-card/85 backdrop-blur supports-[backdrop-filter]:bg-card/70">
+        <div className="max-w-6xl mx-auto px-6 py-3.5 flex items-center justify-between gap-4">
+          <Link href="/" className="flex items-center font-semibold text-foreground text-base">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-teal-600 to-teal-400 text-white text-xs font-bold mr-2.5">3</span>
+            3API Panel
+          </Link>
+          <nav className="flex items-center gap-0.5 text-sm">
+            <Link href="/pricing" className="px-2.5 py-2 text-foreground rounded-md hover:bg-accent transition-colors">{t('nav_pricing')}</Link>
+            <a href="https://github.com/3api-pro/relay-panel#readme" target="_blank" rel="noopener" className="px-2.5 py-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-accent transition-colors hidden sm:inline-block">{t('nav_docs')}</a>
+            <a href="https://github.com/3api-pro/relay-panel" target="_blank" rel="noopener" className="px-2.5 py-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-accent transition-colors hidden sm:inline-block">GitHub</a>
+            <Link href="/login" className="px-2.5 py-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-accent transition-colors">{t('nav_login')}</Link>
+            <Link href="/create" className="ml-1.5 px-3.5 py-2 rounded-md bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 transition-colors">{t('nav_signup')}</Link>
+            <span className="inline-flex items-center gap-0.5 ml-1.5">
+              <LanguageSwitcher />
+              <ThemeToggle />
+            </span>
           </nav>
         </div>
       </header>
@@ -180,84 +189,34 @@ function MarketingPricing() {
         </div>
       </section>
 
-      <section className="border-t border-border bg-muted/30">
-        <div className="max-w-6xl mx-auto px-6 py-16">
-          <h2 className="text-2xl font-semibold text-foreground">和现有方案对比</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            摘自 <Link href="https://github.com/3api-pro/3api-relay-panel/blob/main/docs/COMPARISON.md" className="underline" target="_blank" rel="noopener">docs/COMPARISON.md</Link>，完整 25 行矩阵看仓库。
-          </p>
-          <div className="mt-6 overflow-x-auto">
-            <table className="min-w-full text-sm border border-border rounded-lg overflow-hidden bg-card">
-              <thead>
-                <tr className="text-left text-muted-foreground border-b border-border">
-                  <th className="py-3 px-4 font-medium">能力</th>
-                  <th className="py-3 px-4 font-medium">3api / relay-panel</th>
-                  <th className="py-3 px-4 font-medium">new-api</th>
-                  <th className="py-3 px-4 font-medium">sub2api</th>
-                </tr>
-              </thead>
-              <tbody className="text-foreground">
-                <tr className="border-b border-border/50">
-                  <td className="py-3 px-4">多租户 SaaS-ready</td>
-                  <td className="py-3 px-4 font-medium">是</td>
-                  <td className="py-3 px-4 text-muted-foreground">否（单租户）</td>
-                  <td className="py-3 px-4 text-muted-foreground">否</td>
-                </tr>
-                <tr className="border-b border-border/50">
-                  <td className="py-3 px-4">每个分销开独立子域</td>
-                  <td className="py-3 px-4 font-medium">是 (Caddy on-demand TLS)</td>
-                  <td className="py-3 px-4 text-muted-foreground">否</td>
-                  <td className="py-3 px-4 text-muted-foreground">否</td>
-                </tr>
-                <tr className="border-b border-border/50">
-                  <td className="py-3 px-4">内置上游额度池</td>
-                  <td className="py-3 px-4 font-medium">是 (api.llmapi.pro/wholesale)</td>
-                  <td className="py-3 px-4 text-muted-foreground">否（要自配）</td>
-                  <td className="py-3 px-4">建议自配</td>
-                </tr>
-                <tr className="border-b border-border/50">
-                  <td className="py-3 px-4">订阅 + Token 双轨计费</td>
-                  <td className="py-3 px-4 font-medium">是</td>
-                  <td className="py-3 px-4">部分</td>
-                  <td className="py-3 px-4">是</td>
-                </tr>
-                <tr>
-                  <td className="py-3 px-4">技术栈</td>
-                  <td className="py-3 px-4">TypeScript + Postgres</td>
-                  <td className="py-3 px-4 text-muted-foreground">Go + Postgres/MySQL</td>
-                  <td className="py-3 px-4 text-muted-foreground">Go + Postgres</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+      {/* Second compare table removed in v0.8.4 — was a duplicate of the
+          i18n'd one above; kept causing inconsistent terminology and didn't
+          add new information. */}
 
       <section className="max-w-3xl mx-auto w-full px-6 py-16">
         <h2 className="text-2xl font-semibold text-foreground">常见问题</h2>
-        <FAQ q="多久能开起来？">
-          注册账号 + 配置店铺名/Logo/收款渠道，5-10 分钟可上线。
-          可以先用默认 subdomain（<code className="px-1 py-0.5 bg-muted rounded text-xs">{`{slug}.3api.pro`}</code>），后面再换自定义域名（Caddy on-demand TLS 自动签）。
+        <FAQ q="多久可以上线？">
+          创建账户后填入站点名、Logo、收款渠道，约 5–10 分钟即可对外提供服务。可先使用默认子域名
+          (<code className="px-1 py-0.5 bg-muted rounded text-xs">{`{slug}.3api.pro`}</code>)
+          ，后续在管理后台绑定自定义域名（自动签发并续期 TLS 证书）。
         </FAQ>
-        <FAQ q="上游怎么保证不挂？">
-          平台维护多 base 上游池（Anthropic 官方 / Claude Code 兼容多通道），任一通道挂了自动 failover。
-          挂的不是中转，是上游基座。我们做的就是把 base 切换的代价从客户身上拿掉。
+        <FAQ q="上游稳定性如何保障？">
+          平台维护多通道上游池（Anthropic 官方 + Claude Code 兼容多通道），任一通道异常将自动 failover
+          到可用通道。base 切换由平台承担，对终端用户透明。
         </FAQ>
-        <FAQ q="收款方式？">
-          内置支付宝扫码 / USDT-TRC20 / USDT-ERC20；v0.2 接入 Stripe。账款直接进站长的收款账户，平台不过手。
+        <FAQ q="支持哪些收款方式？">
+          内置支付宝扫码、USDT-TRC20 / USDT-ERC20。Stripe 接入将在后续版本提供。款项直接结算至运营方账户，平台不过手。
         </FAQ>
-        <FAQ q="我能自由修改套餐价格吗？">
-          完全可以。后台 / Plans 任意改名字、价格、token 额度、模型 allowlist。
-          face value 是平台进货价，零售价你说了算。
+        <FAQ q="可以自定义套餐价格吗？">
+          可以。管理后台 → 套餐 可调整名称、价格、Token 额度、模型 allowlist。基础价为平台批发价，对外零售价由运营方自定。
         </FAQ>
-        <FAQ q="自定义域名怎么接？">
-          站长在后台填入自己的域名 → 把 DNS A 记录指向 3api.pro 服务 IP → Caddy 自动签证书。
-          整个过程无需登录 Cloudflare，无需手贴证书。
+        <FAQ q="如何接入自定义域名？">
+          管理后台填入域名，将 DNS A 记录指向 3api.pro 的服务 IP，Caddy 将自动签发并续期 TLS 证书，无需手动配置。
         </FAQ>
-        <FAQ q="我可以同时用 llmapi 推荐上游 + 自己的 key (BYOK) 吗？">
-          可以。后台 Channels 里加一个 BYOK channel (粘贴你的 Anthropic / OpenAI key), 给它设 priority。
-          系统按 priority + 模型 allowlist 选最便宜的通道；任一通道失败自动 failover 到下一个。
-          推荐策略：BYOK 走小流量降本, llmapi 批发兜底高峰。</FAQ>
+        <FAQ q="可以同时使用平台批发上游与自有 key (BYOK) 吗？">
+          可以。在「上游 Channel」新增一个 BYOK channel（填入自有 Anthropic / OpenAI key）并设置优先级。
+          系统按优先级 + 模型 allowlist 选择通道，单通道失败时自动 failover 至下一通道。
+        </FAQ>
       </section>
 
       <footer className="border-t border-border bg-card mt-auto">

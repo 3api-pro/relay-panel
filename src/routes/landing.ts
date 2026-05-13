@@ -5,6 +5,8 @@
  *
  * Self-contained HTML — no asset pipeline. Bilingual (zh + en) and
  * dark-mode aware via the inline boot script + data-i18n attributes.
+ * Language switcher is a dropdown menu — designed to extend to more
+ * locales by adding entries to SUPPORTED_LOCALES + STRINGS dicts.
  */
 import { Router, Request, Response } from 'express';
 import { config } from '../config';
@@ -18,7 +20,7 @@ const HTML = `<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title data-i18n="meta.title">3API Panel — 为团队搭建 Claude 兼容 API 中转站</title>
 <meta name="description" data-i18n-attr="content" data-i18n="meta.description" content="面向开发者与团队的 Claude 兼容 API 中转平台。内置订阅 / Token 计费、多租户后台、上游路由与 BYOK。开源 MIT。">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230d9488'/%3E%3Ctext x='16' y='22' text-anchor='middle' fill='white' font-family='system-ui' font-weight='700' font-size='14'%3E3%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d9488'/%3E%3Ctext x='16' y='22' text-anchor='middle' fill='white' font-family='system-ui' font-weight='700' font-size='15'%3E3%3C/text%3E%3C/svg%3E">
 <script>
 // Bootstrap theme + lang BEFORE first paint to avoid FOUC.
 (function(){
@@ -51,39 +53,57 @@ const HTML = `<!doctype html>
   :root, html.light {
     --ink: #0b1220; --ink-soft: #1e293b; --mute: #475569; --mute-2: #64748b;
     --line: #e2e8f0; --line-strong: #cbd5e1;
-    --accent: #0d9488; --accent-2: #0f766e; --accent-soft: rgba(13,148,136,0.10);
+    --accent: #0d9488; --accent-2: #0f766e; --accent-3: #14b8a6; --accent-soft: rgba(13,148,136,0.10);
     --bg: #fafbfc; --bg-elev: #f1f5f9; --surface: #ffffff;
     --btn-ghost-bg: #ffffff; --shadow-soft: 0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -16px rgba(15,23,42,0.18);
+    --shadow-mockup: 0 12px 24px -12px rgba(15,23,42,0.20), 0 32px 64px -32px rgba(15,23,42,0.30);
     --hero-glow: radial-gradient(circle at 50% -20%, rgba(13,148,136,0.10), transparent 55%);
+    --chrome-bg: #f1f5f9; --chrome-border: #e2e8f0;
+    --good: #059669; --bad: #dc2626;
   }
   html.dark {
     --ink: #e2e8f0; --ink-soft: #cbd5e1; --mute: #94a3b8; --mute-2: #64748b;
     --line: #1f2937; --line-strong: #334155;
-    --accent: #14b8a6; --accent-2: #2dd4bf; --accent-soft: rgba(20,184,166,0.14);
+    --accent: #14b8a6; --accent-2: #2dd4bf; --accent-3: #5eead4; --accent-soft: rgba(20,184,166,0.14);
     --bg: #07101f; --bg-elev: #0f1a2d; --surface: #0e1729;
     --btn-ghost-bg: #0e1729; --shadow-soft: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px -20px rgba(0,0,0,0.75);
+    --shadow-mockup: 0 12px 32px -8px rgba(0,0,0,0.50), 0 32px 80px -32px rgba(0,0,0,0.65);
     --hero-glow: radial-gradient(circle at 50% -10%, rgba(20,184,166,0.18), transparent 55%);
+    --chrome-bg: #111a2e; --chrome-border: #1f2937;
+    --good: #34d399; --bad: #f87171;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; transition: background-color .2s ease, color .2s ease; }
   a { color: inherit; text-decoration: none; }
   .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
 
-  /* Header */
+  /* Header — shared visual language with /pricing */
   header { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 50; backdrop-filter: saturate(180%) blur(8px); }
   header .row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; position: relative; gap: 12px; }
   header .brand { display: inline-flex; align-items: center; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; color: var(--ink); }
-  header .brand .mark { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; font-size: 12px; font-weight: 700; margin-right: 10px; }
-  header nav { display: flex; align-items: center; gap: 4px; }
-  header nav a.link { font-size: 14px; color: var(--mute); padding: 8px 10px; border-radius: 6px; }
+  header .brand .mark { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 7px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; font-size: 13px; font-weight: 700; margin-right: 10px; }
+  header nav { display: flex; align-items: center; gap: 2px; }
+  header nav a.link { font-size: 14px; color: var(--mute); padding: 8px 10px; border-radius: 7px; transition: color .12s, background-color .12s; }
   header nav a.link:hover { color: var(--ink); background: var(--bg-elev); }
-  header nav .cta { background: var(--accent); color: #fff; padding: 8px 14px; border-radius: 7px; font-size: 14px; font-weight: 500; margin-left: 6px; }
+  header nav .cta { background: var(--accent); color: #fff; padding: 8px 14px; border-radius: 7px; font-size: 14px; font-weight: 500; margin-left: 6px; transition: background-color .12s; }
   header nav .cta:hover { background: var(--accent-2); color: #fff; }
-  .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 7px; color: var(--mute); cursor: pointer; background: transparent; border: 1px solid transparent; }
-  .icon-btn:hover { color: var(--ink); background: var(--bg-elev); border-color: var(--line); }
+  .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 7px; color: var(--mute); cursor: pointer; background: transparent; border: 1px solid transparent; padding: 0; font: inherit; }
+  .icon-btn:hover { color: var(--ink); background: var(--bg-elev); }
   .icon-btn svg { width: 17px; height: 17px; }
   html.light .icon-btn .i-moon, html.dark .icon-btn .i-sun { display: inline-block; }
   html.light .icon-btn .i-sun, html.dark .icon-btn .i-moon { display: none; }
+
+  /* Menu (lang dropdown) — extensible to N locales */
+  .menu { position: relative; }
+  .menu-list { position: absolute; top: calc(100% + 6px); right: 0; min-width: 160px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-soft); padding: 4px; list-style: none; margin: 0; opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .12s ease, transform .12s ease, visibility .12s; z-index: 100; }
+  .menu.open .menu-list { opacity: 1; visibility: visible; transform: translateY(0); }
+  .menu-item { display: flex; align-items: center; width: 100%; padding: 8px 12px; background: transparent; border: 0; font: inherit; font-size: 14px; color: var(--ink); cursor: pointer; border-radius: 6px; text-align: left; }
+  .menu-item:hover { background: var(--bg-elev); }
+  .menu-item[aria-current="true"] { color: var(--accent-2); font-weight: 500; }
+  .menu-item[aria-current="true"]::after { content: "✓"; margin-left: auto; }
+  .menu-section { font-size: 11px; color: var(--mute-2); text-transform: uppercase; letter-spacing: 0.06em; padding: 8px 12px 4px; font-weight: 600; }
+
+  /* Mobile hamburger */
   .nav-toggle { display: none; }
   .nav-burger { display: none; flex-direction: column; gap: 4px; cursor: pointer; padding: 8px; margin: -8px; border-radius: 6px; }
   .nav-burger:hover { background: var(--bg-elev); }
@@ -91,11 +111,12 @@ const HTML = `<!doctype html>
   @media (max-width: 760px) {
     .nav-burger { display: flex; order: 3; }
     header .row { flex-wrap: wrap; }
-    header nav { display: none; position: absolute; top: 56px; right: 0; left: 0; flex-direction: column; padding: 8px 24px 16px; background: var(--surface); border-bottom: 1px solid var(--line); box-shadow: var(--shadow-soft); z-index: 20; align-items: stretch; }
-    header nav a.link { padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 15px; border-radius: 0; }
+    header nav { display: none; position: absolute; top: 60px; right: 0; left: 0; flex-direction: column; padding: 8px 24px 16px; background: var(--surface); border-bottom: 1px solid var(--line); box-shadow: var(--shadow-soft); z-index: 20; align-items: stretch; gap: 0; }
+    header nav a.link { padding: 12px 4px; border-bottom: 1px solid var(--line); font-size: 15px; border-radius: 0; }
     header nav a.link:last-of-type { border-bottom: 0; }
-    header nav .cta { display: inline-block; align-self: flex-start; margin: 8px 0 0; padding: 10px 18px; }
-    header nav .icon-btn { margin: 8px 8px 0 0; align-self: flex-start; }
+    header nav .cta { display: inline-block; align-self: flex-start; margin: 8px 4px 0; padding: 10px 18px; }
+    header nav .icon-buttons { display: flex; gap: 4px; margin-top: 8px; padding-left: 4px; }
+    .menu-list { right: auto; left: 0; }
     .nav-toggle:checked ~ nav { display: flex; }
     .nav-toggle:checked ~ .nav-burger span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
     .nav-toggle:checked ~ .nav-burger span:nth-child(2) { opacity: 0; }
@@ -103,7 +124,7 @@ const HTML = `<!doctype html>
   }
 
   /* Hero */
-  .hero { position: relative; padding: 110px 0 90px; text-align: center; overflow: hidden; }
+  .hero { position: relative; padding: 100px 0 40px; text-align: center; overflow: hidden; }
   .hero::before { content: ""; position: absolute; inset: 0; background: var(--hero-glow); pointer-events: none; }
   .hero > .wrap { position: relative; }
   .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; color: var(--mute); background: var(--surface); margin-bottom: 28px; }
@@ -119,55 +140,84 @@ const HTML = `<!doctype html>
   .btn.ghost { border: 1px solid var(--line-strong); background: var(--btn-ghost-bg); color: var(--ink); }
   .btn.ghost:hover { border-color: var(--accent); color: var(--accent-2); }
   @media (max-width: 760px) {
-    .hero { padding: 70px 0 60px; }
-    .hero h1 { font-size: 34px; line-height: 1.18; }
+    .hero { padding: 60px 0 24px; }
+    .hero h1 { font-size: 32px; line-height: 1.18; }
     .hero p.sub { font-size: 16px; margin-top: 18px; padding: 0 4px; }
     .hero .ctas { margin-top: 28px; }
     .btn { padding: 11px 18px; font-size: 14px; }
   }
 
+  /* One-click trio (一键 X) — featured row directly under hero */
+  .trio { padding: 56px 0 80px; }
+  .trio .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  @media (max-width: 900px) { .trio .grid-3 { grid-template-columns: 1fr; } }
+  .trio-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px; transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease; position: relative; overflow: hidden; }
+  .trio-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-soft); }
+  .trio-card .num { position: absolute; top: 18px; right: 22px; font-size: 36px; font-weight: 800; color: var(--accent); opacity: 0.16; letter-spacing: -0.04em; }
+  .trio-card .ic { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 11px; background: var(--accent-soft); color: var(--accent); margin-bottom: 16px; }
+  .trio-card .ic svg { width: 22px; height: 22px; }
+  .trio-card h3 { margin: 0 0 10px; font-size: 19px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+  .trio-card p { margin: 0; color: var(--mute); font-size: 14px; line-height: 1.65; }
+
+  /* Admin preview mockup — CSS-only browser chrome with stylized dashboard */
+  .preview { padding: 40px 0 100px; }
+  .preview .frame { max-width: 1000px; margin: 0 auto; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); overflow: hidden; box-shadow: var(--shadow-mockup); }
+  .preview .chrome { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: var(--chrome-bg); border-bottom: 1px solid var(--chrome-border); }
+  .preview .chrome .dot { width: 11px; height: 11px; border-radius: 50%; background: #cbd5e1; }
+  html.dark .preview .chrome .dot { background: #334155; }
+  .preview .chrome .addr { margin-left: 12px; font-size: 12px; color: var(--mute); padding: 4px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+  .mock-body { display: grid; grid-template-columns: 180px 1fr; min-height: 360px; background: var(--bg-elev); }
+  @media (max-width: 760px) { .mock-body { grid-template-columns: 1fr; min-height: auto; } .mock-side { display: none; } }
+  .mock-side { border-right: 1px solid var(--line); padding: 20px 14px; background: var(--surface); }
+  .mock-side .ms-logo { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 18px; padding: 0 6px; display: inline-flex; align-items: center; }
+  .mock-side .ms-logo::before { content: "3"; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; font-size: 11px; margin-right: 8px; }
+  .mock-side ul { list-style: none; padding: 0; margin: 0; }
+  .mock-side li { padding: 7px 10px; font-size: 12.5px; color: var(--mute); border-radius: 6px; margin-bottom: 2px; display: flex; align-items: center; gap: 8px; }
+  .mock-side li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.4; }
+  .mock-side li.active { background: var(--accent-soft); color: var(--accent-2); font-weight: 500; }
+  .mock-side li.active::before { opacity: 1; }
+  .mock-main { padding: 24px; }
+  .mock-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 600px) { .mock-stats { grid-template-columns: 1fr 1fr; } }
+  .mock-stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .mock-stat .label { font-size: 11px; color: var(--mute); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+  .mock-stat .value { font-size: 22px; font-weight: 700; color: var(--ink); margin: 4px 0 2px; letter-spacing: -0.02em; }
+  .mock-stat .delta { font-size: 11px; color: var(--good); font-weight: 500; display: inline-flex; align-items: center; gap: 3px; }
+  .mock-stat .delta::before { content: "▲"; font-size: 9px; }
+  .mock-chart { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .mock-chart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .mock-chart-head .title { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .mock-chart-head .badge { font-size: 10px; color: var(--accent-2); background: var(--accent-soft); padding: 3px 8px; border-radius: 999px; font-weight: 500; }
+  .mock-chart svg { width: 100%; height: 92px; color: var(--accent); display: block; }
+  .preview .caption { text-align: center; margin-top: 18px; font-size: 13px; color: var(--mute); }
+
   /* Sections */
-  section.feature, section.why, section.modes, section.final { padding: 80px 0; }
-  section.feature { border-top: 1px solid var(--line); }
+  section.modes, section.final { padding: 80px 0; }
   .section-head { text-align: center; margin: 0 auto 56px; max-width: 700px; }
   .section-head h2 { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 12px; color: var(--ink); }
   .section-head p { color: var(--mute); font-size: 16px; margin: 0; line-height: 1.55; }
 
-  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-  @media (max-width: 760px) { .grid-3 { grid-template-columns: 1fr; gap: 16px; } }
-
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px; transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease; }
-  .card:hover { border-color: var(--line-strong); transform: translateY(-2px); box-shadow: var(--shadow-soft); }
-  .card .ic { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); margin-bottom: 18px; }
-  .card .ic svg { width: 20px; height: 20px; }
-  .card h3 { margin: 0 0 8px; font-size: 17px; font-weight: 600; color: var(--ink); }
-  .card p { margin: 0; color: var(--mute); font-size: 14px; line-height: 1.65; }
-  .card code { background: var(--bg-elev); padding: 2px 6px; border-radius: 4px; font-size: 13px; color: var(--ink-soft); }
-
-  .why .card .kicker { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; color: var(--accent-2); text-transform: uppercase; margin-bottom: 12px; }
-
-  /* Compare */
+  /* Compare table */
   .modes { background: var(--bg-elev); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
   .compare-wrap { max-width: 820px; margin: 0 auto; }
   table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   th, td { padding: 14px 20px; text-align: left; border-bottom: 1px solid var(--line); font-size: 14px; color: var(--ink-soft); }
-  th { background: var(--bg-elev); font-weight: 600; color: var(--mute); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; }
+  th { background: var(--bg-elev); font-weight: 600; color: var(--mute); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
   th.cap-hosted { color: var(--accent-2); }
   tr:last-child td { border-bottom: 0; }
   td.label { color: var(--mute); }
-  @media (max-width: 760px) {
-    th, td { padding: 12px 14px; font-size: 13px; }
-  }
+  @media (max-width: 760px) { th, td { padding: 12px 14px; font-size: 13px; } }
 
   /* Final CTA */
   .final { text-align: center; }
   .final h2 { font-size: 36px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 14px; }
   .final p { color: var(--mute); font-size: 16px; margin: 0 0 32px; }
+  .final .ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
   @media (max-width: 760px) {
     .final h2 { font-size: 26px; }
-    section.feature, section.why, section.modes, section.final { padding: 60px 0; }
-    .section-head { margin-bottom: 36px; }
-    .section-head h2 { font-size: 26px; }
+    section.modes, section.final { padding: 56px 0; }
+    .section-head { margin-bottom: 32px; }
+    .section-head h2 { font-size: 24px; }
   }
 
   /* Footer */
@@ -193,13 +243,22 @@ const HTML = `<!doctype html>
       <a href="https://github.com/3api-pro/relay-panel" class="link">GitHub</a>
       <a href="/admin/login/" class="link" data-i18n="nav.signin">登录</a>
       <a href="/create/" class="cta" data-i18n="nav.cta">创建账户</a>
-      <button class="icon-btn" id="lang-toggle" type="button" data-i18n-attr="aria-label" data-i18n="nav.lang_label" aria-label="切换语言" title="EN / 中文">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/></svg>
-      </button>
-      <button class="icon-btn" id="theme-toggle" type="button" data-i18n-attr="aria-label" data-i18n="nav.theme_label" aria-label="切换主题" title="Light / Dark">
-        <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-        <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      </button>
+      <span class="icon-buttons" style="display:inline-flex;align-items:center;gap:2px;margin-left:6px;">
+        <div class="menu" id="lang-menu">
+          <button class="icon-btn menu-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="lang-menu-list" data-i18n-attr="aria-label" data-i18n="nav.lang_label" aria-label="切换语言" title="Language">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/></svg>
+          </button>
+          <!-- To add more locales: add a STRINGS.<code> dict + a <button> here with matching data-locale -->
+          <ul class="menu-list" id="lang-menu-list" role="menu">
+            <li role="none"><button class="menu-item" role="menuitem" data-locale="zh">中文</button></li>
+            <li role="none"><button class="menu-item" role="menuitem" data-locale="en">English</button></li>
+          </ul>
+        </div>
+        <button class="icon-btn" id="theme-toggle" type="button" data-i18n-attr="aria-label" data-i18n="nav.theme_label" aria-label="切换主题" title="Light / Dark">
+          <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </span>
     </nav>
   </div>
 </header>
@@ -218,55 +277,89 @@ const HTML = `<!doctype html>
   </div>
 </section>
 
-<section class="feature">
+<section class="trio">
   <div class="wrap">
-    <div class="section-head">
-      <h2 data-i18n="feat.title">核心能力</h2>
-      <p data-i18n="feat.subtitle">运营一个对外的 AI API 服务需要的核心环节，3API Panel 已经替你装好。</p>
-    </div>
     <div class="grid-3">
-      <div class="card">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
-        <h3 data-i18n="feat.card1.title">协议兼容</h3>
-        <p data-i18n="feat.card1.body">兼容 Anthropic Messages API。Claude Code、Cursor、Cline、Continue 等主流客户端直连即用，无需修改 SDK。</p>
+      <div class="trio-card">
+        <div class="num">01</div>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" x2="12" y1="22.08" y2="12"/></svg></div>
+        <h3 data-i18n="trio.deploy.title">一键部署</h3>
+        <p data-i18n="trio.deploy.body">在 3api.pro 注册即获托管账户，或拉取仓库通过 Docker Compose 自托管 — 两种方式同一份代码，可自由迁移。</p>
       </div>
-      <div class="card">
+      <div class="trio-card">
+        <div class="num">02</div>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+        <h3 data-i18n="trio.connect.title">一键接入</h3>
+        <p data-i18n="trio.connect.body">兼容 Anthropic Messages API，Claude Code、Cursor、Cline 等主流客户端直连即用。内置批发上游池，亦支持绑定自有 key (BYOK)。</p>
+      </div>
+      <div class="trio-card">
+        <div class="num">03</div>
         <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg></div>
-        <h3 data-i18n="feat.card2.title">完整计费</h3>
-        <p data-i18n="feat.card2.body">订阅、Token 套餐、每日签到、兑换码、Alipay / USDT 收款 — 业务运营所需的支付与额度环节全部内置。</p>
-      </div>
-      <div class="card">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18"/><path d="M3 6h18"/><path d="M3 18h18"/></svg></div>
-        <h3 data-i18n="feat.card3.title">上游可选</h3>
-        <p data-i18n="feat.card3.body">可使用平台维护的批发上游池，也可绑定自有 Anthropic / OpenAI key (BYOK)，按优先级与模型 allowlist 自动路由。</p>
+        <h3 data-i18n="trio.pay.title">一键支付</h3>
+        <p data-i18n="trio.pay.body">Alipay 扫码、USDT-TRC20 / ERC20 全套预置，款项直接结算至运营方账户，平台不过手。</p>
       </div>
     </div>
   </div>
 </section>
 
-<section class="why">
+<section class="preview">
   <div class="wrap">
-    <div class="section-head">
-      <h2 data-i18n="why.title">为什么选择 3API Panel</h2>
-      <p data-i18n="why.subtitle">与自行拼装一套相比，3API Panel 让你跳过基础设施层，直接进入产品与运营。</p>
+    <div class="frame">
+      <div class="chrome">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="addr">3api.pro/admin</span>
+      </div>
+      <div class="mock-body">
+        <aside class="mock-side">
+          <div class="ms-logo">3API Panel</div>
+          <ul>
+            <li class="active" data-i18n="mock.nav.dashboard">总览</li>
+            <li data-i18n="mock.nav.plans">套餐</li>
+            <li data-i18n="mock.nav.users">用户</li>
+            <li data-i18n="mock.nav.orders">订单</li>
+            <li data-i18n="mock.nav.channels">上游 Channel</li>
+            <li data-i18n="mock.nav.branding">品牌</li>
+            <li data-i18n="mock.nav.settings">设置</li>
+          </ul>
+        </aside>
+        <main class="mock-main">
+          <div class="mock-stats">
+            <div class="mock-stat">
+              <div class="label" data-i18n="mock.stat.revenue">本月收入</div>
+              <div class="value">¥48,920</div>
+              <div class="delta">18.2%</div>
+            </div>
+            <div class="mock-stat">
+              <div class="label" data-i18n="mock.stat.users">活跃用户</div>
+              <div class="value">1,247</div>
+              <div class="delta">9.4%</div>
+            </div>
+            <div class="mock-stat">
+              <div class="label" data-i18n="mock.stat.requests">本月请求</div>
+              <div class="value">8.3M</div>
+              <div class="delta">24.1%</div>
+            </div>
+          </div>
+          <div class="mock-chart">
+            <div class="mock-chart-head">
+              <div class="title" data-i18n="mock.chart.title">最近 30 天用量</div>
+              <div class="badge" data-i18n="mock.chart.badge">实时</div>
+            </div>
+            <svg viewBox="0 0 400 92" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="currentColor" stop-opacity="0.35"/>
+                  <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <path d="M0,72 L25,68 L50,62 L75,66 L100,55 L125,58 L150,46 L175,50 L200,42 L225,38 L250,30 L275,34 L300,26 L325,20 L350,18 L375,12 L400,8 L400,92 L0,92 Z" fill="url(#chartGrad)"/>
+              <path d="M0,72 L25,68 L50,62 L75,66 L100,55 L125,58 L150,46 L175,50 L200,42 L225,38 L250,30 L275,34 L300,26 L325,20 L350,18 L375,12 L400,8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </main>
+      </div>
     </div>
-    <div class="grid-3">
-      <div class="card">
-        <div class="kicker" data-i18n="why.card1.kicker">零基础设施</div>
-        <h3 data-i18n="why.card1.title">无需自采上游</h3>
-        <p data-i18n="why.card1.body">平台维护批发上游池，注册后即可对外提供服务。无需自行采购 Anthropic 账号、维护 key 轮换、处理上游限流。</p>
-      </div>
-      <div class="card">
-        <div class="kicker" data-i18n="why.card2.kicker">完整后台</div>
-        <h3 data-i18n="why.card2.title">业务环节全覆盖</h3>
-        <p data-i18n="why.card2.body">订阅生命周期、用户额度、用量统计、退款流程、事务邮件、Webhook 通知 — 运营所需的每一环都已实现并可定制。</p>
-      </div>
-      <div class="card">
-        <div class="kicker" data-i18n="why.card3.kicker">数据自由</div>
-        <h3 data-i18n="why.card3.title">托管或自托管</h3>
-        <p data-i18n="why.card3.body">完整开源 (MIT 协议)。可使用 3api.pro 托管 SaaS，也可部署到任意支持 Docker 的服务器，数据完全归你所有。</p>
-      </div>
-    </div>
+    <p class="caption" data-i18n="preview.caption">控制后台预览 · 实际数据以你的运营情况为准</p>
   </div>
 </section>
 
@@ -274,7 +367,7 @@ const HTML = `<!doctype html>
   <div class="wrap">
     <div class="section-head">
       <h2 data-i18n="modes.title">两种部署方式</h2>
-      <p data-i18n="modes.subtitle">同一份代码、同一套数据模型，你可以在两种模式之间自由迁移。</p>
+      <p data-i18n="modes.subtitle">同一份代码、同一套数据模型。你可以在两种模式之间自由迁移。</p>
     </div>
     <div class="compare-wrap">
       <table>
@@ -321,7 +414,7 @@ const HTML = `<!doctype html>
   <div class="wrap">
     <h2 data-i18n="final.title">现在开始构建你的 AI API 服务</h2>
     <p data-i18n="final.body">免费创建账户，无需信用卡。先把服务跑起来，再根据规模决定是否升级。</p>
-    <div class="ctas" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+    <div class="ctas">
       <a href="/create/" class="btn primary" data-i18n="final.cta_primary">免费创建账户 →</a>
       <a href="/pricing" class="btn ghost" data-i18n="final.cta_secondary">查看套餐与定价</a>
     </div>
@@ -338,8 +431,19 @@ const HTML = `<!doctype html>
 </footer>
 
 <script>
-// Inline i18n + theme controller. Keeps the page self-contained.
 (function(){
+  // ------------------------------------------------------------------
+  // SUPPORTED_LOCALES — add a new entry here + add a matching dict
+  // section to STRINGS below + add a <button> to the lang-menu-list to
+  // light up a new locale. No other change needed.
+  // ------------------------------------------------------------------
+  var SUPPORTED_LOCALES = [
+    { code: 'zh', label: '中文' },
+    { code: 'en', label: 'English' }
+    // { code: 'ja', label: '日本語' },
+    // { code: 'ko', label: '한국어' },
+  ];
+
   var STRINGS = {
     zh: {
       "meta.title": "3API Panel — 为团队搭建 Claude 兼容 API 中转站",
@@ -356,27 +460,27 @@ const HTML = `<!doctype html>
       "hero.body": "<strong>Claude 兼容的 API 中转平台</strong>。内置订阅与 Token 计费、多租户后台、上游路由与 BYOK — 主流客户端开箱即用。",
       "hero.cta_primary": "免费创建账户 →",
       "hero.cta_secondary": "查看 GitHub",
-      "feat.title": "核心能力",
-      "feat.subtitle": "运营一个对外的 AI API 服务需要的核心环节，3API Panel 已经替你装好。",
-      "feat.card1.title": "协议兼容",
-      "feat.card1.body": "兼容 Anthropic Messages API。Claude Code、Cursor、Cline、Continue 等主流客户端直连即用，无需修改 SDK。",
-      "feat.card2.title": "完整计费",
-      "feat.card2.body": "订阅、Token 套餐、每日签到、兑换码、Alipay / USDT 收款 — 业务运营所需的支付与额度环节全部内置。",
-      "feat.card3.title": "上游可选",
-      "feat.card3.body": "可使用平台维护的批发上游池，也可绑定自有 Anthropic / OpenAI key (BYOK)，按优先级与模型 allowlist 自动路由。",
-      "why.title": "为什么选择 3API Panel",
-      "why.subtitle": "与自行拼装一套相比，3API Panel 让你跳过基础设施层，直接进入产品与运营。",
-      "why.card1.kicker": "零基础设施",
-      "why.card1.title": "无需自采上游",
-      "why.card1.body": "平台维护批发上游池，注册后即可对外提供服务。无需自行采购 Anthropic 账号、维护 key 轮换、处理上游限流。",
-      "why.card2.kicker": "完整后台",
-      "why.card2.title": "业务环节全覆盖",
-      "why.card2.body": "订阅生命周期、用户额度、用量统计、退款流程、事务邮件、Webhook 通知 — 运营所需的每一环都已实现并可定制。",
-      "why.card3.kicker": "数据自由",
-      "why.card3.title": "托管或自托管",
-      "why.card3.body": "完整开源 (MIT 协议)。可使用 3api.pro 托管 SaaS，也可部署到任意支持 Docker 的服务器，数据完全归你所有。",
+      "trio.deploy.title": "一键部署",
+      "trio.deploy.body": "在 3api.pro 注册即获托管账户，或拉取仓库通过 Docker Compose 自托管 — 两种方式同一份代码，可自由迁移。",
+      "trio.connect.title": "一键接入",
+      "trio.connect.body": "兼容 Anthropic Messages API，Claude Code、Cursor、Cline 等主流客户端直连即用。内置批发上游池，亦支持绑定自有 key (BYOK)。",
+      "trio.pay.title": "一键支付",
+      "trio.pay.body": "Alipay 扫码、USDT-TRC20 / ERC20 全套预置，款项直接结算至运营方账户，平台不过手。",
+      "mock.nav.dashboard": "总览",
+      "mock.nav.plans": "套餐",
+      "mock.nav.users": "用户",
+      "mock.nav.orders": "订单",
+      "mock.nav.channels": "上游 Channel",
+      "mock.nav.branding": "品牌",
+      "mock.nav.settings": "设置",
+      "mock.stat.revenue": "本月收入",
+      "mock.stat.users": "活跃用户",
+      "mock.stat.requests": "本月请求",
+      "mock.chart.title": "最近 30 天用量",
+      "mock.chart.badge": "实时",
+      "preview.caption": "控制后台预览 · 实际数据以你的运营情况为准",
       "modes.title": "两种部署方式",
-      "modes.subtitle": "同一份代码、同一套数据模型，你可以在两种模式之间自由迁移。",
+      "modes.subtitle": "同一份代码、同一套数据模型。你可以在两种模式之间自由迁移。",
       "modes.col_cap": "能力",
       "modes.col_hosted": "托管 (3api.pro)",
       "modes.col_oss": "自托管",
@@ -417,25 +521,25 @@ const HTML = `<!doctype html>
       "hero.body": "<strong>A Claude-compatible API gateway.</strong> Subscriptions, token billing, multi-tenant admin, upstream routing, and BYOK — every major client connects out of the box.",
       "hero.cta_primary": "Create a free account →",
       "hero.cta_secondary": "View on GitHub",
-      "feat.title": "Core capabilities",
-      "feat.subtitle": "Everything required to run a public-facing AI API service is already built in.",
-      "feat.card1.title": "Protocol-compatible",
-      "feat.card1.body": "Anthropic Messages API compatible. Claude Code, Cursor, Cline, Continue — every major client connects directly with no SDK changes.",
-      "feat.card2.title": "Billing built in",
-      "feat.card2.body": "Subscriptions, token packs, daily check-ins, redemption codes, Alipay / USDT checkout — every commerce surface ships ready.",
-      "feat.card3.title": "Bring any upstream",
-      "feat.card3.body": "Use the managed wholesale upstream pool, or bind your own Anthropic / OpenAI keys (BYOK). Priority and model allow-list drive automatic routing.",
-      "why.title": "Why 3API Panel",
-      "why.subtitle": "Skip the plumbing layer and go straight to product and operations.",
-      "why.card1.kicker": "Zero infrastructure",
-      "why.card1.title": "No upstream sourcing",
-      "why.card1.body": "We maintain the wholesale upstream pool — sign up and you are ready to serve traffic. No Anthropic account procurement, no key rotation, no upstream rate-limit firefighting.",
-      "why.card2.kicker": "Full back office",
-      "why.card2.title": "Every operational surface, ready",
-      "why.card2.body": "Subscription lifecycle, user quotas, usage analytics, refunds, transactional email, webhook notifications — implemented and customisable out of the box.",
-      "why.card3.kicker": "Data portability",
-      "why.card3.title": "Hosted or self-hosted",
-      "why.card3.body": "Fully open source under MIT. Run on the hosted SaaS at 3api.pro, or deploy on any Docker-capable server — your data stays yours either way.",
+      "trio.deploy.title": "One-line install",
+      "trio.deploy.body": "Sign up on 3api.pro for a hosted account, or clone the repo and bring it up with Docker Compose. Same codebase, free to migrate either direction.",
+      "trio.connect.title": "Drop-in compatible",
+      "trio.connect.body": "Anthropic Messages API compatible. Claude Code, Cursor, Cline and other major clients connect directly. Managed wholesale upstream ready, BYOK supported.",
+      "trio.pay.title": "Built-in checkout",
+      "trio.pay.body": "Alipay, USDT-TRC20 / ERC20 ready out of the box. Payments settle directly to the operator's account — the platform never touches the funds.",
+      "mock.nav.dashboard": "Overview",
+      "mock.nav.plans": "Plans",
+      "mock.nav.users": "Users",
+      "mock.nav.orders": "Orders",
+      "mock.nav.channels": "Upstream",
+      "mock.nav.branding": "Branding",
+      "mock.nav.settings": "Settings",
+      "mock.stat.revenue": "Revenue · MTD",
+      "mock.stat.users": "Active users",
+      "mock.stat.requests": "Requests · MTD",
+      "mock.chart.title": "Usage · last 30 days",
+      "mock.chart.badge": "Live",
+      "preview.caption": "Admin console preview · figures are illustrative",
       "modes.title": "Two deployment modes",
       "modes.subtitle": "One codebase, one data model. Move between hosted and self-hosted whenever it suits you.",
       "modes.col_cap": "Capability",
@@ -467,13 +571,21 @@ const HTML = `<!doctype html>
 
   function getLocale() {
     var l = document.documentElement.getAttribute('data-lang');
-    return (l === 'en' || l === 'zh') ? l : 'zh';
+    if (!l) return 'zh';
+    for (var i = 0; i < SUPPORTED_LOCALES.length; i++) {
+      if (SUPPORTED_LOCALES[i].code === l) return l;
+    }
+    return 'zh';
   }
 
   function applyLocale(locale) {
-    if (locale !== 'zh' && locale !== 'en') return;
+    var supported = false;
+    for (var i = 0; i < SUPPORTED_LOCALES.length; i++) {
+      if (SUPPORTED_LOCALES[i].code === locale) { supported = true; break; }
+    }
+    if (!supported) return;
     document.documentElement.setAttribute('data-lang', locale);
-    document.documentElement.lang = locale === 'en' ? 'en' : 'zh-CN';
+    document.documentElement.lang = locale === 'en' ? 'en' : (locale === 'zh' ? 'zh-CN' : locale);
     var dict = STRINGS[locale] || STRINGS.zh;
     var nodes = document.querySelectorAll('[data-i18n]');
     for (var i = 0; i < nodes.length; i++) {
@@ -482,15 +594,16 @@ const HTML = `<!doctype html>
       var val = dict[key];
       if (val == null) continue;
       var attrName = node.getAttribute('data-i18n-attr');
-      if (attrName) {
-        node.setAttribute(attrName, val);
-        continue;
-      }
-      if (node.hasAttribute('data-i18n-html')) {
-        node.innerHTML = val;
-      } else {
-        node.textContent = val;
-      }
+      if (attrName) { node.setAttribute(attrName, val); continue; }
+      if (node.hasAttribute('data-i18n-html')) { node.innerHTML = val; }
+      else { node.textContent = val; }
+    }
+    // Mark current locale in lang menu
+    var items = document.querySelectorAll('#lang-menu-list .menu-item');
+    for (var j = 0; j < items.length; j++) {
+      var c = items[j].getAttribute('data-locale');
+      if (c === locale) items[j].setAttribute('aria-current', 'true');
+      else items[j].removeAttribute('aria-current');
     }
     try { localStorage.setItem('3api_locale', locale); } catch(_){}
     try { document.cookie = '3api_locale=' + encodeURIComponent(locale) + '; Max-Age=31536000; Path=/; SameSite=Lax'; } catch(_){}
@@ -504,13 +617,38 @@ const HTML = `<!doctype html>
     try { localStorage.setItem('3api_theme', t); } catch(_){}
   }
 
+  // Reusable dropdown menu controller. To add more menus on this page,
+  // just give them a unique id with a .menu-trigger inside.
+  function setupMenu(menuId) {
+    var menu = document.getElementById(menuId);
+    if (!menu) return;
+    var trigger = menu.querySelector('.menu-trigger');
+    if (!trigger) return;
+    function close() { menu.classList.remove('open'); trigger.setAttribute('aria-expanded', 'false'); }
+    function open() { menu.classList.add('open'); trigger.setAttribute('aria-expanded', 'true'); }
+    trigger.addEventListener('click', function(e){
+      e.stopPropagation();
+      if (menu.classList.contains('open')) close(); else open();
+    });
+    document.addEventListener('click', function(e){ if (!menu.contains(e.target)) close(); });
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') close(); });
+  }
+
   document.addEventListener('DOMContentLoaded', function(){
     applyLocale(getLocale());
-    var langBtn = document.getElementById('lang-toggle');
-    if (langBtn) langBtn.addEventListener('click', function(){
-      var cur = getLocale();
-      applyLocale(cur === 'zh' ? 'en' : 'zh');
-    });
+    setupMenu('lang-menu');
+    // Wire lang menu items
+    var items = document.querySelectorAll('#lang-menu-list .menu-item');
+    for (var i = 0; i < items.length; i++) {
+      (function(item){
+        item.addEventListener('click', function(){
+          var locale = item.getAttribute('data-locale');
+          if (locale) applyLocale(locale);
+          var m = document.getElementById('lang-menu');
+          if (m) { m.classList.remove('open'); var t = m.querySelector('.menu-trigger'); if (t) t.setAttribute('aria-expanded', 'false'); }
+        });
+      })(items[i]);
+    }
     var themeBtn = document.getElementById('theme-toggle');
     if (themeBtn) themeBtn.addEventListener('click', function(){
       var cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
@@ -530,15 +668,6 @@ const NOT_FOUND_HTML = `<!doctype html>
 </head><body><div class="b"><div class="t">404</div><p>这是 3api.pro 根域。<br>登录请走 /admin/login，访问已有站点请使用对应的子域 (如 acme.3api.pro)。</p>
 <p><a href="/">返回首页</a> · <a href="https://github.com/3api-pro/relay-panel">GitHub</a></p></div></body></html>`;
 
-/**
- * Mount this BEFORE tenant routes. On the SaaS root domain (or www) it owns
- * the entire request lifecycle: GET / serves marketing, anything else is a
- * dedicated 404 — root domain has no tenant context, so leaking subdomain
- * pages here would confuse users.
- *
- * Subdomains fall through (`next()`) to /api/* and the static UI bundle.
- * Single-tenant deploys (no saasDomain configured) skip entirely.
- */
 const ROOT_DOMAIN_ALLOW: Array<RegExp> = [
   /^\/health$/,
   /^\/create\/?$/,
