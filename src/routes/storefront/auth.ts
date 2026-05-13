@@ -22,7 +22,8 @@ import { query } from '../../services/database';
 import { hashPassword, verifyPassword } from '../../services/auth';
 import { signSession } from '../../services/jwt';
 import { logger } from '../../services/logger';
-import { sendEmail, isEmailConfigured } from '../../services/email-resend';
+import { sendEmail, isEmailConfigured } from '../../services/email-provider';
+import { evaluateEmail, canonicalizeEmail } from '../../services/email-policy';
 
 export const storefrontAuthRouter = Router();
 
@@ -50,6 +51,16 @@ storefrontAuthRouter.post('/signup', async (req: Request, res: Response) => {
     }
     if (typeof password !== 'string' || password.length < 6) {
       res.status(400).json({ error: { type: 'invalid_request_error', message: 'Password must be ≥6 chars' } });
+      return;
+    }
+    const policy = evaluateEmail(email);
+    if (!policy.ok) {
+      res.status(400).json({ error: {
+        type: 'email_not_allowed',
+        message: policy.reason === 'blocked'
+          ? 'This email domain is not accepted (disposable / blocked)'
+          : 'This email domain is not on the allowlist',
+      } });
       return;
     }
 

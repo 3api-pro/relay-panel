@@ -18,7 +18,7 @@ import { Router, Request, Response } from 'express';
 import { query } from '../../services/database';
 import { hashPassword, verifyPassword } from '../../services/auth';
 import { logger } from '../../services/logger';
-import { sendEmail } from '../../services/email-resend';
+import { sendEmail } from '../../services/email-provider';
 
 export const adminExtrasRouter = Router();
 

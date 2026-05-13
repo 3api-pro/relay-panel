@@ -26,6 +26,7 @@ import { storefrontRouter } from "./routes/storefront";
 import { paymentsRouter, storefrontPaymentsRouter } from "./routes/payments";
 import { ensureDefaultAdmin } from './services/auth';
 import { initAppConfig } from './services/app-config';
+import { initEmailPolicy } from './services/email-policy';
 import { startUsdtWatcher } from "./services/payments/usdt-watcher";
 import { startEmailCron } from "./services/email-cron";
 import { startWholesaleSync } from "./services/wholesale-sync";
@@ -37,6 +38,7 @@ try { require('dotenv').config(); } catch {}
 async function main(): Promise<void> {
   await initDatabase();
   await initAppConfig();
+  await initEmailPolicy();
   await ensureDefaultAdmin();
 
   const app = express();

@@ -25,6 +25,7 @@ import { setAdminCookie, ADMIN_TTL_SECONDS } from './auth-admin';
 import { config } from '../config';
 import { logger } from '../services/logger';
 import { recordReferral } from '../services/affiliate';
+import { evaluateEmail } from '../services/email-policy';
 
 export const signupTenantRouter = Router();
 
@@ -126,6 +127,17 @@ signupTenantRouter.post('/', async (req: Request, res: Response) => {
     res.status(400).json({
       error: { type: 'invalid_request_error', message: 'admin_password must be 8–128 chars' },
     });
+    return;
+  }
+
+  const policy = evaluateEmail(admin_email);
+  if (!policy.ok) {
+    res.status(400).json({ error: {
+      type: 'email_not_allowed',
+      message: policy.reason === 'blocked'
+        ? 'This email domain is not accepted (disposable / blocked)'
+        : 'This email domain is not on the allowlist',
+    } });
     return;
   }
 
