@@ -800,6 +800,7 @@ const ROOT_DOMAIN_ALLOW: Array<RegExp> = [
   /^\/create\/?$/,
   /^\/login\/?$/,
   /^\/pricing\/?$/,
+  /^\/sso(\/.*)?$/,
   /^\/admin(\/.*)?$/,
   /^\/api\/admin(\/.*)?$/,
   /^\/api\/signup-tenant(\/.*)?$/,

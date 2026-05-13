@@ -29,10 +29,10 @@ interface PlanSeed {
 // drains via remaining_tokens countdown.
 const DEFAULT_PLANS: PlanSeed[] = [
   // --- subscription (monthly recurring, period resets each order) ---------
-  { name: 'Pro',     slug: 'pro',    period_days: 30,   quota_tokens:   5_000_000, price_cents:  2900, wholesale_face_value_cents:  2900, sort_order: 10, billing_type: 'subscription' },
-  { name: 'Max 5x',  slug: 'max5x',  period_days: 30,   quota_tokens:  25_000_000, price_cents: 14900, wholesale_face_value_cents: 14900, sort_order: 20, billing_type: 'subscription' },
-  { name: 'Max 20x', slug: 'max20x', period_days: 30,   quota_tokens: 100_000_000, price_cents: 29900, wholesale_face_value_cents: 29900, sort_order: 30, billing_type: 'subscription' },
-  { name: 'Ultra',   slug: 'ultra',  period_days: 30,   quota_tokens: 300_000_000, price_cents: 59900, wholesale_face_value_cents: 59900, sort_order: 40, billing_type: 'subscription' },
+  { name: 'Pro',     slug: 'pro',    period_days: 30,   quota_tokens:   5_000_000, price_cents:  5800, wholesale_face_value_cents:  2900, sort_order: 10, billing_type: 'subscription' },
+  { name: 'Max 5x',  slug: 'max5x',  period_days: 30,   quota_tokens:  25_000_000, price_cents: 29800, wholesale_face_value_cents: 14900, sort_order: 20, billing_type: 'subscription' },
+  { name: 'Max 20x', slug: 'max20x', period_days: 30,   quota_tokens: 100_000_000, price_cents: 59800, wholesale_face_value_cents: 29900, sort_order: 30, billing_type: 'subscription' },
+  { name: 'Ultra',   slug: 'ultra',  period_days: 30,   quota_tokens: 300_000_000, price_cents:119800, wholesale_face_value_cents: 59900, sort_order: 40, billing_type: 'subscription' },
   // --- token_pack (one-shot, no monthly cap; ~10y "permanent" expiry) ----
   { name: '10M Tokens 体验包', slug: 'pack-10m', period_days: 3650, quota_tokens:  10_000_000, price_cents: 1000, wholesale_face_value_cents: 1000, sort_order: 110, billing_type: 'token_pack' },
   { name: '50M Tokens 套餐',   slug: 'pack-50m', period_days: 3650, quota_tokens:  50_000_000, price_cents: 4500, wholesale_face_value_cents: 4500, sort_order: 120, billing_type: 'token_pack' },

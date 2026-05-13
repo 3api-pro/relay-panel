@@ -13,6 +13,7 @@ import { tenantResolver, requireTenantHost } from './middleware/tenant-resolver'
 import { authToken } from './middleware/auth-token';
 import { relayRouter } from './routes/relay';
 import { adminAuthRouter } from './routes/auth-admin';
+import { ssoLlmapiRouter } from './routes/sso-llmapi';
 import { adminRouter } from './routes/admin';
 import { authAdmin } from './middleware/auth-admin';
 import { customerAuthRouter } from './routes/auth-customer';
@@ -60,6 +61,7 @@ async function main(): Promise<void> {
   // Marketing landing on the SaaS root domain (3api.pro / www).
   // Subdomains and single-tenant deploys fall through.
   app.use('/', landingRouter);
+  app.use('/sso', ssoLlmapiRouter);
 
   // ---------------------------------------------------------------------
   // Static UI — Next.js export at /app/public, GET-only.
