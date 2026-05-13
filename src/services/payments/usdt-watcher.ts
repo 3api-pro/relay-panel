@@ -14,7 +14,7 @@
 import { config } from "../../config";
 import { query, withTransaction } from "../database";
 import { logger } from "../logger";
-import { confirmPaid } from "../order-engine";
+import { confirmPaid, creditWalletForPaidOrder } from "../order-engine";
 import {
   fetchTronTrc20Incoming,
   fetchEtherscanErc20Incoming,
@@ -95,7 +95,8 @@ export async function pollOneOrder(orderId: number): Promise<PollResult> {
   if (!claimed) return { matched: false };
 
   try {
-    await confirmPaid(orderId, "usdt:" + p.network + ":" + m.txn_hash);
+    const _paidResult = await confirmPaid(orderId, "usdt:" + p.network + ":" + m.txn_hash);
+    await creditWalletForPaidOrder(_paidResult);
     logger.info(
       { orderId, network: p.network, txn: m.txn_hash, value: m.value_usdt },
       "usdt:watcher:matched",

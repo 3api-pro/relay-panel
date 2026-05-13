@@ -17,7 +17,7 @@
 import { config } from "../../config";
 import { query } from "../database";
 import { logger } from "../logger";
-import { confirmPaid } from "../order-engine";
+import { confirmPaid, creditWalletForPaidOrder } from "../order-engine";
 
 function loadAlipaySdk(): any {
   try {
@@ -201,6 +201,7 @@ export async function handleAlipayNotify(body: Record<string, any>): Promise<{ o
     return { ok: false, reason: v.reason };
   }
   await confirmPaid(v.order_id, "alipay:" + (v.trade_no || "unknown"));
+  try { const r = await (await import("../order-engine")).confirmPaid(v.order_id, "alipay:" + (v.trade_no || "unknown")); /* idempotent re-call returns same row */ await creditWalletForPaidOrder(r); } catch(_) { /* logged inside */ }
   logger.info({ orderId: v.order_id, tradeNo: v.trade_no }, "alipay:notify:confirmed");
   return { ok: true };
 }

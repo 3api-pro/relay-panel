@@ -27,6 +27,7 @@ import type { PoolClient } from 'pg';
 import { withTransaction, query } from './database';
 import { logger } from './logger';
 
+import { creditOrder } from './wallet';
 export interface CreateOrderInput {
   tenantId: number;
   endUserId: number;
@@ -377,6 +378,37 @@ export async function confirmPaid(
       wholesale_shortage,
     };
   });
+}
+
+// ----------------------------------------------------------------------------
+// Wallet credit hook — called by every payment webhook caller of confirmPaid.
+// Idempotent via wallet_transaction.idempotency_key. Best-effort: a failed
+// credit logs a warning but doesn't roll back the order.
+// ----------------------------------------------------------------------------
+export async function creditWalletForPaidOrder(
+  result: ConfirmPaidResult,
+  ip?: string | null,
+): Promise<void> {
+  const o = result.order;
+  if (!o || o.status !== 'paid' && o.status !== 'paid_pending_provision') return;
+  try {
+    const r = await creditOrder({
+      tenantId: o.tenant_id,
+      amountCents: o.amount_cents,
+      orderId: o.id,
+      provider: o.payment_provider || 'unknown',
+      txExternalId: o.provider_txn_id ?? null,
+      ip: ip ?? null,
+    });
+    if (!r.duplicate) {
+      logger.info(
+        { tenantId: o.tenant_id, orderId: o.id, amount: o.amount_cents, balance_cents: r.balanceCents },
+        'wallet:credited_for_order',
+      );
+    }
+  } catch (err: any) {
+    logger.warn({ err: err.message, orderId: o.id }, 'wallet:credit_for_order:fail');
+  }
 }
 
 /**
