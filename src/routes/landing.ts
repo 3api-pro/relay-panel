@@ -662,6 +662,133 @@ const HTML = `<!doctype html>
 </html>
 `;
 
+
+const LEGAL_PAGE_CSS = `
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;background:#fafbfc;color:#0b1220;margin:0;padding:0;line-height:1.6;-webkit-font-smoothing:antialiased}
+.legal-wrap{max-width:780px;margin:0 auto;padding:48px 24px 80px}
+.legal-wrap header.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;padding-bottom:20px;border-bottom:1px solid #e2e8f0}
+.legal-wrap header.top a.back{color:#475569;text-decoration:none;font-size:14px}
+.legal-wrap header.top a.back:hover{color:#0d9488}
+.legal-wrap h1{font-size:34px;font-weight:700;letter-spacing:-0.02em;margin:0 0 8px;color:#0b1220}
+.legal-wrap .updated{color:#64748b;font-size:13px;margin-bottom:32px}
+.legal-wrap h2{font-size:20px;font-weight:600;margin:36px 0 12px;color:#0b1220}
+.legal-wrap p,.legal-wrap li{color:#1e293b;font-size:15px}
+.legal-wrap a{color:#0f766e}
+.legal-wrap code{background:#f1f5f9;padding:1px 6px;border-radius:4px;font-size:13.5px}
+@media (prefers-color-scheme: dark){
+  body{background:#07101f;color:#e2e8f0}
+  .legal-wrap header.top{border-color:#1f2937}
+  .legal-wrap header.top a.back{color:#94a3b8}
+  .legal-wrap h1,.legal-wrap h2{color:#e2e8f0}
+  .legal-wrap p,.legal-wrap li{color:#cbd5e1}
+  .legal-wrap a{color:#5eead4}
+  .legal-wrap code{background:#0f1a2d}
+  .legal-wrap .updated{color:#64748b}
+}
+</style>
+`;
+
+const PRIVACY_HTML = `<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>隐私政策 — 3API Panel</title>
+${LEGAL_PAGE_CSS}
+</head><body><div class="legal-wrap">
+<header class="top"><a class="back" href="/">← 3API Panel</a><span style="font-size:13px;color:#64748b">huyazhou0203hf@gmail.com</span></header>
+<h1>隐私政策</h1>
+<div class="updated">最后更新：2026-05-13</div>
+
+<p>本政策适用于 <code>3api.pro</code> 主站点（站长后台、注册、计费等运营方提供的页面）。各站点（子域 / 自定义域）由站长独立运营，与本站点的客户面服务有独立隐私政策。</p>
+
+<h2>1. 我们收集的信息</h2>
+<ul>
+<li><strong>账号信息</strong>：邮箱、姓名（由 OAuth 提供方传入或注册时填写）、密码哈希。</li>
+<li><strong>使用 Google 登录时</strong>：仅获取 <code>email</code>、<code>profile</code>、<code>openid</code> scope — 用于识别账号身份。我们不读取邮件内容、联系人或日历。</li>
+<li><strong>运营数据</strong>：API 调用统计、订阅状态、付款记录 — 用于账单与服务运行。</li>
+<li><strong>日志</strong>：访问 IP、User-Agent、错误堆栈 — 用于故障排查与反滥用，保留 30 天。</li>
+</ul>
+
+<h2>2. 我们如何使用</h2>
+<ul>
+<li>提供与维护 3api.pro 服务（登录、计费、上游接入）。</li>
+<li>反垃圾、反滥用、安全审计。</li>
+<li>遵守适用的法律法规。</li>
+</ul>
+
+<h2>3. 第三方共享</h2>
+<p>我们不向第三方出售或转让你的个人数据。仅在以下场景共享必要信息：</p>
+<ul>
+<li>支付服务（Alipay、加密货币网关）— 仅传递必要的订单与金额。</li>
+<li>云基础设施（Cloudflare、PostgreSQL 自托管）— 数据落地于服务器存储。</li>
+<li>法律强制要求时。</li>
+</ul>
+
+<h2>4. 数据保留与删除</h2>
+<p>账号与订阅数据在你账户存续期间保留。注销账户后，运营数据在 90 天内匿名化或删除，账单凭据按所在司法管辖区要求保留（通常 5 年）。</p>
+
+<h2>5. 你的权利</h2>
+<p>你有权访问、更正、导出或要求删除你的个人数据。联系 <a href="mailto:huyazhou0203hf@gmail.com">huyazhou0203hf@gmail.com</a>。</p>
+
+<h2>6. Cookie</h2>
+<p>我们使用必要的 cookie 维持登录会话（<code>3api_admin_token</code>）以及主题/语言偏好。不使用追踪类 cookie。</p>
+
+<h2>7. 变更</h2>
+<p>本政策可能更新，重大变更会通过邮件或站内公告通知。</p>
+
+<h2>8. 联系</h2>
+<p>有任何问题请邮件 <a href="mailto:huyazhou0203hf@gmail.com">huyazhou0203hf@gmail.com</a>。</p>
+
+</div></body></html>`;
+
+const TERMS_HTML = `<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>服务条款 — 3API Panel</title>
+${LEGAL_PAGE_CSS}
+</head><body><div class="legal-wrap">
+<header class="top"><a class="back" href="/">← 3API Panel</a><span style="font-size:13px;color:#64748b">huyazhou0203hf@gmail.com</span></header>
+<h1>服务条款</h1>
+<div class="updated">最后更新：2026-05-13</div>
+
+<p>欢迎使用 3API Panel（以下简称"本平台"）。本条款约束你在 <code>3api.pro</code> 的使用行为。注册账号即表示你同意本条款。</p>
+
+<h2>1. 服务说明</h2>
+<p>本平台提供 Claude 兼容 API 中转站点的搭建工具。注册后你成为"站长"，可创建自己的站点并对外提供服务。</p>
+
+<h2>2. 站长责任</h2>
+<ul>
+<li>对自己站点的客户负责，包括服务可用性、客户支持、客户数据安全。</li>
+<li>不得用于非法用途（钓鱼、欺诈、未经授权访问、滥用上游 API 等）。</li>
+<li>依所在司法管辖区合规经营、纳税。</li>
+<li>站点条款与隐私政策由站长自行制定并对客户公示。</li>
+</ul>
+
+<h2>3. 上游与配额</h2>
+<p>本平台对接的上游 API 配额按订阅套餐分配。超额请求会被速率限制或拒绝。配额政策详见 <a href="/pricing">/pricing</a>。</p>
+
+<h2>4. 付款与退款</h2>
+<ul>
+<li>订阅按月预付，自动续期可在后台关闭。</li>
+<li>未使用周期内按未消耗 token 比例可申请退款；已消耗部分不退。</li>
+<li>因平台不可抗力（持续 24h+ 服务中断）导致的损失，按比例补偿至下一周期。</li>
+</ul>
+
+<h2>5. 知识产权</h2>
+<p>3API Panel 软件以 MIT 协议开源（<a href="https://github.com/3api-pro/relay-panel">GitHub</a>）。你的内容归你所有。</p>
+
+<h2>6. 免责声明</h2>
+<p>服务按"现状"提供，不对适用性、不间断或无错误作保证。在适用法律允许的最大范围内，本平台不对间接、附带或后果性损害负责。</p>
+
+<h2>7. 账号终止</h2>
+<p>违反本条款的账号可能被暂停或终止。你可以随时注销账号。</p>
+
+<h2>8. 变更</h2>
+<p>本条款可能更新，重大变更会通过邮件或站内公告通知，继续使用视为接受。</p>
+
+<h2>9. 联系</h2>
+<p>有任何问题请邮件 <a href="mailto:huyazhou0203hf@gmail.com">huyazhou0203hf@gmail.com</a>。</p>
+
+</div></body></html>`;
+
 const NOT_FOUND_HTML = `<!doctype html>
 <html lang="zh"><head><meta charset="utf-8"><title>404 — 3api.pro</title>
 <style>body{font-family:-apple-system,sans-serif;background:#fafbfc;color:#0b1220;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}.b{text-align:center;padding:32px}.t{font-size:64px;font-weight:700;color:#0d9488;margin:0}p{color:#475569;margin:12px 0 24px}a{color:#0f766e;text-decoration:none}</style>
@@ -677,8 +804,17 @@ const ROOT_DOMAIN_ALLOW: Array<RegExp> = [
   /^\/api\/admin(\/.*)?$/,
   /^\/api\/signup-tenant(\/.*)?$/,
   /^\/api\/health$/,
+  /^\/privacy\/?$/,
+  /^\/terms\/?$/,
   /^\/_next\//,
 ];
+
+landingRouter.get('/privacy', (_req: Request, res: Response) => {
+  res.type('html').status(200).send(PRIVACY_HTML);
+});
+landingRouter.get('/terms', (_req: Request, res: Response) => {
+  res.type('html').status(200).send(TERMS_HTML);
+});
 
 landingRouter.use((req: Request, res: Response, next) => {
   const host = (req.hostname || '').toLowerCase();

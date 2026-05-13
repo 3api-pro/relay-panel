@@ -72,6 +72,7 @@ export const config = {
   emailCronEnabled:
     (process.env.EMAIL_CRON_ENABLED || "on").toLowerCase() === "on",
 
+
   logLevel: process.env.LOG_LEVEL || "info",
   autoUpdate: process.env.AUTO_UPDATE !== "off",
 } as const;

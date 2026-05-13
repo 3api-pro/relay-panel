@@ -4,6 +4,8 @@ import { query } from '../services/database';
 import { verifyPassword } from '../services/auth';
 import { signSession } from '../services/jwt';
 import { logger } from '../services/logger';
+import { getAuthorizeUrl, exchangeCode, getUserInfo, isGoogleOAuthConfigured } from '../services/oauth-google';
+import { config } from '../config';
 
 export const adminAuthRouter = Router();
 
@@ -199,6 +201,175 @@ adminAuthRouter.post('/logout', (_req: Request, res: Response) => {
   if (secure) parts.push('Secure');
   res.setHeader('Set-Cookie', parts.join('; '));
   res.json({ ok: true });
+});
+
+
+
+// =============================================================================
+// Google OAuth (admin login). Reseller admins only; never used for end-users.
+// =============================================================================
+
+const OAUTH_STATE_COOKIE = '3api_oauth_state';
+const OAUTH_STATE_TTL = 300;
+
+function makeStateCookie(state: string, secure: boolean): string {
+  const parts = [
+    `${OAUTH_STATE_COOKIE}=${state}`,
+    `Path=/`,
+    `Max-Age=${OAUTH_STATE_TTL}`,
+    `HttpOnly`,
+    `SameSite=Lax`,
+  ];
+  if (secure) parts.push('Secure');
+  return parts.join('; ');
+}
+
+function makeStateClearCookie(secure: boolean): string {
+  const parts = [
+    `${OAUTH_STATE_COOKIE}=`,
+    `Path=/`,
+    `Max-Age=0`,
+    `HttpOnly`,
+    `SameSite=Lax`,
+  ];
+  if (secure) parts.push('Secure');
+  return parts.join('; ');
+}
+
+function buildAdminCookieValue(token: string, secure: boolean): string {
+  const parts = [
+    `${ADMIN_COOKIE_NAME}=${token}`,
+    `Path=/`,
+    `Max-Age=${ADMIN_TTL_SECONDS}`,
+    `HttpOnly`,
+    `SameSite=Lax`,
+  ];
+  if (secure) parts.push('Secure');
+  return parts.join('; ');
+}
+
+function googleRedirectUri(): string {
+  // Always root domain — never tenant subdomains or custom domains.
+  return `${(config.publicBaseUrl || '').replace(/\/$/, '')}/admin/auth/google/callback`;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+}
+
+/**
+ * GET /admin/auth/google — start the OAuth flow.
+ * Sets a short-lived state cookie, 302 to Google authorize URL.
+ */
+adminAuthRouter.get('/auth/google', (_req: Request, res: Response) => {
+  if (!isGoogleOAuthConfigured()) {
+    res.status(503).type('html').send('<h1>Google login not configured</h1><p>Set GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET env.</p>');
+    return;
+  }
+  const state = crypto.randomBytes(24).toString('hex');
+  const secure = /^https:/i.test(process.env.PUBLIC_URL || '');
+  res.setHeader('Set-Cookie', makeStateCookie(state, secure));
+  const url = getAuthorizeUrl(state, googleRedirectUri());
+  res.redirect(302, url);
+});
+
+/**
+ * GET /admin/auth/google/callback — handle Google's redirect.
+ *
+ * Resolution order:
+ *   1. reseller_admin.google_sub matches → log in (no DB write).
+ *   2. reseller_admin.email matches (no google_sub yet) → link + log in.
+ *   3. no match → redirect to /create with prefilled google_email + google_sub
+ *      so the signup wizard can create a tenant tied to this Google account.
+ */
+adminAuthRouter.get('/auth/google/callback', async (req: Request, res: Response) => {
+  try {
+    if (!isGoogleOAuthConfigured()) {
+      res.status(503).type('html').send('<h1>Google login not configured</h1>');
+      return;
+    }
+    const { code, state, error } = req.query as Record<string, string | undefined>;
+    if (error) {
+      res.status(400).type('html').send(`<h1>Google login cancelled</h1><p>${escapeHtml(error)}</p><p><a href="/admin/login">返回登录</a></p>`);
+      return;
+    }
+    if (typeof code !== 'string' || typeof state !== 'string') {
+      res.status(400).type('html').send('<h1>Bad request</h1><p>Missing code or state.</p>');
+      return;
+    }
+
+    // Verify state cookie matches the state echoed back by Google.
+    const cookieHeader = req.headers.cookie || '';
+    const stateCookie = cookieHeader.split(/;\s*/).find((c) => c.startsWith(`${OAUTH_STATE_COOKIE}=`));
+    const stateValue = stateCookie ? stateCookie.substring(`${OAUTH_STATE_COOKIE}=`.length) : '';
+    if (!stateValue || stateValue !== state) {
+      res.status(400).type('html').send('<h1>Bad state</h1><p>Login session expired. <a href="/admin/login">重试</a></p>');
+      return;
+    }
+
+    const tokens = await exchangeCode(code, googleRedirectUri());
+    const userinfo = await getUserInfo(tokens.access_token);
+    if (!userinfo.sub || !userinfo.email) {
+      throw new Error('userinfo missing sub or email');
+    }
+
+    const secure = /^https:/i.test(process.env.PUBLIC_URL || '');
+    const stateClear = makeStateClearCookie(secure);
+
+    // 1. google_sub match
+    let rows = await query<any>(
+      `SELECT id, email, status, tenant_id, google_sub
+         FROM reseller_admin
+        WHERE google_sub = $1 AND status = 'active'
+        ORDER BY id ASC LIMIT 1`,
+      [userinfo.sub],
+    );
+
+    if (rows.length === 0) {
+      // 2. email match (any tenant — pick lowest id, link google_sub if NULL)
+      rows = await query<any>(
+        `SELECT id, email, status, tenant_id, google_sub
+           FROM reseller_admin
+          WHERE LOWER(email) = LOWER($1) AND status = 'active'
+          ORDER BY id ASC LIMIT 1`,
+        [userinfo.email],
+      );
+      if (rows.length > 0 && !rows[0].google_sub) {
+        await query(
+          `UPDATE reseller_admin SET google_sub = $1 WHERE id = $2 AND google_sub IS NULL`,
+          [userinfo.sub, rows[0].id],
+        );
+        logger.info({ adminId: rows[0].id, email: userinfo.email }, 'admin:google:linked');
+      }
+    }
+
+    if (rows.length === 0) {
+      // 3. New user — redirect to signup with prefilled Google data.
+      res.setHeader('Set-Cookie', stateClear);
+      const params = new URLSearchParams({
+        google_email: userinfo.email,
+        google_sub: userinfo.sub,
+        google_name: userinfo.name || '',
+      });
+      res.redirect(302, `/create?${params.toString()}`);
+      return;
+    }
+
+    const row = rows[0];
+    const token = signSession({
+      type: 'admin',
+      adminId: row.id,
+      tenantId: row.tenant_id,
+      email: row.email,
+    });
+
+    res.setHeader('Set-Cookie', [stateClear, buildAdminCookieValue(token, secure)]);
+    logger.info({ adminId: row.id, tenantId: row.tenant_id, host: req.hostname }, 'admin:google:login');
+    res.redirect(302, '/admin');
+  } catch (err: any) {
+    logger.error({ err: err.message, stack: err.stack }, 'admin:google:callback:error');
+    res.status(500).type('html').send(`<h1>Google login error</h1><p>${escapeHtml(err.message || 'internal')}</p><p><a href="/admin/login">返回登录</a></p>`);
+  }
 });
 
 export { ADMIN_COOKIE_NAME, ADMIN_TTL_SECONDS, setAdminCookie };
