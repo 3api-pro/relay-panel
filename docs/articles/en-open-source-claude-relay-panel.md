@@ -24,21 +24,24 @@ you handle customer acquisition.
 
 ## Quick install
 
-Tested on Ubuntu 22.04, Debian 12, CentOS Stream 9. 1 GB RAM minimum:
+Any host with Docker works — Linux, macOS, or Windows (Docker Desktop).
+1 GB RAM minimum:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/install.sh | bash
+git clone https://github.com/3api-pro/relay-panel
+cd relay-panel
+cp .env.example .env          # set POSTGRES_PASSWORD, JWT_SECRET, UPSTREAM_KEY
+docker compose up -d
 ```
 
-The script:
-1. Detects OS and installs Docker if missing
-2. Fetches `docker-compose.yml` + `Caddyfile`
-3. Prompts for your domain + 3API wholesale key (`wsk-...`)
-4. Generates random admin password + JWT secret
-5. Brings up the stack with `docker compose up -d`
+Open `http://localhost:8080`, sign up as the first admin, walk through the
+onboarding wizard (upstream config, branding, first plan), and you have a
+fully-functioning Claude-compatible API reseller panel. Put it behind your
+own reverse proxy or use the bundled `Caddyfile` for automatic TLS on a
+public domain.
 
-Five minutes later, `https://your-domain` is a fully-functioning
-Claude-compatible API reseller panel.
+Prefer not to run your own server? Skip the clone and start at
+[3api.pro/create](https://3api.pro/create) — same panel, hosted by us.
 
 ## Business model: multiplexing arbitrage
 

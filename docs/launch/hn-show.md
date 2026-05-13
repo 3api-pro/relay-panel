@@ -75,7 +75,8 @@ copy-paste; substitute one URL or screenshot per channel.
 > open-source AI API reseller panel for self-hosting on a VPS.
 >
 > ```bash
-> curl -sSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/install.sh | bash
+> git clone https://github.com/3api-pro/relay-panel
+> cd relay-panel && cp .env.example .env && docker compose up -d
 > ```
 >
 > The novel bit vs `one-api` / `new-api` / `sub2api`: instead of BYOK
@@ -124,7 +125,8 @@ copy-paste; substitute one URL or screenshot per channel.
 > ## 一键安装
 >
 > ```bash
-> curl -sSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/install.sh | bash
+> git clone https://github.com/3api-pro/relay-panel
+> cd relay-panel && cp .env.example .env && docker compose up -d
 > ```
 >
 > 或 Hosted SaaS 直接注册: <https://3api.pro/create>, 5 秒钟拿到自己的
@@ -180,7 +182,8 @@ copy-paste; substitute one URL or screenshot per channel.
 > ## 一键装
 >
 > ```bash
-> curl -sSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/install.sh | bash
+> git clone https://github.com/3api-pro/relay-panel
+> cd relay-panel && cp .env.example .env && docker compose up -d
 > ```
 >
 > ## 或者直接用 Hosted SaaS

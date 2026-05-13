@@ -1003,6 +1003,18 @@
       "cta_signup": "立即开始",
       "cta_pricing": "查看价格"
     },
+    "marketing_landing": {
+      "nav_pricing": "价格",
+      "nav_login": "登录",
+      "nav_signup": "注册",
+      "nav_github_label": "在 GitHub 上查看",
+      "nav_theme_label": "切换主题",
+      "hero_title": "Opus 级体验, Claude API 兼容",
+      "hero_subtitle": "按 token 计费, 包月套餐任选。Claude Code、Cursor、Cline 等开箱即用。",
+      "cta_signup": "立即开始",
+      "cta_pricing": "查看价格",
+      "footer": "Powered by 3API Panel · Open source under MIT"
+    },
     "footer": {
       "default_shop_name": "AI API",
       "contact_prefix": "联系: ",

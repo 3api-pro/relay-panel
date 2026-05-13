@@ -212,8 +212,9 @@ The threat model assumes a hostile customer can:
                                        └────────▶ upstream (Anthropic, etc.)
 ```
 
-Single VM, three containers, Caddy issues Let's Encrypt cert for the
-reseller's chosen hostname. `docker compose up -d` after `install.sh`.
+Single host, three containers (panel + postgres + caddy), brought up with
+`git clone … && cp .env.example .env && docker compose up -d`. Caddy
+issues a Let's Encrypt cert for the reseller's chosen hostname.
 
 ### Hosted SaaS (multi-tenant, 3api.pro)
 

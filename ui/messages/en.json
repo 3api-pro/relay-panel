@@ -1003,6 +1003,18 @@
       "cta_signup": "Get started",
       "cta_pricing": "See pricing"
     },
+    "marketing_landing": {
+      "nav_pricing": "Pricing",
+      "nav_login": "Sign in",
+      "nav_signup": "Sign up",
+      "nav_github_label": "View on GitHub",
+      "nav_theme_label": "Toggle theme",
+      "hero_title": "Opus-grade experience, Claude API compatible",
+      "hero_subtitle": "Token-based billing with optional monthly plans. Claude Code, Cursor, Cline — all work out of the box.",
+      "cta_signup": "Get started",
+      "cta_pricing": "See pricing",
+      "footer": "Powered by 3API Panel · Open source under MIT"
+    },
     "footer": {
       "default_shop_name": "AI API",
       "contact_prefix": "Contact: ",

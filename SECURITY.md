@@ -30,7 +30,7 @@ In scope:
 
 - The `relay-panel` codebase (this repository)
 - The default `docker-compose.yml` and `Dockerfile`
-- The example installer (`install.sh`)
+- The bundled `Caddyfile`
 - Any code under `@3api/*` on npm
 
 Out of scope:

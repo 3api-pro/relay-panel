@@ -23,7 +23,7 @@ assignees: ''
 ## Environment
 
 - relay-panel version / commit:
-- Deployment: docker-compose / VPS install.sh / kubernetes / other:
+- Deployment: docker-compose / hosted 3api.pro / kubernetes / other:
 - Node version (if dev mode):
 - Postgres version:
 - Browser (if a UI bug):

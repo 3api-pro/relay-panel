@@ -59,12 +59,9 @@ docker compose up -d
 # → open http://localhost:8080 → signup → onboarding wizard → done
 ```
 
-### Option C: VPS one-line install (60 seconds)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/install.sh \
-  | DOMAIN=relay.example.com UPSTREAM_KEY=wsk-... bash
-```
+> Works on any host with Docker &mdash; Linux, macOS, or Windows
+> (via Docker Desktop / WSL2). For production, put it behind your own
+> reverse proxy or use the bundled Caddyfile.
 
 Full walkthrough (including the hosted path) in
 [docs/QUICKSTART.md](docs/QUICKSTART.md).
@@ -121,7 +118,6 @@ Full diagram, multi-tenant strategy, money flow and security boundaries:
 - **Checkout** &mdash; Alipay + USDT (Paddle / Stripe on roadmap)
 - **Analytics dashboard** &mdash; per-tenant revenue, usage, top customers
 - **Resend mailer** &mdash; transactional emails out of the box
-- **One-click VPS install** &mdash; `curl -sSL https://3api.pro/install | bash`
 
 ## Roadmap
 

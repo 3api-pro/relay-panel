@@ -223,11 +223,14 @@ const HTML = `<!doctype html>
 <section class="features">
   <div class="wrap">
     <h2>开发者也可以自部署</h2>
-    <div class="sub">不喜欢 SaaS? 自己拉一份, MIT 开源, 一行命令装</div>
+    <div class="sub">不喜欢 SaaS? clone 仓库, MIT 开源, Docker Compose 起服务。<br>支持 Linux / macOS, 以及 Windows (Docker Desktop)。</div>
     <div class="install" id="install" style="margin-bottom:32px">
-      <pre><span class="c"># Ubuntu 22.04 / Debian / RHEL — 60 秒一键装</span>
-curl -fsSL https://raw.githubusercontent.com/3api-pro/relay-panel/main/install.sh \\
-  | DOMAIN=relay.example.com UPSTREAM_KEY=wsk-... bash</pre>
+      <pre><span class="c"># 任意装了 Docker 的机器都可以跑</span>
+git clone https://github.com/3api-pro/relay-panel
+cd relay-panel
+cp .env.example .env   <span class="c"># 改 POSTGRES_PASSWORD / JWT_SECRET / UPSTREAM_KEY</span>
+docker compose up -d
+<span class="c"># → http://localhost:8080 → 注册 → 引导向导 → 完成</span></pre>
     </div>
     <div class="grid">
       <div class="card">
