@@ -64,7 +64,7 @@ function randomSlugCandidate(): string {
   return `${a}-${n}-${tail}`;
 }
 
-async function generateUniqueSlug(maxTries = 12): Promise<string> {
+export async function generateUniqueSlug(maxTries = 12): Promise<string> {
   for (let i = 0; i < maxTries; i++) {
     const candidate = randomSlugCandidate();
     if (RESERVED_SLUGS.has(candidate)) continue;

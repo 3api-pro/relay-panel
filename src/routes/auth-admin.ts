@@ -5,6 +5,11 @@ import { verifyPassword } from '../services/auth';
 import { signSession } from '../services/jwt';
 import { logger } from '../services/logger';
 import { getAuthorizeUrl, exchangeCode, getUserInfo, isGoogleOAuthConfigured } from '../services/oauth-google';
+import { withTransaction } from '../services/database';
+import { createAdminForTenant } from '../services/auth';
+import { seedPlansForTenant, seedBrandConfigForTenant, ensureWholesaleBalance } from '../services/plans-seed';
+import { provisionTenantUpstreamInTx } from '../services/signup-provisioner';
+import { generateUniqueSlug } from './signup-tenant';
 import { config } from '../config';
 
 export const adminAuthRouter = Router();
@@ -344,14 +349,56 @@ adminAuthRouter.get('/auth/google/callback', async (req: Request, res: Response)
     }
 
     if (rows.length === 0) {
-      // 3. New user — redirect to signup with prefilled Google data.
-      res.setHeader('Set-Cookie', stateClear);
-      const params = new URLSearchParams({
-        google_email: userinfo.email,
-        google_sub: userinfo.sub,
-        google_name: userinfo.name || '',
+      // 3. New user — auto-provision a tenant + admin tied to this Google
+      //    account. No /create form: Google has already verified email.
+      //    password_hash gets a random 64-byte hex (unguessable; password
+      //    login path is effectively disabled for this admin).
+      const slug = await generateUniqueSlug();
+      const randomPwd = crypto.randomBytes(32).toString('hex');
+
+      const provisioned = await withTransaction(async (client) => {
+        const t = await client.query<{ id: number; slug: string }>(
+          `INSERT INTO tenant (slug, status) VALUES ($1, 'active') RETURNING id, slug`,
+          [slug],
+        );
+        const tenant = t.rows[0];
+        const adminId = await createAdminForTenant(
+          client,
+          tenant.id,
+          userinfo.email,
+          randomPwd,
+          userinfo.name || null,
+        );
+        // Link google_sub so future Google logins skip the email-fallback path.
+        await client.query(
+          `UPDATE reseller_admin SET google_sub = $1 WHERE id = $2`,
+          [userinfo.sub, adminId],
+        );
+        await seedPlansForTenant(client, tenant.id);
+        await seedBrandConfigForTenant(client, tenant.id, tenant.slug);
+        await ensureWholesaleBalance(client, tenant.id, 0);
+        try {
+          await provisionTenantUpstreamInTx(client, tenant.id);
+        } catch (err: any) {
+          logger.warn({ tenantId: tenant.id, err: err?.message ?? String(err) }, 'oauth:google:provision_failed');
+        }
+        return { tenantId: tenant.id, slug: tenant.slug, adminId };
       });
-      res.redirect(302, `/create?${params.toString()}`);
+
+      const tok = signSession({
+        type: 'admin',
+        adminId: provisioned.adminId,
+        tenantId: provisioned.tenantId,
+        email: userinfo.email.toLowerCase(),
+      });
+      res.setHeader('Set-Cookie', [stateClear, buildAdminCookieValue(tok, secure)]);
+      logger.info({
+        adminId: provisioned.adminId,
+        tenantId: provisioned.tenantId,
+        slug: provisioned.slug,
+        email: userinfo.email,
+      }, 'admin:google:auto-provision');
+      res.redirect(302, '/admin');
       return;
     }
 
