@@ -210,6 +210,33 @@ adminAuthRouter.post('/logout', (_req: Request, res: Response) => {
 
 
 
+
+/**
+ * SSO bridge — render a tiny HTML page that writes the JWT into localStorage
+ * (UI reads Bearer from there) and then location.replace('/admin'). Token
+ * never appears in URL/history/referrer. The HttpOnly cookie is also set as
+ * a SDK-friendly fallback.
+ *
+ * JWT chars are base64url + '.', so we sanitize to [A-Za-z0-9._-] before
+ * embedding into the inline script to prevent any injection vector.
+ */
+function ssoBridgeHtml(token: string, returnTo: string = '/admin'): string {
+  const safeToken = token.replace(/[^A-Za-z0-9._-]/g, '');
+  const safeReturn = returnTo.replace(/[^A-Za-z0-9/_?=&.-]/g, '');
+  return `<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>登录中…</title>
+<style>body{font-family:-apple-system,sans-serif;background:#fafbfc;color:#0b1220;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}p{color:#475569}</style>
+</head><body>
+<p>登录成功，正在进入控制台…</p>
+<script>
+(function(){
+  try { localStorage.setItem('token', '${safeToken}'); } catch(e){}
+  location.replace('${safeReturn}');
+})();
+</script>
+<noscript><p>请<a href="${safeReturn}">点这里</a>继续。</p></noscript>
+</body></html>`;
+}
+
 // =============================================================================
 // Google OAuth (admin login). Reseller admins only; never used for end-users.
 // =============================================================================
@@ -398,7 +425,7 @@ adminAuthRouter.get('/auth/google/callback', async (req: Request, res: Response)
         slug: provisioned.slug,
         email: userinfo.email,
       }, 'admin:google:auto-provision');
-      res.redirect(302, '/admin');
+      res.status(200).type('html').send(ssoBridgeHtml(tok));
       return;
     }
 
@@ -412,7 +439,7 @@ adminAuthRouter.get('/auth/google/callback', async (req: Request, res: Response)
 
     res.setHeader('Set-Cookie', [stateClear, buildAdminCookieValue(token, secure)]);
     logger.info({ adminId: row.id, tenantId: row.tenant_id, host: req.hostname }, 'admin:google:login');
-    res.redirect(302, '/admin');
+    res.status(200).type('html').send(ssoBridgeHtml(token));
   } catch (err: any) {
     logger.error({ err: err.message, stack: err.stack }, 'admin:google:callback:error');
     res.status(500).type('html').send(`<h1>Google login error</h1><p>${escapeHtml(err.message || 'internal')}</p><p><a href="/admin/login">返回登录</a></p>`);
