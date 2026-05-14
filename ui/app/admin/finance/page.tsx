@@ -52,6 +52,7 @@ export default function FinancePage() {
   const [llmapiOrders, setLlmapiOrders] = useState<LlmapiOrder[]>([]);
   const [llmapiLinked, setLlmapiLinked] = useState<boolean>(false);
   const [llmapiErr, setLlmapiErr] = useState<string>('');
+  const [llmapiLoading, setLlmapiLoading] = useState<boolean>(true);
 
   async function refresh() {
     const [w, p] = await Promise.all([
@@ -60,13 +61,16 @@ export default function FinancePage() {
     ]);
     setWs(w);
     setPlanRev(p.data || []);
-     try {
+     setLlmapiLoading(true);
+    try {
       const r = await api<{ ok: boolean; linked: boolean; orders: LlmapiOrder[]; err?: string }>('/admin/finance/llmapi-orders');
       setLlmapiLinked(!!r.linked);
       setLlmapiOrders(r.orders || []);
       setLlmapiErr(r.err || '');
     } catch (e: any) {
       setLlmapiErr(e.message || String(e));
+    } finally {
+      setLlmapiLoading(false);
     }
   }
   useEffect(() => { refresh(); }, []);
@@ -225,8 +229,13 @@ export default function FinancePage() {
               </tr>
             </thead>
             <tbody>
-              {llmapiOrders.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">{llmapiLinked === false ? '关联 llmapi 账号后会显示你的订阅订单' : '还没有 llmapi 付费订单'}</td></tr>
+              {llmapiLoading && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                  <span className="inline-block w-4 h-4 mr-2 align-middle border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />加载中…
+                </td></tr>
+              )}
+              {!llmapiLoading && llmapiOrders.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">{llmapiLinked === false ? '未关联 llmapi 账号 (请先从 llmapi.pro 控制台进入)' : llmapiErr ? `加载失败: ${llmapiErr}` : '你在 llmapi.pro 还没有付费订单'}</td></tr>
               )}
               {llmapiOrders.map((o) => (
                 <tr key={o.id} className="border-t border-border/50 hover:bg-muted/20">

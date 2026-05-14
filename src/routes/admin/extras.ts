@@ -79,16 +79,34 @@ const BRAND_DEFAULTS = {
 
 adminExtrasRouter.get('/brand', async (req: Request, res: Response) => {
   const tenantId = req.resellerAdmin!.tenantId;
+  // Join tenant for slug + custom_domain so UI can render CNAME instructions
   const rows = await query<any>(
-    `SELECT tenant_id, store_name, logo_url, primary_color, announcement, footer_html, contact_email, updated_at
-       FROM brand_config WHERE tenant_id = $1 LIMIT 1`,
+    `SELECT b.tenant_id, b.store_name, b.logo_url, b.primary_color, b.announcement,
+            b.footer_html, b.contact_email, b.updated_at,
+            t.slug, t.custom_domain
+       FROM tenant t
+       LEFT JOIN brand_config b ON b.tenant_id = t.id
+      WHERE t.id = $1 LIMIT 1`,
     [tenantId],
   );
   if (rows.length === 0) {
-    res.json({ tenant_id: tenantId, ...BRAND_DEFAULTS, updated_at: null });
+    res.json({ tenant_id: tenantId, ...BRAND_DEFAULTS, updated_at: null, slug: null, custom_domain: null });
     return;
   }
-  res.json(rows[0]);
+  const row = rows[0];
+  // brand_config may be NULL via LEFT JOIN — synth defaults
+  res.json({
+    tenant_id: row.tenant_id || tenantId,
+    store_name: row.store_name ?? null,
+    logo_url: row.logo_url ?? null,
+    primary_color: row.primary_color ?? BRAND_DEFAULTS.primary_color,
+    announcement: row.announcement ?? null,
+    footer_html: row.footer_html ?? null,
+    contact_email: row.contact_email ?? null,
+    updated_at: row.updated_at ?? null,
+    slug: row.slug,
+    custom_domain: row.custom_domain ?? null,
+  });
 });
 
 const BRAND_FIELDS = ['store_name', 'logo_url', 'primary_color', 'announcement', 'footer_html', 'contact_email'] as const;
@@ -594,6 +612,128 @@ adminExtrasRouter.patch('/brand/custom-domain', async (req: Request, res: Respon
   );
   logger.info({ tenantId, custom_domain: domain || null }, 'admin:brand:custom_domain:set');
   res.json({ ok: true, custom_domain: domain || null });
+});
+
+// =========================================================================
+// /brand/cloudflare-cname — one-click CNAME via Cloudflare API
+// =========================================================================
+// Body: { cf_api_token, custom_domain, proxied?: false }
+//
+// Resolves the zone (root domain) on the reseller's CF account, creates a
+// CNAME record pointing at <slug>.3api.pro. We DO NOT persist the CF token
+// — it's used once per call.
+
+adminExtrasRouter.post('/brand/cloudflare-cname', async (req: Request, res: Response) => {
+  const tenantId = req.resellerAdmin!.tenantId;
+  const { cf_api_token, custom_domain, proxied } = req.body ?? {};
+
+  if (typeof cf_api_token !== 'string' || cf_api_token.length < 20) {
+    res.status(400).json({ error: { type: 'invalid_request', message: '请提供有效的 Cloudflare API Token' } });
+    return;
+  }
+  const domain = String(custom_domain || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '').split('/')[0];
+  if (!domain || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(domain)) {
+    res.status(400).json({ error: { type: 'invalid_domain', message: '请输入合法域名' } });
+    return;
+  }
+
+  // Resolve tenant slug for target.
+  const trows = await query<{ slug: string }>(
+    `SELECT slug FROM tenant WHERE id = $1 LIMIT 1`,
+    [tenantId],
+  );
+  if (trows.length === 0) {
+    res.status(404).json({ error: { type: 'not_found', message: 'tenant not found' } });
+    return;
+  }
+  const saas = (process.env.SAAS_DOMAIN || '3api.pro').toLowerCase();
+  const target = `${trows[0].slug}.${saas}`;
+
+  // Determine root domain — for X.Y.Z.tld we try Z.tld first.
+  const parts = domain.split('.');
+  const rootCandidates = parts.length >= 2 ? [parts.slice(-2).join('.'), parts.slice(-3).join('.')] : [domain];
+
+  const cfHeaders = { 'Authorization': `Bearer ${cf_api_token}`, 'Content-Type': 'application/json' };
+
+  // Step 1: find zone
+  let zoneId: string | null = null;
+  let zoneName: string | null = null;
+  for (const root of rootCandidates) {
+    if (!root || !root.includes('.')) continue;
+    try {
+      const r = await fetch(`https://api.cloudflare.com/client/v4/zones?name=${encodeURIComponent(root)}`, { headers: cfHeaders });
+      const d: any = await r.json();
+      if (r.ok && d.success && Array.isArray(d.result) && d.result.length > 0) {
+        zoneId = d.result[0].id;
+        zoneName = d.result[0].name;
+        break;
+      }
+    } catch { /* try next */ }
+  }
+  if (!zoneId) {
+    res.status(404).json({ error: { type: 'zone_not_found', message: `Cloudflare 上找不到该域名的 zone (尝试了: ${rootCandidates.join(', ')})。请确认 token 有权限 + 域名在 CF。` } });
+    return;
+  }
+
+  // Step 2: create or update CNAME record
+  const recordName = domain;
+  const body = {
+    type: 'CNAME',
+    name: recordName,
+    content: target,
+    ttl: 1,
+    proxied: proxied === true,
+    comment: '3api auto-provisioned',
+  };
+
+  let recordRes: any;
+  try {
+    // Check if exists
+    const list = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?type=CNAME&name=${encodeURIComponent(recordName)}`, { headers: cfHeaders });
+    const listD: any = await list.json();
+    if (listD.success && Array.isArray(listD.result) && listD.result.length > 0) {
+      // Update existing
+      const recordId = listD.result[0].id;
+      const u = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${recordId}`, {
+        method: 'PUT', headers: cfHeaders, body: JSON.stringify(body),
+      });
+      recordRes = await u.json();
+      if (!u.ok || !recordRes.success) {
+        const errMsg = (recordRes.errors && recordRes.errors[0]?.message) || 'cf_update_failed';
+        res.status(400).json({ error: { type: 'cf_api_failed', message: `CF API 更新失败: ${errMsg}` } });
+        return;
+      }
+    } else {
+      // Create
+      const c = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`, {
+        method: 'POST', headers: cfHeaders, body: JSON.stringify(body),
+      });
+      recordRes = await c.json();
+      if (!c.ok || !recordRes.success) {
+        const errMsg = (recordRes.errors && recordRes.errors[0]?.message) || 'cf_create_failed';
+        res.status(400).json({ error: { type: 'cf_api_failed', message: `CF API 创建失败: ${errMsg}` } });
+        return;
+      }
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: { type: 'cf_api_network', message: err.message } });
+    return;
+  }
+
+  // Step 3: persist custom_domain to tenant
+  await query(`UPDATE tenant SET custom_domain = $2 WHERE id = $1`, [tenantId, domain]);
+  logger.info({ tenantId, domain, zone: zoneName, target, proxied: body.proxied }, 'admin:brand:cf_cname:created');
+
+  res.json({
+    ok: true,
+    custom_domain: domain,
+    zone: zoneName,
+    target,
+    proxied: body.proxied,
+    note: body.proxied
+      ? 'CF Proxy 已开启 (橙色云朵)，CF 提供 SSL。如想用平台 Caddy 的 LE 证书，关闭 Proxy。'
+      : 'CF Proxy 已关闭 (灰色云朵)。平台 Caddy 会自动用 Let\'s Encrypt 给该域名签 SSL 证书 (首次访问可能需 10-30s)。',
+  });
 });
 
 adminExtrasRouter.get('/brand/verify-domain', async (req: Request, res: Response) => {
