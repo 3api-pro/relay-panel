@@ -27,6 +27,7 @@ const GROUPS: NavGroup[] = [
   {
     id: 'sales', titleKey: 'sales',
     items: [
+      { href: '/admin/wallet',     labelKey: 'wallet',     Icon: CreditCard },
       { href: '/admin/plans',      labelKey: 'plans',      Icon: Package },
       { href: '/admin/orders',     labelKey: 'orders',     Icon: ShoppingCart },
       { href: '/admin/users',      labelKey: 'users',      Icon: Users },

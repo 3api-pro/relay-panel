@@ -37,12 +37,16 @@ export interface WithdrawalDraft {
   requestedBy: number;        // reseller_admin.id
   grossCents: number;
   currency: string;
+  /** 'bank' (China domestic card) or 'alipay' (国际兼容 收款码 or 账号) */
+  method: 'bank' | 'alipay';
+  /** Required for both methods: name the money is paid to. */
   cardholderName: string;
+  /** Required when method='bank' */
   bankName?: string;
-  cardNumber: string;
-  swiftCode?: string;
-  iban?: string;
-  payoutCountry?: string;
+  cardNumber?: string;
+  /** Required when method='alipay' — Alipay account / phone / email
+   * registered on Alipay (also works for Alipay HK / 国际版 用户). */
+  alipayAccount?: string;
   contactEmail: string;       // OTP destination
 }
 
@@ -102,18 +106,33 @@ export async function submitWithdrawal(draft: WithdrawalDraft, ip?: string | nul
   const { fee, net } = calcFee(draft.grossCents);
   const { code, hash } = genOtp();
 
+  // Validate per-method requirements.
+  if (draft.method === 'bank') {
+    if (!draft.cardNumber || !draft.bankName) {
+      throw Object.assign(new Error('bank method requires cardNumber + bankName'), { code: 'BAD_PAYOUT' });
+    }
+  } else if (draft.method === 'alipay') {
+    if (!draft.alipayAccount) {
+      throw Object.assign(new Error('alipay method requires alipayAccount'), { code: 'BAD_PAYOUT' });
+    }
+  } else {
+    throw Object.assign(new Error('unknown method'), { code: 'BAD_PAYOUT' });
+  }
+
   const id = await withTransaction(async (client) => {
     const r = await client.query<{ id: number }>(
       `INSERT INTO withdrawal_request
          (tenant_id, requested_by, gross_cents, fee_cents, net_cents, currency,
-          cardholder_name, bank_name, card_number, swift_code, iban,
-          payout_country, contact_email, confirm_code_hash, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending_confirm')
+          cardholder_name, bank_name, card_number, alipay_account, method,
+          contact_email, confirm_code_hash, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending_confirm')
        RETURNING id`,
       [
         draft.tenantId, draft.requestedBy, draft.grossCents, fee, net, draft.currency,
-        draft.cardholderName, draft.bankName ?? null, draft.cardNumber,
-        draft.swiftCode ?? null, draft.iban ?? null, draft.payoutCountry ?? null,
+        draft.cardholderName, draft.bankName ?? null,
+        draft.method === 'bank' ? draft.cardNumber! : null,
+        draft.method === 'alipay' ? draft.alipayAccount! : null,
+        draft.method,
         draft.contactEmail, hash,
       ],
     );
