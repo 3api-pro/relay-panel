@@ -27,6 +27,19 @@ interface PlanRevenue {
   revenue_cents: number;
 }
 
+interface LlmapiOrder {
+  id: number;
+  order_no: string;
+  plan_name: string;
+  plan_display: string;
+  amount: number;     // yuan as decimal
+  cycle: string;
+  duration_days: number;
+  status: string;
+  created_at: string;
+  paid_at: string | null;
+}
+
 export default function FinancePage() {
   const t = useTranslations('admin.finance');
   const tCommon = useTranslations('common');
@@ -36,6 +49,9 @@ export default function FinancePage() {
   const [amount, setAmount] = useState('50000'); // ¥500
   const [method, setMethod] = useState<'alipay' | 'usdt'>('alipay');
   const [busy, setBusy] = useState(false);
+  const [llmapiOrders, setLlmapiOrders] = useState<LlmapiOrder[]>([]);
+  const [llmapiLinked, setLlmapiLinked] = useState<boolean>(false);
+  const [llmapiErr, setLlmapiErr] = useState<string>('');
 
   async function refresh() {
     const [w, p] = await Promise.all([
@@ -44,6 +60,14 @@ export default function FinancePage() {
     ]);
     setWs(w);
     setPlanRev(p.data || []);
+     try {
+      const r = await api<{ ok: boolean; linked: boolean; orders: LlmapiOrder[]; err?: string }>('/admin/finance/llmapi-orders');
+      setLlmapiLinked(!!r.linked);
+      setLlmapiOrders(r.orders || []);
+      setLlmapiErr(r.err || '');
+    } catch (e: any) {
+      setLlmapiErr(e.message || String(e));
+    }
   }
   useEffect(() => { refresh(); }, []);
 
@@ -180,6 +204,48 @@ export default function FinancePage() {
           </div>
         </div>
       </Modal>
+    
+      <section className="mt-8 bg-card border border-border rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-border bg-muted/40 flex items-center justify-between">
+          <h2 className="text-sm font-semibold">我在 llmapi.pro 的付费订单</h2>
+          {llmapiLinked === false && (
+            <span className="text-xs text-muted-foreground">⚠ 未关联 llmapi 账号 (请从 llmapi.pro/dashboard 模块进入)</span>
+          )}
+        </div>
+        {llmapiErr && (
+          <div className="mx-5 my-3 px-3 py-2 rounded-md bg-rose-50 border border-rose-200 text-xs text-rose-700">{llmapiErr}</div>
+        )}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground bg-muted/20">
+              <tr>
+                <th className="px-4 py-2 text-left">时间</th>
+                <th className="px-4 py-2 text-left">订单号</th>
+                <th className="px-4 py-2 text-left">套餐</th>
+                <th className="px-4 py-2 text-left">周期</th>
+                <th className="px-4 py-2 text-right">金额</th>
+                <th className="px-4 py-2 text-left">状态</th>
+              </tr>
+            </thead>
+            <tbody>
+              {llmapiOrders.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">{llmapiLinked === false ? '关联 llmapi 账号后会显示你的订阅订单' : '还没有 llmapi 付费订单'}</td></tr>
+              )}
+              {llmapiOrders.map((o) => (
+                <tr key={o.id} className="border-t border-border/50 hover:bg-muted/20">
+                  <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">{o.paid_at ? new Date(o.paid_at).toLocaleString() : new Date(o.created_at).toLocaleString()}</td>
+                  <td className="px-4 py-2 text-xs font-mono">{o.order_no}</td>
+                  <td className="px-4 py-2">{o.plan_display}</td>
+                  <td className="px-4 py-2 text-xs">{o.cycle} · {o.duration_days}d</td>
+                  <td className="px-4 py-2 text-right font-mono">¥{Number(o.amount).toFixed(2)}</td>
+                  <td className="px-4 py-2"><span className={`inline-block px-2 py-0.5 rounded text-xs ${o.status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100'}`}>{o.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
     </AdminShell>
   );
 }
