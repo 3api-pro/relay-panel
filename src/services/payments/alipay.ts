@@ -15,6 +15,7 @@
  * need real Alipay credentials.
  */
 import { config } from "../../config";
+import { getConfig } from "../app-config";
 import { query } from "../database";
 import { logger } from "../logger";
 import { confirmPaid, creditWalletForPaidOrder } from "../order-engine";
@@ -36,31 +37,36 @@ export interface AlipayCreds {
 }
 
 async function loadAlipayCreds(tenantId: number): Promise<AlipayCreds | null> {
+  // Resolution order: per-tenant payment_config -> platform app_config -> env fallback.
   const rows = await query<any>(
     "SELECT config->'payment_config' AS p FROM tenant WHERE id = $1 LIMIT 1",
     [tenantId],
   );
   const p = rows[0]?.p || {};
-  const appId = p.alipay_app_id || config.alipayAppIdFallback;
-  const pk = (p.alipay_private_key || config.alipayPrivateKeyFallback || "").replace(/\\n/g, "\n");
-  const alipayPk = (p.alipay_public_key || config.alipayPublicKeyFallback || "").replace(/\\n/g, "\n");
+  const appId = p.alipay_app_id || getConfig('alipay_app_id') || config.alipayAppIdFallback;
+  const pkRaw = p.alipay_private_key || getConfig('alipay_private_key') || config.alipayPrivateKeyFallback || "";
+  const alipayPkRaw = p.alipay_public_key || getConfig('alipay_public_key') || config.alipayPublicKeyFallback || "";
+  const pk = pkRaw.replace(/\\n/g, "\n");
+  const alipayPk = alipayPkRaw.replace(/\\n/g, "\n");
   if (!appId || !pk || !alipayPk) return null;
   return { alipay_app_id: appId, alipay_private_key: pk, alipay_public_key: alipayPk };
 }
 
 export function isMockMode(): boolean {
-  return (config.alipayGateway || "").toLowerCase() === "sandbox";
+  const g = (getConfig('alipay_gateway') || config.alipayGateway || "").toLowerCase();
+  return g === "sandbox" || g === "" || g === "mock";
 }
 
 function getSdk(creds: AlipayCreds) {
   const mod = loadAlipaySdk();
   if (!mod) return null;
   const Cls = mod.AlipaySdk || mod.default;
+  const gateway = getConfig('alipay_gateway') || config.alipayGateway;
   return new Cls({
     appId: creds.alipay_app_id,
     privateKey: creds.alipay_private_key,
     alipayPublicKey: creds.alipay_public_key,
-    gateway: config.alipayGateway,
+    gateway,
     signType: "RSA2",
     timeout: 8000,
     camelcase: true,

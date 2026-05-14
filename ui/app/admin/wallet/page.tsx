@@ -129,7 +129,7 @@ export default function WalletPage() {
       </section>
 
       <section className="mb-3 text-xs text-muted-foreground leading-relaxed">
-        客户在你的站点付款后，钱直接进入这里（你不需要自己接收款渠道）。你可以走 <strong>国内银行卡</strong> 或 <strong>支付宝</strong>（国际兼容）提现，平台收 3% 手续费 + T+1 人工审核到账；或者把余额直接抵到你的 llmapi 订阅续费（免手续费）。
+        客户在你的站点付款后（统一走平台 Alipay 收款，你不需要自己申请商户号），钱直接进入这里。你可以走 <strong>国内银行卡</strong> 或 <strong>支付宝收款码</strong>（国际兼容）提现，平台收 3% 手续费 + T+1 人工审核到账；或者把余额直接抵到你的 llmapi 订阅续费（内部转账，免手续费）。
       </section>
 
       {/* Transactions */}
