@@ -21,6 +21,7 @@ import { createAlipayQrPay, handleAlipayNotify } from "../services/payments/alip
 import { createUsdtPay, checkUsdtOnce, UsdtNetwork } from "../services/payments/usdt";
 import { createPaypalOrder, capturePaypalOrder, isPaypalConfigured } from "../services/payments/paypal";
 import { createCreemCheckout, verifyCreemSignature, isCreemConfigured } from "../services/payments/creem";
+import { createStripeSession, verifyStripeSignature, isStripeConfigured } from "../services/payments/stripe";
 import { confirmPaid, creditWalletForPaidOrder } from "../services/order-engine";
 import { config } from "../config";
 
@@ -306,6 +307,96 @@ paymentsRouter.post(
       res.json({ ok: true });
     } catch (err: any) {
       logger.error({ err: err.message }, "creem:webhook:err");
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+
+// =============================================================================
+// Stripe (国际信用卡 — 主流)
+// =============================================================================
+// POST /storefront/payments/stripe/create
+//   Body: { order_id, currency?, product_name? }
+//   Returns: { session_id, url }
+storefrontPaymentsRouter.post("/stripe/create", async (req, res) => {
+  try {
+    const { order_id, currency, product_name } = req.body ?? {};
+    if (typeof order_id !== "number") {
+      res.status(400).json({ error: { type: "invalid_request", message: "order_id required" } });
+      return;
+    }
+    if (!isStripeConfigured()) {
+      res.status(503).json({ error: { type: "not_configured", message: "Stripe not configured" } });
+      return;
+    }
+    const orderRows = await query<any>(
+      `SELECT o.id, o.tenant_id, o.amount_cents, o.currency, o.status, p.name AS plan_name
+         FROM orders o LEFT JOIN plans p ON p.id = o.plan_id
+        WHERE o.id=$1 AND o.tenant_id=$2`,
+      [order_id, req.tenantId!],
+    );
+    if (orderRows.length === 0) {
+      res.status(404).json({ error: { type: "not_found", message: "order not found" } });
+      return;
+    }
+    const order = orderRows[0];
+    if (order.status !== "pending") {
+      res.status(400).json({ error: { type: "bad_state", message: `order status=${order.status}` } });
+      return;
+    }
+    const base = (config.publicBaseUrl || "").replace(/\/$/, "");
+    const result = await createStripeSession({
+      orderId: order.id,
+      amountCents: order.amount_cents,
+      currency: (currency || order.currency || "usd").toString(),
+      productName: product_name || order.plan_name || `Order #${order.id}`,
+      successUrl: `${base}/dashboard?payment=success&order=${order.id}`,
+      cancelUrl: `${base}/dashboard?payment=cancelled`,
+    });
+    await query<any>(
+      `UPDATE orders SET payment_provider='stripe', payment_meta = payment_meta || $2::jsonb WHERE id=$1`,
+      [order.id, JSON.stringify({ stripe_session_id: result.session_id })],
+    );
+    res.json(result);
+  } catch (err: any) {
+    logger.error({ err: err.message }, "stripe:create:err");
+    res.status(500).json({ error: { type: "internal", message: err.message } });
+  }
+});
+
+// POST /payments/stripe/webhook (no auth — HMAC verified)
+paymentsRouter.post(
+  "/stripe/webhook",
+  express.raw({ type: "application/json", limit: "256kb" }),
+  async (req, res) => {
+    try {
+      const sig = (req.headers["stripe-signature"] as string | undefined) || "";
+      const raw = (req.body as Buffer).toString("utf8");
+      if (!verifyStripeSignature(raw, sig)) {
+        logger.warn("stripe:webhook:bad_sig");
+        res.status(401).json({ error: "bad signature" });
+        return;
+      }
+      const evt = JSON.parse(raw);
+      const type = evt.type || "";
+      if (type !== "checkout.session.completed" && type !== "checkout.session.async_payment_succeeded") {
+        res.json({ ok: true, ignored: type });
+        return;
+      }
+      const sess = evt.data?.object ?? {};
+      // payment_status should be 'paid' for credit-card sync; for async (bank transfer) wait for async_payment_succeeded.
+      if (sess.payment_status && sess.payment_status !== "paid") {
+        res.json({ ok: true, pending: true });
+        return;
+      }
+      const orderId = parseInt(sess.client_reference_id || sess.metadata?.order_id || "0", 10);
+      if (!orderId) { res.status(400).json({ error: "no order_id" }); return; }
+      const result = await confirmPaid(orderId, `stripe:${sess.payment_intent || sess.id}`);
+      await creditWalletForPaidOrder(result);
+      res.json({ ok: true });
+    } catch (err: any) {
+      logger.error({ err: err.message }, "stripe:webhook:err");
       res.status(500).json({ error: err.message });
     }
   }
