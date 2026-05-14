@@ -215,7 +215,7 @@ async function upsertLlmapiUpstream(
   llmapiUserId: number,
 ): Promise<number> {
   const nowIso = new Date().toISOString();
-  const baseUrl = 'https://api.llmapi.pro/v1';
+  const baseUrl = 'https://llmapi.pro/v1';
   const keysJson = JSON.stringify([{
     key: skKey,
     status: 'active',
