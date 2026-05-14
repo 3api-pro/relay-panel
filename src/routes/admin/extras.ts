@@ -600,7 +600,6 @@ adminExtrasRouter.patch('/payment-config', async (req: Request, res: Response) =
 adminExtrasRouter.patch('/brand/custom-domain', async (req: Request, res: Response) => {
   const tenantId = req.resellerAdmin!.tenantId;
   const raw = (req.body?.custom_domain ?? '').toString().trim().toLowerCase();
-  // Strip protocol + trailing slash
   const domain = raw.replace(/^https?:\/\//, '').replace(/\/+$/, '').split('/')[0];
   if (domain && !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(domain)) {
     res.status(400).json({ error: { type: 'invalid_domain', message: '请输入合法域名 (e.g. api.your-site.com)' } });
@@ -611,7 +610,39 @@ adminExtrasRouter.patch('/brand/custom-domain', async (req: Request, res: Respon
     [tenantId, domain || null],
   );
   logger.info({ tenantId, custom_domain: domain || null }, 'admin:brand:custom_domain:set');
-  res.json({ ok: true, custom_domain: domain || null });
+
+  // Auto-detect NS provider so UI can show a deep link to the DNS dashboard.
+  let nsProvider: { name: string; url: string } | null = null;
+  if (domain) {
+    try {
+      const dns = await import('dns');
+      const parts = domain.split('.');
+      // For api.your-site.com, lookup NS of your-site.com.
+      const root = parts.length >= 2 ? parts.slice(-2).join('.') : domain;
+      const ns: string[] = await new Promise((resolve) => {
+        dns.resolveNs(root, (err, recs) => resolve(err ? [] : (recs || []).map((r) => r.toLowerCase())));
+      });
+      const ns0 = (ns[0] || '').toLowerCase();
+      if (ns0.includes('cloudflare')) {
+        nsProvider = { name: 'Cloudflare', url: 'https://dash.cloudflare.com/?to=/:account/' + encodeURIComponent(root) + '/dns/records' };
+      } else if (ns0.includes('aliyun') || ns0.includes('hichina')) {
+        nsProvider = { name: '阿里云 (Aliyun)', url: 'https://dns.console.aliyun.com/' };
+      } else if (ns0.includes('dnspod')) {
+        nsProvider = { name: '腾讯云 DNSPod', url: 'https://console.dnspod.cn/dns/list' };
+      } else if (ns0.includes('domaincontrol.com') || ns0.includes('godaddy')) {
+        nsProvider = { name: 'GoDaddy', url: 'https://dcc.godaddy.com/control/dnsmanagement?domainName=' + encodeURIComponent(root) };
+      } else if (ns0.includes('namecheap')) {
+        nsProvider = { name: 'Namecheap', url: 'https://ap.www.namecheap.com/Domains/DomainControlPanel/' + encodeURIComponent(root) + '/advancedns' };
+      } else if (ns0.includes('vercel-dns')) {
+        nsProvider = { name: 'Vercel', url: 'https://vercel.com/dashboard/domains' };
+      } else if (ns0.includes('awsdns')) {
+        nsProvider = { name: 'AWS Route 53', url: 'https://us-east-1.console.aws.amazon.com/route53/v2/hostedzones' };
+      } else if (ns.length > 0) {
+        nsProvider = { name: ns0.replace(/^ns\d+\./, '').replace(/\.$/, ''), url: '' };
+      }
+    } catch { /* best-effort */ }
+  }
+  res.json({ ok: true, custom_domain: domain || null, ns_provider: nsProvider });
 });
 
 // =========================================================================

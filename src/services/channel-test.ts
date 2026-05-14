@@ -25,6 +25,18 @@
  * can render the result without re-hitting the upstream.
  */
 import { query } from './database';
+import { ProxyAgent } from 'undici';
+import { getConfig } from './app-config';
+
+let _disp: ProxyAgent | undefined;
+let _dispUrl: string | undefined;
+function dispatcher(): any {
+  const proxy = getConfig('outbound_https_proxy', '');
+  if (proxy && proxy !== _dispUrl) { _disp = new ProxyAgent(proxy); _dispUrl = proxy; }
+  else if (!proxy) { _disp = undefined; _dispUrl = undefined; }
+  return _disp;
+}
+
 import { logger } from './logger';
 import { DEEPSEEK_DEFAULT_BASE_URL } from './provider-deepseek';
 import { MOONSHOT_DEFAULT_BASE_URL } from './provider-moonshot';
@@ -53,7 +65,11 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...init, signal: ctrl.signal });
+    const d = dispatcher();
+    // Route public-internet probes through the outbound proxy when set, so a
+    // container without direct internet (e.g. CN host) can still reach
+    // api.llmapi.pro / api.anthropic.com / Stripe / etc.
+    return await fetch(url, { ...init, signal: ctrl.signal, ...(d ? { dispatcher: d } : {}) } as any);
   } finally {
     clearTimeout(timer);
   }

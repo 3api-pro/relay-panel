@@ -38,7 +38,7 @@ export default function BrandingPage() {
   const [verify, setVerify] = useState<DomainVerify | null>(null);
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [domainBusy, setDomainBusy] = useState(false);
-  const [bindMode, setBindMode] = useState<'cf' | 'manual'>('cf');
+  const [bindMode, setBindMode] = useState<'manual' | 'cf'>('manual');
   const [cfToken, setCfToken] = useState<string>('');
   const [cfProxied, setCfProxied] = useState<boolean>(false);
   const [cfBusy, setCfBusy] = useState<boolean>(false);
@@ -280,13 +280,13 @@ export default function BrandingPage() {
 
               {/* Tab: CF one-click vs manual */}
               <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-lg">
-                <button type="button" onClick={() => setBindMode('cf')}
-                  className={`py-2 rounded-md text-sm font-medium transition-all ${bindMode === 'cf' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}>
-                  Cloudflare 一键
-                </button>
                 <button type="button" onClick={() => setBindMode('manual')}
                   className={`py-2 rounded-md text-sm font-medium transition-all ${bindMode === 'manual' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}>
-                  其他 DNS (手动)
+                  手动加 CNAME (推荐)
+                </button>
+                <button type="button" onClick={() => setBindMode('cf')}
+                  className={`py-2 rounded-md text-sm font-medium transition-all ${bindMode === 'cf' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground'}`}>
+                  CF API Token (高级)
                 </button>
               </div>
 
@@ -318,35 +318,61 @@ export default function BrandingPage() {
                   </button>
                 </div>
               ) : (
-                <div>
-                  <div className="flex gap-2 mb-3">
-                    <button
-                      onClick={saveDomain}
-                      disabled={domainBusy || domainDraft === (brand.custom_domain || '')}
-                      className="px-4 py-2 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium disabled:opacity-50"
-                    >
-                      {domainBusy ? '保存中…' : '保存域名'}
-                    </button>
-                    {brand.custom_domain && (
-                      <button
-                        onClick={verifyDomain}
-                        disabled={verifyBusy}
-                        className="px-4 py-2 rounded-md border border-teal-500 text-teal-700 text-sm font-medium hover:bg-teal-50 disabled:opacity-50"
-                      >
-                        {verifyBusy ? '验证中…' : '验证 DNS'}
-                      </button>
-                    )}
-                  </div>
-                  <div className="p-3 rounded-md bg-muted/40 text-xs space-y-1">
-                    <div className="font-medium">在你的 DNS 后台 (Aliyun/GoDaddy/Namecheap/…) 加这条记录:</div>
-                    <div className="font-mono text-[11px] bg-card border border-border rounded p-2 mt-1">
-                      <div><span className="text-muted-foreground">类型:</span> <strong>CNAME</strong></div>
-                      <div><span className="text-muted-foreground">名称 / Host:</span> <strong>{domainDraft || 'api.your-site.com'}</strong> <span className="text-muted-foreground">(完整域名或主机名)</span></div>
-                      <div><span className="text-muted-foreground">值 / Target:</span> <strong>{brand.slug ? `${brand.slug}.3api.pro` : '<等加载>'}</strong></div>
-                      <div className="text-muted-foreground mt-1">TTL: Auto / 300</div>
+                <div className="space-y-3">
+                  <button
+                    onClick={saveDomain}
+                    disabled={domainBusy || !domainDraft || domainDraft === (brand.custom_domain || '')}
+                    className="px-4 py-2 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium disabled:opacity-50"
+                  >
+                    {domainBusy ? '保存中…' : '保存域名'}
+                  </button>
+
+                  {brand.custom_domain && (
+                    <div className="p-4 rounded-md bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 space-y-3">
+                      <div>
+                        <div className="text-sm font-medium text-teal-900 mb-2">第一步: 在你的 DNS 后台加 CNAME</div>
+                        <div className="bg-white border border-border rounded p-3 font-mono text-xs space-y-1">
+                          <div>类型: <strong>CNAME</strong></div>
+                          <div>名称: <strong>{brand.custom_domain}</strong></div>
+                          <div>值/目标: <strong className="text-teal-700">{brand.slug ? `${brand.slug}.3api.pro` : ''}</strong></div>
+                          <div className="text-muted-foreground">TTL: Auto / 300</div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const target = brand.slug ? `${brand.slug}.3api.pro` : '';
+                            try { navigator.clipboard.writeText(target); } catch {}
+                          }}
+                          className="text-xs text-teal-700 hover:underline mt-1.5"
+                        >📋 复制目标值</button>
+                      </div>
+
+                      <div className="text-xs text-teal-900/80">
+                        你的 DNS 在哪? 常见入口:
+                        <span className="ml-1">
+                          <a href="https://dash.cloudflare.com/" target="_blank" rel="noopener" className="text-teal-700 underline">Cloudflare</a>
+                          {' · '}
+                          <a href="https://dns.console.aliyun.com/" target="_blank" rel="noopener" className="text-teal-700 underline">阿里云</a>
+                          {' · '}
+                          <a href="https://console.dnspod.cn/dns/list" target="_blank" rel="noopener" className="text-teal-700 underline">DNSPod</a>
+                          {' · '}
+                          <a href="https://dcc.godaddy.com/" target="_blank" rel="noopener" className="text-teal-700 underline">GoDaddy</a>
+                          {' · '}
+                          <a href="https://ap.www.namecheap.com/Domains/DomainControlPanel/" target="_blank" rel="noopener" className="text-teal-700 underline">Namecheap</a>
+                        </span>
+                      </div>
+
+                      <div>
+                        <div className="text-sm font-medium text-teal-900 mb-2">第二步: 加完后点击验证</div>
+                        <button
+                          onClick={verifyDomain}
+                          disabled={verifyBusy}
+                          className="px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium disabled:opacity-50"
+                        >
+                          {verifyBusy ? '验证中…' : '验证 DNS'}
+                        </button>
+                      </div>
                     </div>
-                    <div className="text-muted-foreground">DNS 生效后 (通常 1-15 分钟), 点击"验证 DNS"按钮。验证通过后平台自动签 SSL。</div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
