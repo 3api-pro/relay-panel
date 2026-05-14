@@ -126,10 +126,7 @@ export default function FinancePage() {
             </div>
           )}
           <div className="mt-5 flex gap-2">
-            <button onClick={() => setTopupOpen(true)}
-              className="px-4 py-2 rounded-md bg-brand-600 text-white text-sm hover:bg-brand-700">
-              {t('topup_btn')}
-            </button>
+            {/* topup button removed — wholesale balance is platform-managed in the wallet-based model */}
             <button onClick={() => alert(t('withdraw_pending'))}
               className="px-4 py-2 rounded-md border border-input text-sm hover:bg-muted">
               {t('withdraw_btn')}

@@ -573,3 +573,66 @@ adminExtrasRouter.patch('/payment-config', async (req: Request, res: Response) =
     res.status(500).json({ error: { type: 'internal_error', message: 'Internal error' } });
   }
 });
+
+
+// =========================================================================
+// /brand/custom-domain — set CNAME-target domain + verify DNS resolution
+// =========================================================================
+
+adminExtrasRouter.patch('/brand/custom-domain', async (req: Request, res: Response) => {
+  const tenantId = req.resellerAdmin!.tenantId;
+  const raw = (req.body?.custom_domain ?? '').toString().trim().toLowerCase();
+  // Strip protocol + trailing slash
+  const domain = raw.replace(/^https?:\/\//, '').replace(/\/+$/, '').split('/')[0];
+  if (domain && !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(domain)) {
+    res.status(400).json({ error: { type: 'invalid_domain', message: '请输入合法域名 (e.g. api.your-site.com)' } });
+    return;
+  }
+  await query(
+    `UPDATE tenant SET custom_domain = $2 WHERE id = $1`,
+    [tenantId, domain || null],
+  );
+  logger.info({ tenantId, custom_domain: domain || null }, 'admin:brand:custom_domain:set');
+  res.json({ ok: true, custom_domain: domain || null });
+});
+
+adminExtrasRouter.get('/brand/verify-domain', async (req: Request, res: Response) => {
+  const tenantId = req.resellerAdmin!.tenantId;
+  const rows = await query<{ slug: string; custom_domain: string | null }>(
+    `SELECT slug, custom_domain FROM tenant WHERE id = $1 LIMIT 1`,
+    [tenantId],
+  );
+  if (rows.length === 0) {
+    res.status(404).json({ error: 'tenant not found' });
+    return;
+  }
+  const { slug, custom_domain } = rows[0];
+  if (!custom_domain) {
+    res.json({ ok: false, reason: 'no_custom_domain', expected_target: null });
+    return;
+  }
+  const saas = (process.env.SAAS_DOMAIN || '3api.pro').toLowerCase();
+  const expectedTarget = `${slug}.${saas}`;
+  try {
+    const dns = await import('dns');
+    const cnames = await new Promise<string[]>((resolve) => {
+      dns.resolveCname(custom_domain, (err, recs) => {
+        if (err) resolve([]);
+        else resolve((recs || []).map((r) => r.toLowerCase().replace(/\.$/, '')));
+      });
+    });
+    const ok = cnames.some((c) => c === expectedTarget.toLowerCase());
+    res.json({
+      ok,
+      custom_domain,
+      expected_target: expectedTarget,
+      resolved_cnames: cnames,
+      hint: ok
+        ? '域名已正确指向 3api 平台, 客户访问会自动 SSL'
+        : '请在你的域名 DNS 设置里加一条 CNAME 记录, 指向上面的 expected_target',
+    });
+  } catch (err: any) {
+    res.json({ ok: false, custom_domain, expected_target: expectedTarget, err: err.message });
+  }
+});
+
