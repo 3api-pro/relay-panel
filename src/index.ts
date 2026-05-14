@@ -14,6 +14,8 @@ import { authToken } from './middleware/auth-token';
 import { relayRouter } from './routes/relay';
 import { adminAuthRouter } from './routes/auth-admin';
 import { ssoLlmapiRouter } from './routes/sso-llmapi';
+import { adminWalletRouter } from './routes/admin/wallet';
+import { platformWithdrawalsRouter } from './routes/platform/withdrawals';
 import { adminRouter } from './routes/admin';
 import { authAdmin } from './middleware/auth-admin';
 import { customerAuthRouter } from './routes/auth-customer';
@@ -93,11 +95,13 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------
   function mountApi(router: express.Router): void {
     router.use('/admin', tenantResolver, adminAuthRouter);
+    router.use('/admin/wallet', tenantResolver, adminWalletRouter);
     router.use('/admin', tenantResolver, authAdmin, adminRouter);
     router.use('/customer', tenantResolver, requireTenantHost, customerAuthRouter);
     router.use('/customer', tenantResolver, requireTenantHost, authCustomer, customerRouter);
     router.use('/v1', tenantResolver, requireTenantHost, authToken, relayRouter);
     router.use('/platform', platformRouter);
+    router.use('/platform/withdrawals', platformWithdrawalsRouter);
     router.use("/signup-tenant", signupTenantRouter);
     router.use("/storefront", tenantResolver, requireTenantHost, storefrontRouter);
     // Authed storefront payment endpoints (requires tenant + JWT).
