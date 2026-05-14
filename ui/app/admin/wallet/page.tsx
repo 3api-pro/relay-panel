@@ -118,18 +118,13 @@ export default function WalletPage() {
             >
               提现
             </button>
-            <button
-              onClick={() => setShowTopup(true)}
-              className="px-5 py-2.5 rounded-xl bg-white/15 backdrop-blur text-white font-medium text-sm border border-white/30 hover:bg-white/25 transition-all"
-            >
-              抵 llmapi 续费
-            </button>
+
           </div>
         </div>
       </section>
 
       <section className="mb-3 text-xs text-muted-foreground leading-relaxed">
-        客户在你的站点付款后（统一走平台 Alipay 收款，你不需要自己申请商户号），钱直接进入这里。你可以走 <strong>国内银行卡</strong> 或 <strong>支付宝收款码</strong>（国际兼容）提现，平台收 3% 手续费 + T+1 人工审核到账；或者把余额直接抵到你的 llmapi 订阅续费（内部转账，免手续费）。
+        客户在你的站点付款（Alipay / PayPal / Stripe / USDT 多渠道，走平台收款 — 你不需要自己申请商户号），钱直接进入这里。你有两种用法：① 走 <strong>国内银行卡</strong> 或 <strong>支付宝收款码</strong>（国际兼容）<strong>提现</strong>，平台收 3% 手续费 + T+1 人工审核到账；② 在 llmapi.pro 买套餐时选 <strong>"钱包余额支付"</strong> — 免手续费内部转账。
       </section>
 
       {/* Transactions */}
@@ -223,7 +218,6 @@ export default function WalletPage() {
       </section>
 
       {showWithdraw && <WithdrawModal onClose={() => setShowWithdraw(false)} onSuccess={refresh} balanceSpendable={bal?.spendable_cents || 0} />}
-      {showTopup && <TopupModal onClose={() => setShowTopup(false)} onSuccess={refresh} balanceSpendable={bal?.spendable_cents || 0} />}
       {confirmId !== null && <ConfirmOtpModal id={confirmId} onClose={() => setConfirmId(null)} onSuccess={refresh} />}
     </AdminShell>
   );

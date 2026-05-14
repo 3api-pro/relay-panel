@@ -14,6 +14,7 @@ import { authToken } from './middleware/auth-token';
 import { relayRouter } from './routes/relay';
 import { adminAuthRouter } from './routes/auth-admin';
 import { ssoLlmapiRouter } from './routes/sso-llmapi';
+import { internalWalletRouter } from './routes/internal-wallet';
 import { adminWalletRouter } from './routes/admin/wallet';
 import { platformWithdrawalsRouter } from './routes/platform/withdrawals';
 import { adminRouter } from './routes/admin';
@@ -64,6 +65,7 @@ async function main(): Promise<void> {
   // Subdomains and single-tenant deploys fall through.
   app.use('/', landingRouter);
   app.use('/sso', ssoLlmapiRouter);
+  app.use('/api/internal', internalWalletRouter);
 
   // ---------------------------------------------------------------------
   // Static UI — Next.js export at /app/public, GET-only.
