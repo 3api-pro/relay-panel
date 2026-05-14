@@ -19,9 +19,9 @@ import { query } from "../services/database";
 import { logger } from "../services/logger";
 import { createAlipayQrPay, handleAlipayNotify } from "../services/payments/alipay";
 import { createUsdtPay, checkUsdtOnce, UsdtNetwork } from "../services/payments/usdt";
-import { createPaypalOrder, capturePaypalOrder, isPaypalConfigured } from "../services/payments/paypal";
-import { createCreemCheckout, verifyCreemSignature, isCreemConfigured } from "../services/payments/creem";
-import { createStripeSession, verifyStripeSignature, isStripeConfigured } from "../services/payments/stripe";
+import { createPaypalOrder, capturePaypalOrder, isPaypalConfigured, loadPaypalCredsWithSource } from "../services/payments/paypal";
+import { createCreemCheckout, verifyCreemSignature, isCreemConfigured, loadCreemCredsWithSource } from "../services/payments/creem";
+import { createStripeSession, verifyStripeSignature, isStripeConfigured, loadStripeCredsWithSource } from "../services/payments/stripe";
 import { confirmPaid, creditWalletForPaidOrder } from "../services/order-engine";
 import { config } from "../config";
 
@@ -199,13 +199,11 @@ storefrontPaymentsRouter.post("/paypal/create", async (req, res) => {
       returnUrl: `${base}/storefront/payments/paypal/return`,
       cancelUrl: `${base}/storefront/payments/paypal/cancel`,
     });
+    const ppResolved = await loadPaypalCredsWithSource(req.tenantId!);
+    const ppHolder = ppResolved?.fundsHolder || 'platform';
     await query<any>(
-      `UPDATE orders SET funds_holder='platform' WHERE id=$1`,
-      [order.id],
-    );
-    await query<any>(
-      `UPDATE orders SET payment_provider='paypal', payment_meta = payment_meta || $2::jsonb WHERE id=$1`,
-      [order.id, JSON.stringify({ paypal_order_id: result.paypal_order_id })],
+      `UPDATE orders SET funds_holder=$2, payment_provider='paypal', payment_meta = payment_meta || $3::jsonb WHERE id=$1`,
+      [order.id, ppHolder, JSON.stringify({ paypal_order_id: result.paypal_order_id, funds_holder: ppHolder })],
     );
     res.json(result);
   } catch (err: any) {
@@ -273,13 +271,11 @@ storefrontPaymentsRouter.post("/creem/create", async (req, res) => {
       successUrl: `${base}/dashboard?payment=success&order=${order.id}`,
       cancelUrl: `${base}/dashboard?payment=cancelled`,
     });
+    const crResolved = await loadCreemCredsWithSource(req.tenantId!);
+    const crHolder = crResolved?.fundsHolder || 'platform';
     await query<any>(
-      `UPDATE orders SET funds_holder='platform' WHERE id=$1`,
-      [order.id],
-    );
-    await query<any>(
-      `UPDATE orders SET payment_provider='creem', payment_meta = payment_meta || $2::jsonb WHERE id=$1`,
-      [order.id, JSON.stringify({ creem_checkout_id: result.checkout_id })],
+      `UPDATE orders SET funds_holder=$2, payment_provider='creem', payment_meta = payment_meta || $3::jsonb WHERE id=$1`,
+      [order.id, crHolder, JSON.stringify({ creem_checkout_id: result.checkout_id, funds_holder: crHolder })],
     );
     res.json(result);
   } catch (err: any) {
@@ -362,13 +358,11 @@ storefrontPaymentsRouter.post("/stripe/create", async (req, res) => {
       successUrl: `${base}/dashboard?payment=success&order=${order.id}`,
       cancelUrl: `${base}/dashboard?payment=cancelled`,
     });
+    const stResolved = await loadStripeCredsWithSource(req.tenantId!);
+    const stHolder = stResolved?.fundsHolder || 'platform';
     await query<any>(
-      `UPDATE orders SET funds_holder='platform' WHERE id=$1`,
-      [order.id],
-    );
-    await query<any>(
-      `UPDATE orders SET payment_provider='stripe', payment_meta = payment_meta || $2::jsonb WHERE id=$1`,
-      [order.id, JSON.stringify({ stripe_session_id: result.session_id })],
+      `UPDATE orders SET funds_holder=$2, payment_provider='stripe', payment_meta = payment_meta || $3::jsonb WHERE id=$1`,
+      [order.id, stHolder, JSON.stringify({ stripe_session_id: result.session_id, funds_holder: stHolder })],
     );
     res.json(result);
   } catch (err: any) {

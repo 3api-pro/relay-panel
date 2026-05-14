@@ -14,6 +14,7 @@
 import crypto from 'crypto';
 import { ProxyAgent } from 'undici';
 import { getConfig } from '../app-config';
+import { query } from '../database';
 
 let _disp: ProxyAgent | undefined;
 let _dispUrl: string | undefined;
@@ -90,4 +91,36 @@ export function verifyCreemSignature(rawBody: string, headerSig: string | undefi
     if (a.length === b.length && crypto.timingSafeEqual(a, b)) return true;
   }
   return false;
+}
+
+export interface CreemCredsWithSource {
+  api_key: string;
+  webhook_secret: string;
+  environment: 'test' | 'live';
+  fundsHolder: 'tenant' | 'platform';
+}
+
+export async function loadCreemCredsWithSource(tenantId: number): Promise<CreemCredsWithSource | null> {
+  const rows = await query<any>(
+    "SELECT config->'payment_config' AS p FROM tenant WHERE id = $1 LIMIT 1",
+    [tenantId],
+  );
+  const p = rows[0]?.p || {};
+  if (p.creem_api_key && p.creem_webhook_secret) {
+    return {
+      api_key: p.creem_api_key,
+      webhook_secret: p.creem_webhook_secret,
+      environment: (p.creem_environment === 'live' ? 'live' : 'test'),
+      fundsHolder: 'tenant',
+    };
+  }
+  const ak = getConfig('creem_api_key', '');
+  const ws = getConfig('creem_webhook_secret', '');
+  if (!ak) return null;
+  return {
+    api_key: ak,
+    webhook_secret: ws,
+    environment: (getConfig('creem_environment', 'live') === 'live' ? 'live' : 'test'),
+    fundsHolder: 'platform',
+  };
 }

@@ -18,6 +18,7 @@
 import crypto from 'crypto';
 import { ProxyAgent } from 'undici';
 import { getConfig } from '../app-config';
+import { query } from '../database';
 
 let _disp: ProxyAgent | undefined;
 let _dispUrl: string | undefined;
@@ -116,4 +117,36 @@ export function verifyStripeSignature(rawBody: string, header: string | undefine
     if (a.length === b.length && crypto.timingSafeEqual(a, b)) return true;
   }
   return false;
+}
+
+export interface StripeCredsWithSource {
+  secret_key: string;
+  webhook_secret: string;
+  mode: 'test' | 'live';
+  fundsHolder: 'tenant' | 'platform';
+}
+
+export async function loadStripeCredsWithSource(tenantId: number): Promise<StripeCredsWithSource | null> {
+  const rows = await query<any>(
+    "SELECT config->'payment_config' AS p FROM tenant WHERE id = $1 LIMIT 1",
+    [tenantId],
+  );
+  const p = rows[0]?.p || {};
+  if (p.stripe_secret_key && p.stripe_webhook_secret) {
+    return {
+      secret_key: p.stripe_secret_key,
+      webhook_secret: p.stripe_webhook_secret,
+      mode: (p.stripe_mode === 'live' ? 'live' : 'test'),
+      fundsHolder: 'tenant',
+    };
+  }
+  const sk = getConfig('stripe_secret_key', '');
+  const ws = getConfig('stripe_webhook_secret', '');
+  if (!sk) return null;
+  return {
+    secret_key: sk,
+    webhook_secret: ws,
+    mode: (getConfig('stripe_mode', 'test') === 'live' ? 'live' : 'test'),
+    fundsHolder: 'platform',
+  };
 }

@@ -20,12 +20,27 @@ import { useTranslations } from '@/lib/i18n';
 
 interface PaymentConfig {
   alipay_app_id: string;
-  alipay_private_key: string; // masked
+  alipay_private_key: string;
   alipay_private_key_set: boolean;
-  alipay_public_key: string; // masked
+  alipay_public_key: string;
   alipay_public_key_set: boolean;
   usdt_trc20_address: string;
   usdt_erc20_address: string;
+  // International providers (per-tenant override; empty = platform fallback)
+  paypal_client_id?: string;
+  paypal_client_secret?: string;
+  paypal_client_secret_set?: boolean;
+  paypal_environment?: 'sandbox' | 'live';
+  stripe_secret_key?: string;
+  stripe_secret_key_set?: boolean;
+  stripe_webhook_secret?: string;
+  stripe_webhook_secret_set?: boolean;
+  stripe_mode?: 'test' | 'live';
+  creem_api_key?: string;
+  creem_api_key_set?: boolean;
+  creem_webhook_secret?: string;
+  creem_webhook_secret_set?: boolean;
+  creem_environment?: 'test' | 'live';
 }
 
 const EMPTY: PaymentConfig = {
@@ -115,6 +130,36 @@ export default function PaymentConfigPage() {
       setData(r);
       setDraft(r);
       setMsg(t('save_usdt_ok'));
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveIntl() {
+    setSaving(true); setErr(''); setMsg('');
+    try {
+      const patch: Record<string, string> = {};
+      // PayPal — only id is plain; secret only when touched
+      if (touched['paypal_client_id'] || draft.paypal_client_id !== undefined) {
+        patch.paypal_client_id = draft.paypal_client_id || '';
+      }
+      if (touched['paypal_client_secret']) patch.paypal_client_secret = draft.paypal_client_secret || '';
+      if (touched['paypal_environment']) patch.paypal_environment = draft.paypal_environment || 'sandbox';
+      // Stripe
+      if (touched['stripe_secret_key']) patch.stripe_secret_key = draft.stripe_secret_key || '';
+      if (touched['stripe_webhook_secret']) patch.stripe_webhook_secret = draft.stripe_webhook_secret || '';
+      if (touched['stripe_mode']) patch.stripe_mode = draft.stripe_mode || 'test';
+      // Creem
+      if (touched['creem_api_key']) patch.creem_api_key = draft.creem_api_key || '';
+      if (touched['creem_webhook_secret']) patch.creem_webhook_secret = draft.creem_webhook_secret || '';
+      if (touched['creem_environment']) patch.creem_environment = draft.creem_environment || 'live';
+      if (Object.keys(patch).length === 0) { setMsg('没有改动'); return; }
+      const r = await api<PaymentConfig>('/admin/payment-config', {
+        method: 'PATCH', body: JSON.stringify(patch),
+      });
+      setData(r); setDraft(r); setTouched({}); setMsg('已保存国际收款配置');
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -355,6 +400,105 @@ export default function PaymentConfigPage() {
           </TabsContent>
         </Tabs>
       )}
-    </AdminShell>
+
+      <div className="mt-8 bg-card border border-border rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-2">
+          <CreditCard className="w-4 h-4 text-muted-foreground" />
+          <h2 className="text-base font-semibold">国际收款 (per-tenant 覆盖)</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          配你自己的 PayPal / Stripe / Creem 凭据 — 客户付款直接进你的账户。<strong>留空则平台代收</strong>（钱进你的钱包，可提现或抵 llmapi 续费）。
+        </p>
+
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-sm font-semibold mb-2">PayPal</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="pp_id" className="text-xs">Client ID</Label>
+                <Input id="pp_id" value={draft.paypal_client_id || ''}
+                  placeholder="留空走平台"
+                  onChange={(e) => { setDraft({ ...draft, paypal_client_id: e.target.value }); setTouched((t) => ({ ...t, paypal_client_id: true })); }} />
+              </div>
+              <div>
+                <Label htmlFor="pp_sec" className="text-xs">Client Secret {draft.paypal_client_secret_set && <span className="text-xs text-emerald-600 ml-1">✓</span>}</Label>
+                <Input id="pp_sec" type="password" value={draft.paypal_client_secret || ''}
+                  placeholder={draft.paypal_client_secret_set ? '（不变）输入新值替换' : ''}
+                  onChange={(e) => { setDraft({ ...draft, paypal_client_secret: e.target.value }); setTouched((t) => ({ ...t, paypal_client_secret: true })); }} />
+              </div>
+              <div>
+                <Label htmlFor="pp_env" className="text-xs">环境</Label>
+                <select id="pp_env" value={draft.paypal_environment || 'sandbox'}
+                  onChange={(e) => { setDraft({ ...draft, paypal_environment: e.target.value as 'sandbox' | 'live' }); setTouched((t) => ({ ...t, paypal_environment: true })); }}
+                  className="w-full h-9 px-3 border border-input bg-background rounded-md text-sm">
+                  <option value="sandbox">Sandbox</option>
+                  <option value="live">Live</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold mb-2">Stripe</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="st_sk" className="text-xs">Secret Key {draft.stripe_secret_key_set && <span className="text-xs text-emerald-600 ml-1">✓</span>}</Label>
+                <Input id="st_sk" type="password" value={draft.stripe_secret_key || ''}
+                  placeholder={draft.stripe_secret_key_set ? '（不变）输入新值替换' : 'sk_live_… 或 sk_test_…'}
+                  onChange={(e) => { setDraft({ ...draft, stripe_secret_key: e.target.value }); setTouched((t) => ({ ...t, stripe_secret_key: true })); }} />
+              </div>
+              <div>
+                <Label htmlFor="st_wh" className="text-xs">Webhook Signing Secret {draft.stripe_webhook_secret_set && <span className="text-xs text-emerald-600 ml-1">✓</span>}</Label>
+                <Input id="st_wh" type="password" value={draft.stripe_webhook_secret || ''}
+                  placeholder={draft.stripe_webhook_secret_set ? '（不变）输入新值替换' : 'whsec_…'}
+                  onChange={(e) => { setDraft({ ...draft, stripe_webhook_secret: e.target.value }); setTouched((t) => ({ ...t, stripe_webhook_secret: true })); }} />
+              </div>
+              <div>
+                <Label htmlFor="st_mode" className="text-xs">模式</Label>
+                <select id="st_mode" value={draft.stripe_mode || 'test'}
+                  onChange={(e) => { setDraft({ ...draft, stripe_mode: e.target.value as 'test' | 'live' }); setTouched((t) => ({ ...t, stripe_mode: true })); }}
+                  className="w-full h-9 px-3 border border-input bg-background rounded-md text-sm">
+                  <option value="test">Test</option>
+                  <option value="live">Live</option>
+                </select>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Webhook URL: <code className="text-xs">https://3api.pro/payments/stripe/webhook</code></p>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold mb-2">Creem</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="cr_ak" className="text-xs">API Key {draft.creem_api_key_set && <span className="text-xs text-emerald-600 ml-1">✓</span>}</Label>
+                <Input id="cr_ak" type="password" value={draft.creem_api_key || ''}
+                  placeholder={draft.creem_api_key_set ? '（不变）输入新值替换' : 'creem_…'}
+                  onChange={(e) => { setDraft({ ...draft, creem_api_key: e.target.value }); setTouched((t) => ({ ...t, creem_api_key: true })); }} />
+              </div>
+              <div>
+                <Label htmlFor="cr_wh" className="text-xs">Webhook Secret {draft.creem_webhook_secret_set && <span className="text-xs text-emerald-600 ml-1">✓</span>}</Label>
+                <Input id="cr_wh" type="password" value={draft.creem_webhook_secret || ''}
+                  placeholder={draft.creem_webhook_secret_set ? '（不变）输入新值替换' : 'whsec_…'}
+                  onChange={(e) => { setDraft({ ...draft, creem_webhook_secret: e.target.value }); setTouched((t) => ({ ...t, creem_webhook_secret: true })); }} />
+              </div>
+              <div>
+                <Label htmlFor="cr_env" className="text-xs">环境</Label>
+                <select id="cr_env" value={draft.creem_environment || 'live'}
+                  onChange={(e) => { setDraft({ ...draft, creem_environment: e.target.value as 'test' | 'live' }); setTouched((t) => ({ ...t, creem_environment: true })); }}
+                  className="w-full h-9 px-3 border border-input bg-background rounded-md text-sm">
+                  <option value="test">Test</option>
+                  <option value="live">Live</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <Button onClick={saveIntl} disabled={saving} className="mt-6">
+          {saving ? '保存中…' : '保存国际收款配置'}
+        </Button>
+      </div>
+
+        </AdminShell>
   );
 }

@@ -442,6 +442,18 @@ const PAYMENT_FIELDS = [
   'alipay_public_key',
   'usdt_trc20_address',
   'usdt_erc20_address',
+  // PayPal (per-tenant; falls back to platform app_config if blank)
+  'paypal_client_id',
+  'paypal_client_secret',
+  'paypal_environment',
+  // Stripe (per-tenant)
+  'stripe_secret_key',
+  'stripe_webhook_secret',
+  'stripe_mode',
+  // Creem (per-tenant)
+  'creem_api_key',
+  'creem_webhook_secret',
+  'creem_environment',
 ] as const;
 type PayField = (typeof PAYMENT_FIELDS)[number];
 
@@ -468,6 +480,20 @@ adminExtrasRouter.get('/payment-config', async (req: Request, res: Response) => 
     alipay_public_key_set: !!cfg.alipay_public_key,
     usdt_trc20_address: cfg.usdt_trc20_address || '',
     usdt_erc20_address: cfg.usdt_erc20_address || '',
+    paypal_client_id: cfg.paypal_client_id || '',
+    paypal_client_secret: maskSecret(cfg.paypal_client_secret),
+    paypal_client_secret_set: !!cfg.paypal_client_secret,
+    paypal_environment: cfg.paypal_environment || 'sandbox',
+    stripe_secret_key: maskSecret(cfg.stripe_secret_key),
+    stripe_secret_key_set: !!cfg.stripe_secret_key,
+    stripe_webhook_secret: maskSecret(cfg.stripe_webhook_secret),
+    stripe_webhook_secret_set: !!cfg.stripe_webhook_secret,
+    stripe_mode: cfg.stripe_mode || 'test',
+    creem_api_key: maskSecret(cfg.creem_api_key),
+    creem_api_key_set: !!cfg.creem_api_key,
+    creem_webhook_secret: maskSecret(cfg.creem_webhook_secret),
+    creem_webhook_secret_set: !!cfg.creem_webhook_secret,
+    creem_environment: cfg.creem_environment || 'live',
   });
 });
 
@@ -527,6 +553,20 @@ adminExtrasRouter.patch('/payment-config', async (req: Request, res: Response) =
       alipay_public_key_set: !!cfg.alipay_public_key,
       usdt_trc20_address: cfg.usdt_trc20_address || '',
       usdt_erc20_address: cfg.usdt_erc20_address || '',
+      paypal_client_id: cfg.paypal_client_id || '',
+      paypal_client_secret: maskSecret(cfg.paypal_client_secret),
+      paypal_client_secret_set: !!cfg.paypal_client_secret,
+      paypal_environment: cfg.paypal_environment || 'sandbox',
+      stripe_secret_key: maskSecret(cfg.stripe_secret_key),
+      stripe_secret_key_set: !!cfg.stripe_secret_key,
+      stripe_webhook_secret: maskSecret(cfg.stripe_webhook_secret),
+      stripe_webhook_secret_set: !!cfg.stripe_webhook_secret,
+      stripe_mode: cfg.stripe_mode || 'test',
+      creem_api_key: maskSecret(cfg.creem_api_key),
+      creem_api_key_set: !!cfg.creem_api_key,
+      creem_webhook_secret: maskSecret(cfg.creem_webhook_secret),
+      creem_webhook_secret_set: !!cfg.creem_webhook_secret,
+      creem_environment: cfg.creem_environment || 'live',
     });
   } catch (err: any) {
     logger.error({ err: err.message, tenantId }, 'admin:payment-config:patch:error');

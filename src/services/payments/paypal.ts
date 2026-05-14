@@ -13,6 +13,7 @@
  */
 import { ProxyAgent } from 'undici';
 import { getConfig } from '../app-config';
+import { query } from '../database';
 import { logger } from '../logger';
 
 let _disp: ProxyAgent | undefined;
@@ -130,5 +131,37 @@ export async function capturePaypalOrder(ppOrderId: string): Promise<PaypalCaptu
     custom_id: pu.custom_id ?? '',
     amount_value: cap.amount?.value ?? '',
     amount_currency: cap.amount?.currency_code ?? '',
+  };
+}
+
+export interface PaypalCredsWithSource {
+  client_id: string;
+  client_secret: string;
+  environment: 'sandbox' | 'live';
+  fundsHolder: 'tenant' | 'platform';
+}
+
+export async function loadPaypalCredsWithSource(tenantId: number): Promise<PaypalCredsWithSource | null> {
+  const rows = await query<any>(
+    "SELECT config->'payment_config' AS p FROM tenant WHERE id = $1 LIMIT 1",
+    [tenantId],
+  );
+  const p = rows[0]?.p || {};
+  const tId = p.paypal_client_id || '';
+  const tSec = p.paypal_client_secret || '';
+  if (tId && tSec) {
+    return {
+      client_id: tId, client_secret: tSec,
+      environment: (p.paypal_environment === 'live' ? 'live' : 'sandbox'),
+      fundsHolder: 'tenant',
+    };
+  }
+  const pid = getConfig('paypal_client_id', '');
+  const psec = getConfig('paypal_client_secret', '');
+  if (!pid || !psec) return null;
+  return {
+    client_id: pid, client_secret: psec,
+    environment: (getConfig('paypal_environment', 'sandbox') === 'live' ? 'live' : 'sandbox'),
+    fundsHolder: 'platform',
   };
 }
