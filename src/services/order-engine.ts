@@ -391,6 +391,13 @@ export async function creditWalletForPaidOrder(
 ): Promise<void> {
   const o = result.order;
   if (!o || o.status !== 'paid' && o.status !== 'paid_pending_provision') return;
+  // Only credit reseller's wallet when the money actually landed in the
+  // PLATFORM account (we hold it on behalf of the reseller). When the
+  // funds_holder is 'tenant' the reseller's own merchant account got
+  // the money directly — we would double-count if we credited here.
+  if ((o as any).funds_holder && (o as any).funds_holder !== 'platform') {
+    return;
+  }
   try {
     const r = await creditOrder({
       tenantId: o.tenant_id,

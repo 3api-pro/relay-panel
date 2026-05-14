@@ -200,6 +200,10 @@ storefrontPaymentsRouter.post("/paypal/create", async (req, res) => {
       cancelUrl: `${base}/storefront/payments/paypal/cancel`,
     });
     await query<any>(
+      `UPDATE orders SET funds_holder='platform' WHERE id=$1`,
+      [order.id],
+    );
+    await query<any>(
       `UPDATE orders SET payment_provider='paypal', payment_meta = payment_meta || $2::jsonb WHERE id=$1`,
       [order.id, JSON.stringify({ paypal_order_id: result.paypal_order_id })],
     );
@@ -269,6 +273,10 @@ storefrontPaymentsRouter.post("/creem/create", async (req, res) => {
       successUrl: `${base}/dashboard?payment=success&order=${order.id}`,
       cancelUrl: `${base}/dashboard?payment=cancelled`,
     });
+    await query<any>(
+      `UPDATE orders SET funds_holder='platform' WHERE id=$1`,
+      [order.id],
+    );
     await query<any>(
       `UPDATE orders SET payment_provider='creem', payment_meta = payment_meta || $2::jsonb WHERE id=$1`,
       [order.id, JSON.stringify({ creem_checkout_id: result.checkout_id })],
@@ -354,6 +362,10 @@ storefrontPaymentsRouter.post("/stripe/create", async (req, res) => {
       successUrl: `${base}/dashboard?payment=success&order=${order.id}`,
       cancelUrl: `${base}/dashboard?payment=cancelled`,
     });
+    await query<any>(
+      `UPDATE orders SET funds_holder='platform' WHERE id=$1`,
+      [order.id],
+    );
     await query<any>(
       `UPDATE orders SET payment_provider='stripe', payment_meta = payment_meta || $2::jsonb WHERE id=$1`,
       [order.id, JSON.stringify({ stripe_session_id: result.session_id })],

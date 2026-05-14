@@ -124,7 +124,7 @@ export default function WalletPage() {
       </section>
 
       <section className="mb-3 text-xs text-muted-foreground leading-relaxed">
-        客户在你的站点付款（Alipay / PayPal / Stripe / USDT 多渠道，走平台收款 — 你不需要自己申请商户号），钱直接进入这里。你有两种用法：① 走 <strong>国内银行卡</strong> 或 <strong>支付宝收款码</strong>（国际兼容）<strong>提现</strong>，平台收 3% 手续费 + T+1 人工审核到账；② 在 llmapi.pro 买套餐时选 <strong>"钱包余额支付"</strong> — 免手续费内部转账。
+        <strong>钱包只显示由平台代收的钱。</strong>建议你在<strong>设置 → 收款渠道</strong>配自己的 Alipay/PayPal/Stripe — 客户付款会直接进你自己的账户，<u>这部分钱不在钱包里</u>，你直接管。<br/><br/>没配的渠道我们用平台账号兜底收款（你没法/嫌烦申请商户的情况），代收的钱进这里。<br/><br/>钱包余额两种用法：① 走 <strong>国内银行卡</strong> 或 <strong>支付宝收款码</strong>（国际兼容）<strong>提现</strong>，3% 手续费 + T+1 人工到账；② 在 llmapi.pro 买套餐时选 <strong>"用余额支付"</strong> — 免手续费内部转账。
       </section>
 
       {/* Transactions */}

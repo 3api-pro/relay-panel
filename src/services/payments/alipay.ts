@@ -36,20 +36,51 @@ export interface AlipayCreds {
   alipay_public_key: string;
 }
 
-async function loadAlipayCreds(tenantId: number): Promise<AlipayCreds | null> {
-  // Resolution order: per-tenant payment_config -> platform app_config -> env fallback.
+interface AlipayCredsResult {
+  creds: AlipayCreds;
+  /** 'tenant'   — reseller's own merchant config; money goes directly to them.
+   *  'platform' — fallback to platform app_config / env; money is collected on
+   *               behalf of reseller and credited to their wallet_balance. */
+  fundsHolder: 'tenant' | 'platform';
+}
+
+async function loadAlipayCredsWithSource(tenantId: number): Promise<AlipayCredsResult | null> {
   const rows = await query<any>(
     "SELECT config->'payment_config' AS p FROM tenant WHERE id = $1 LIMIT 1",
     [tenantId],
   );
   const p = rows[0]?.p || {};
-  const appId = p.alipay_app_id || getConfig('alipay_app_id') || config.alipayAppIdFallback;
-  const pkRaw = p.alipay_private_key || getConfig('alipay_private_key') || config.alipayPrivateKeyFallback || "";
-  const alipayPkRaw = p.alipay_public_key || getConfig('alipay_public_key') || config.alipayPublicKeyFallback || "";
+  // Prefer per-tenant; only treat as 'tenant'-owned if ALL three values present.
+  const tAppId = p.alipay_app_id || '';
+  const tPkRaw = p.alipay_private_key || '';
+  const tPubRaw = p.alipay_public_key || '';
+  if (tAppId && tPkRaw && tPubRaw) {
+    return {
+      creds: {
+        alipay_app_id: tAppId,
+        alipay_private_key: tPkRaw.replace(/\\n/g, "\n"),
+        alipay_public_key: tPubRaw.replace(/\\n/g, "\n"),
+      },
+      fundsHolder: 'tenant',
+    };
+  }
+  // Platform fallback (app_config or env)
+  const appId = getConfig('alipay_app_id') || config.alipayAppIdFallback;
+  const pkRaw = getConfig('alipay_private_key') || config.alipayPrivateKeyFallback || "";
+  const alipayPkRaw = getConfig('alipay_public_key') || config.alipayPublicKeyFallback || "";
   const pk = pkRaw.replace(/\\n/g, "\n");
   const alipayPk = alipayPkRaw.replace(/\\n/g, "\n");
   if (!appId || !pk || !alipayPk) return null;
-  return { alipay_app_id: appId, alipay_private_key: pk, alipay_public_key: alipayPk };
+  return {
+    creds: { alipay_app_id: appId, alipay_private_key: pk, alipay_public_key: alipayPk },
+    fundsHolder: 'platform',
+  };
+}
+
+// Back-compat alias for any caller wanting credentials without the metadata.
+async function loadAlipayCreds(tenantId: number): Promise<AlipayCreds | null> {
+  const r = await loadAlipayCredsWithSource(tenantId);
+  return r ? r.creds : null;
 }
 
 export function isMockMode(): boolean {
@@ -91,6 +122,7 @@ export async function createAlipayQrPay(order: {
 
   if (isMockMode()) {
     const qr = "https://qr.alipay.com/MOCK_QR_" + outTradeNo;
+    await query(`UPDATE orders SET funds_holder = 'platform' WHERE id = $1`, [order.id]);
     await query(
       "UPDATE orders SET payment_meta = payment_meta || $1::jsonb WHERE id = $2",
       [
@@ -108,11 +140,17 @@ export async function createAlipayQrPay(order: {
     return { out_trade_no: outTradeNo, qr_code_url: qr, mode: "mock" };
   }
 
-  const creds = await loadAlipayCreds(order.tenant_id);
-  if (!creds) {
+  const resolved = await loadAlipayCredsWithSource(order.tenant_id);
+  if (!resolved) {
     throw Object.assign(new Error("alipay_not_configured"), { code: "ALIPAY_NOT_CONFIGURED" });
   }
-  const sdk = getSdk(creds);
+  // Tag the order with where the funds will actually land. Used by
+  // creditWalletForPaidOrder to decide whether to record an internal credit.
+  await query(
+    `UPDATE orders SET funds_holder = $2 WHERE id = $1`,
+    [order.id, resolved.fundsHolder],
+  );
+  const sdk = getSdk(resolved.creds);
   if (!sdk) {
     throw Object.assign(new Error("alipay_sdk_missing"), { code: "ALIPAY_SDK_MISSING" });
   }
