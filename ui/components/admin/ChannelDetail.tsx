@@ -103,6 +103,21 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
   // Key management modals
   const [addKeyOpen, setAddKeyOpen] = useState(false);
   const [newKey, setNewKey] = useState('');
+  // Most users never touch weight/priority/legacy-type/models/mapping/headers,
+  // so we keep them collapsed and surface only the four fields that matter
+  // (provider, name, base_url, enabled). But: when editing an existing channel
+  // that ALREADY has non-default advanced values, auto-expand so a power user
+  // sees their config without having to click. Pattern stolen from new-api's
+  // hasAdvancedSettingsValues() — clean for new channels, frictionless for edits.
+  const hasAdvancedValues = (
+    (channel.weight !== 100 && channel.weight !== 0) ||
+    (channel.priority !== 100 && channel.priority !== 0 && channel.priority !== 1) ||
+    !!channel.models ||
+    !!(channel.model_mapping && Object.keys(channel.model_mapping).length > 0) ||
+    !!(channel.custom_headers && Object.keys(channel.custom_headers).length > 0) ||
+    (channel.type !== 'wholesale-3api' && channel.type !== 'byok-claude')
+  );
+  const [showAdvanced, setShowAdvanced] = useState(hasAdvancedValues);
 
   // Reset state when switching channels.
   useEffect(() => {
@@ -277,11 +292,26 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
           </div>
         )}
 
+        {/* ─── CORE (always visible) ─── */}
+
         {/* Provider type */}
         <Field label={t('field_provider_type')} hint={provInfo?.docKey ? t(provInfo.docKey) : provInfo?.doc}>
           <select
             value={form.provider_type}
-            onChange={(e) => setForm({ ...form, provider_type: e.target.value })}
+            onChange={(e) => {
+              const v = e.target.value;
+              const p = PROVIDER_TYPES.find((x) => x.v === v);
+              // Auto-fill base_url default + type alias when switching provider,
+              // but only if the user hasn't customized them yet (keep their edits).
+              const sameProviderDefault = PROVIDER_TYPES.find((x) => x.v === form.provider_type)?.defaultBaseUrl;
+              const baseUrlIsDefault = !form.base_url || form.base_url === sameProviderDefault;
+              setForm({
+                ...form,
+                provider_type: v,
+                type: v === 'llmapi-wholesale' ? 'wholesale-3api' : 'byok-claude',
+                base_url: baseUrlIsDefault && p?.defaultBaseUrl ? p.defaultBaseUrl : form.base_url,
+              });
+            }}
             className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
           >
             {PROVIDER_TYPES.map((p) => (
@@ -293,29 +323,18 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
           </select>
         </Field>
 
-        {/* Name + base_url */}
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={t('field_name')}>
-            <Input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="h-9"
-            />
-          </Field>
-          <Field label={t('field_legacy_type')}>
-            <select
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="wholesale-3api">wholesale-3api</option>
-              <option value="byok-claude">byok-claude</option>
-              <option value="byok-openai-compat">byok-openai-compat</option>
-              <option value="byok-other">byok-other</option>
-            </select>
-          </Field>
-        </div>
-        <Field label={t('field_base_url')}>
+        {/* Name (full width — legacy_type moved to Advanced) */}
+        <Field label={t('field_name')}>
+          <Input
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            className="h-9"
+            placeholder={tChannels('ph_name')}
+          />
+        </Field>
+
+        {/* Base URL */}
+        <Field label={t('field_base_url')} hint={tChannels('hint_base_url')}>
           <Input
             value={form.base_url}
             onChange={(e) => setForm({ ...form, base_url: e.target.value })}
@@ -323,73 +342,101 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
           />
         </Field>
 
-        {/* Weight + priority + enabled */}
-        <div className="grid grid-cols-3 gap-3">
-          <Field label={t('field_weight')}>
-            <Input
-              type="number"
-              value={form.weight}
-              onChange={(e) => setForm({ ...form, weight: Number(e.target.value) })}
-              className="h-9"
+        {/* Enabled switch — single field on its own row */}
+        <Field label={t('field_enabled')}>
+          <div className="flex items-center gap-2 h-9">
+            <Switch
+              checked={form.enabled}
+              onCheckedChange={(v) => setForm({ ...form, enabled: !!v })}
             />
-          </Field>
-          <Field label={t('field_priority')}>
-            <Input
-              type="number"
-              value={form.priority}
-              onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })}
-              className="h-9"
-            />
-          </Field>
-          <Field label={t('field_enabled')}>
-            <div className="flex items-center gap-2 h-9">
-              <Switch
-                checked={form.enabled}
-                onCheckedChange={(v) => setForm({ ...form, enabled: !!v })}
-              />
-              <span className="text-xs text-muted-foreground">
-                {form.enabled ? t('enabled_on') : t('enabled_off')}
-              </span>
-            </div>
-          </Field>
-        </div>
-
-        {/* Models allowlist */}
-        <Field
-          label={t('field_models')}
-          hint={t('models_hint')}
-        >
-          <Input
-            value={form.models}
-            onChange={(e) => setForm({ ...form, models: e.target.value })}
-            className="h-9 font-mono text-xs"
-            placeholder="claude-sonnet-4-7,claude-opus-4-7"
-          />
+            <span className="text-xs text-muted-foreground">
+              {form.enabled ? t('enabled_on') : t('enabled_off')}
+            </span>
+          </div>
         </Field>
 
-        {/* Model mapping editor */}
-        <PairEditor
-          label={t('field_model_mapping')}
-          hint={t('model_mapping_hint')}
-          pairs={mappingPairs}
-          setPairs={setMappingPairs}
-          placeholderKey="claude-sonnet-4-7"
-          placeholderVal="claude-3-5-sonnet-20241022"
-          addLabel={t('pair_add')}
-          emptyLabel={t('pair_empty')}
-        />
+        {/* ─── ADVANCED (collapsed by default) ─── */}
+        <div className="border-t border-border pt-3">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <span className={cn('inline-block transition-transform', showAdvanced && 'rotate-90')}>▸</span>
+            {t('advanced_toggle')}
+            <span className="text-[10px] text-muted-foreground/70">{t('advanced_hint')}</span>
+          </button>
 
-        {/* Custom headers editor */}
-        <PairEditor
-          label={t('field_custom_headers')}
-          hint={t('custom_headers_hint')}
-          pairs={headerPairs}
-          setPairs={setHeaderPairs}
-          placeholderKey="anthropic-beta"
-          placeholderVal="prompt-caching-2024-07-31"
-          addLabel={t('pair_add')}
-          emptyLabel={t('pair_empty')}
-        />
+          {showAdvanced && (
+            <div className="mt-3 pl-3 border-l-2 border-muted space-y-3">
+              {/* Weight + priority + legacy_type */}
+              <div className="grid grid-cols-3 gap-3">
+                <Field label={t('field_weight')}>
+                  <Input
+                    type="number"
+                    value={form.weight}
+                    onChange={(e) => setForm({ ...form, weight: Number(e.target.value) })}
+                    className="h-9"
+                  />
+                </Field>
+                <Field label={t('field_priority')}>
+                  <Input
+                    type="number"
+                    value={form.priority}
+                    onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })}
+                    className="h-9"
+                  />
+                </Field>
+                <Field label={t('field_legacy_type')}>
+                  <select
+                    value={form.type}
+                    onChange={(e) => setForm({ ...form, type: e.target.value })}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="wholesale-3api">wholesale-3api</option>
+                    <option value="byok-claude">byok-claude</option>
+                    <option value="byok-openai-compat">byok-openai-compat</option>
+                    <option value="byok-other">byok-other</option>
+                  </select>
+                </Field>
+              </div>
+
+              {/* Models allowlist */}
+              <Field label={t('field_models')} hint={t('models_hint')}>
+                <Input
+                  value={form.models}
+                  onChange={(e) => setForm({ ...form, models: e.target.value })}
+                  className="h-9 font-mono text-xs"
+                  placeholder="claude-sonnet-4-7,claude-opus-4-7"
+                />
+              </Field>
+
+              {/* Model mapping editor */}
+              <PairEditor
+                label={t('field_model_mapping')}
+                hint={t('model_mapping_hint')}
+                pairs={mappingPairs}
+                setPairs={setMappingPairs}
+                placeholderKey="claude-sonnet-4-7"
+                placeholderVal="claude-3-5-sonnet-20241022"
+                addLabel={t('pair_add')}
+                emptyLabel={t('pair_empty')}
+              />
+
+              {/* Custom headers editor */}
+              <PairEditor
+                label={t('field_custom_headers')}
+                hint={t('custom_headers_hint')}
+                pairs={headerPairs}
+                setPairs={setHeaderPairs}
+                placeholderKey="anthropic-beta"
+                placeholderVal="prompt-caching-2024-07-31"
+                addLabel={t('pair_add')}
+                emptyLabel={t('pair_empty')}
+              />
+            </div>
+          )}
+        </div>
 
         {/* Keys management — embedded v0.2 multi-key UI */}
         <div>

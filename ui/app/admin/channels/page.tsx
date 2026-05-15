@@ -91,11 +91,26 @@ export default function AdminChannelsPage() {
           type: newForm.type,
         }),
       });
-      setMsg(`${t('added_prefix')}${r.id}`);
+      setMsg(`${t('added_prefix')}${r.id} · ${t('auto_testing')}`);
       setNewOpen(false);
       setNewForm({ name: '', base_url: 'https://llmapi.pro/v1', api_key: '', provider_type: 'llmapi-wholesale', type: 'wholesale-3api' });
       await refresh();
       setSelectedId(r.id);
+
+      // Auto-test the freshly created channel so the user immediately knows
+      // whether the key/url actually works — no "now go hunt for the test
+      // button" step. Swallow errors: the row already exists, this is a
+      // best-effort confirmation.
+      try {
+        const tr = await api<any>(`/admin/channels/${r.id}/test`, { method: 'POST' });
+        if (tr.ok) {
+          setMsg(`${t('added_prefix')}${r.id} · ${t('test_ok_with_latency', { latency: tr.latency_ms ?? '-' })}`);
+        } else {
+          setErr(`${t('added_prefix')}${r.id} · ${t('test_fail_prefix')}${formatTestError(tr, t)}`);
+          setMsg('');
+        }
+        await refresh();
+      } catch { /* channel exists; auto-test failed to dispatch — non-fatal */ }
     } catch (e: any) {
       setErr(e.message);
     } finally {
