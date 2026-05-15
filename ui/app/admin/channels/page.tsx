@@ -39,10 +39,10 @@ export default function AdminChannelsPage() {
   const [newOpen, setNewOpen] = useState(false);
   const [newForm, setNewForm] = useState({
     name: '',
-    base_url: 'https://api.llmapi.pro/v1',
+    base_url: 'https://llmapi.pro/v1',
     api_key: '',
-    provider_type: 'anthropic',
-    type: 'byok-claude',
+    provider_type: 'llmapi-wholesale',
+    type: 'wholesale-3api',
   });
   const [newBusy, setNewBusy] = useState(false);
 
@@ -92,7 +92,7 @@ export default function AdminChannelsPage() {
       });
       setMsg(`${t('added_prefix')}${r.id}`);
       setNewOpen(false);
-      setNewForm({ name: '', base_url: 'https://api.llmapi.pro/v1', api_key: '', provider_type: 'anthropic', type: 'byok-claude' });
+      setNewForm({ name: '', base_url: 'https://llmapi.pro/v1', api_key: '', provider_type: 'llmapi-wholesale', type: 'wholesale-3api' });
       await refresh();
       setSelectedId(r.id);
     } catch (e: any) {
@@ -232,7 +232,16 @@ export default function AdminChannelsPage() {
             <Label>{t('field_provider_type')}</Label>
             <select
               value={newForm.provider_type}
-              onChange={(e) => setNewForm({ ...newForm, provider_type: e.target.value })}
+              onChange={(e) => {
+                const v = e.target.value;
+                const p = PROVIDER_TYPES.find((x) => x.v === v);
+                setNewForm({
+                  ...newForm,
+                  provider_type: v,
+                  type: v === 'llmapi-wholesale' ? 'wholesale-3api' : 'byok-claude',
+                  base_url: p?.defaultBaseUrl ?? newForm.base_url,
+                });
+              }}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             >
               {PROVIDER_TYPES.map((p) => (

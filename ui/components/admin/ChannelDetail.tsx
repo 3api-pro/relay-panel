@@ -26,16 +26,17 @@ export const PROVIDER_TYPES: Array<{
   doc: string;
   labelKey?: string;
   docKey?: string;
+  defaultBaseUrl?: string;
 }> = [
-  { v: 'llmapi-wholesale', label: 'llmapi.pro Wholesale  (推荐)', status: 'live', doc: 'Anthropic 兼容协议，我方批发', labelKey: 'provider_label_llmapi_wholesale', docKey: 'provider_doc_llmapi_wholesale' },
-  { v: 'anthropic',        label: 'Anthropic 直连',                status: 'live', doc: '官方 /v1/messages 兼容', labelKey: 'provider_label_anthropic', docKey: 'provider_doc_anthropic' },
-  { v: 'openai',           label: 'OpenAI 兼容',                   status: 'live', doc: '/v1/chat/completions; 非流式自动适配', labelKey: 'provider_label_openai', docKey: 'provider_doc_openai' },
+  { v: 'llmapi-wholesale', label: 'llmapi.pro Wholesale  (推荐)', status: 'live', doc: 'Anthropic 兼容协议，我方批发', labelKey: 'provider_label_llmapi_wholesale', docKey: 'provider_doc_llmapi_wholesale', defaultBaseUrl: 'https://llmapi.pro/v1' },
+  { v: 'anthropic',        label: 'Anthropic 直连',                status: 'live', doc: '官方 /v1/messages 兼容', labelKey: 'provider_label_anthropic', docKey: 'provider_doc_anthropic', defaultBaseUrl: 'https://api.anthropic.com' },
+  { v: 'openai',           label: 'OpenAI 兼容',                   status: 'live', doc: '/v1/chat/completions; 非流式自动适配', labelKey: 'provider_label_openai', docKey: 'provider_doc_openai', defaultBaseUrl: 'https://api.openai.com/v1' },
   { v: 'custom',           label: '自定义 (Passthrough)',          status: 'passthrough', doc: '原样转发到 base_url + custom_headers', labelKey: 'provider_label_custom', docKey: 'provider_doc_custom' },
-  { v: 'gemini',           label: 'Google Gemini',                 status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04' },
-  { v: 'moonshot',         label: 'Moonshot Kimi',                 status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04' },
-  { v: 'deepseek',         label: 'DeepSeek',                      status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04' },
-  { v: 'minimax',          label: 'MiniMax',                       status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04' },
-  { v: 'qwen',             label: 'Qwen / Tongyi',                 status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04' },
+  { v: 'gemini',           label: 'Google Gemini',                 status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta' },
+  { v: 'moonshot',         label: 'Moonshot Kimi',                 status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04', defaultBaseUrl: 'https://api.moonshot.cn/v1' },
+  { v: 'deepseek',         label: 'DeepSeek',                      status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04', defaultBaseUrl: 'https://api.deepseek.com' },
+  { v: 'minimax',          label: 'MiniMax',                       status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04', defaultBaseUrl: 'https://api.minimax.chat/v1' },
+  { v: 'qwen',             label: 'Qwen / Tongyi',                 status: 'stub', doc: 'v0.4 上线', docKey: 'provider_doc_stub_v04', defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
 ];
 
 export interface ChannelFull {
