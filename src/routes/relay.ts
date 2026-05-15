@@ -147,51 +147,60 @@ async function resolveChannel(
   };
 }
 
-relayRouter.post('/messages', async (req: Request, res: Response) => {
-  const start = Date.now();
-  const tok = req.endToken!;
-  const requestedModel = String(req.body?.model || 'claude-sonnet-4-7');
+// Three protocols share the exact same pipeline (auth, tenancy, allowlist,
+// channel selection, usage recording). Only the upstream path differs:
+//   /v1/messages         — Anthropic Messages API (Claude Code, Hermes)
+//   /v1/chat/completions — OpenAI Chat Completions (OpenAI SDK, LiteLLM)
+//   /v1/responses        — OpenAI Responses API (Codex CLI 0.130+)
+// The upstream we forward to is expected to handle all three (e.g. llmapi.pro);
+// for upstreams that only speak Anthropic, the OpenAI paths will 404 from them
+// and the relay will surface that error verbatim.
+function buildRelayHandler(upstreamPath: string) {
+  return async (req: Request, res: Response): Promise<void> => {
+    const start = Date.now();
+    const tok = req.endToken!;
+    const requestedModel = String(req.body?.model || 'claude-sonnet-4-7');
 
-  // System-setting gate: maintenance_mode (P1 #10) returns 503 before we
-  // hit the upstream at all. Service caches per-tenant for 30s — failure
-  // to read the setting falls back to "service open".
-  if (await isMaintenanceMode(tok.tenantId)) {
-    res.status(503).json({
-      error: {
-        type: 'maintenance',
-        message: 'The service is under maintenance, please try again later.',
-      },
-    });
-    return;
-  }
+    if (await isMaintenanceMode(tok.tenantId)) {
+      res.status(503).json({
+        error: {
+          type: 'maintenance',
+          message: 'The service is under maintenance, please try again later.',
+        },
+      });
+      return;
+    }
 
-  // Allow exact match OR glob wildcard ("claude-*" / "claude-sonnet-*").
-  // Plan-derived allow lists are typically wildcards; the legacy admin-issued
-  // tokens use exact model names. Both flow through here.
-  if (tok.allowedModels && !modelMatchesAllowlist(requestedModel, tok.allowedModels)) {
-    res.status(403).json({
-      error: { type: 'permission_error', message: `Model not allowed: ${requestedModel}` },
-    });
-    return;
-  }
+    if (tok.allowedModels && !modelMatchesAllowlist(requestedModel, tok.allowedModels)) {
+      res.status(403).json({
+        error: { type: 'permission_error', message: `Model not allowed: ${requestedModel}` },
+      });
+      return;
+    }
 
-  const resolved = await resolveChannel(tok.tenantId);
-  if (resolved.error) {
-    res.status(503).json({
-      error: { type: 'upstream_not_configured', message: resolved.error },
-    });
-    return;
-  }
+    const resolved = await resolveChannel(tok.tenantId);
+    if (resolved.error) {
+      res.status(503).json({
+        error: { type: 'upstream_not_configured', message: resolved.error },
+      });
+      return;
+    }
 
-  const wantsStream =
-    req.body?.stream === true ||
-    String(req.headers['accept'] ?? '').includes('text/event-stream');
+    const wantsStream =
+      req.body?.stream === true ||
+      String(req.headers['accept'] ?? '').includes('text/event-stream');
 
-  if (wantsStream) {
-    return handleStream(req, res, requestedModel, start, resolved.channel, resolved.channelId, resolved.keyIndex);
-  }
-  return handleJson(req, res, requestedModel, start, resolved.channel, resolved.channelId, resolved.keyIndex);
-});
+    if (wantsStream) {
+      await handleStream(req, res, requestedModel, start, resolved.channel, resolved.channelId, resolved.keyIndex, upstreamPath);
+    } else {
+      await handleJson(req, res, requestedModel, start, resolved.channel, resolved.channelId, resolved.keyIndex, upstreamPath);
+    }
+  };
+}
+
+relayRouter.post('/messages', buildRelayHandler('/messages'));
+relayRouter.post('/chat/completions', buildRelayHandler('/chat/completions'));
+relayRouter.post('/responses', buildRelayHandler('/responses'));
 
 async function handleJson(
   req: Request,
@@ -201,6 +210,7 @@ async function handleJson(
   channel: UpstreamChannel | null,
   channelId: number | null,
   keyIndex: number | null,
+  upstreamPath: string,
 ): Promise<void> {
   const tok = req.endToken!;
   const usr = req.endUser!;
@@ -208,7 +218,7 @@ async function handleJson(
   let upstreamJson;
   try {
     upstreamJson = await callUpstream({
-      path: '/messages',
+      path: upstreamPath,
       body: req.body,
       ...(channel ? { channel } : {}),
     });
@@ -275,6 +285,7 @@ async function handleStream(
   channel: UpstreamChannel | null,
   channelId: number | null,
   keyIndex: number | null,
+  upstreamPath: string,
 ): Promise<void> {
   const tok = req.endToken!;
   const usr = req.endUser!;
@@ -282,7 +293,7 @@ async function handleStream(
   let upstreamHttp: globalThis.Response;
   try {
     upstreamHttp = await callUpstreamStream({
-      path: '/messages',
+      path: upstreamPath,
       body: req.body,
       ...(channel ? { channel } : {}),
     });

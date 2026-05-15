@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing pending.
+### Added
+- Multi-protocol relay — `POST /v1/chat/completions` (OpenAI Chat Completions)
+  and `POST /v1/responses` (OpenAI Responses API, used by Codex CLI `0.130+`)
+  now route through the same pipeline as `/v1/messages` (auth, tenancy,
+  allowlist, billing, usage logging).
+- SSE usage extractor recognises OpenAI Chat Completions terminal-chunk
+  `usage.{prompt,completion}_tokens` and Responses-API `response.usage` shapes
+  alongside the existing Anthropic `usage.{input,output}_tokens`.
+
+### Notes
+- Whether the OpenAI paths actually work end-to-end depends on the upstream
+  channel. The bundled wholesale upstream (`llmapi.pro`) supports all three
+  protocols as of 2026-05-15. BYOK channels pointed at OpenAI-only or
+  Anthropic-only endpoints will surface a 404 on the unsupported paths.
 
 ## [0.8.0] — 2026-05-12
 

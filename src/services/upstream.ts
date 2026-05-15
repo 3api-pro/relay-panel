@@ -511,6 +511,7 @@ export function extractUsageFromSse(buffer: string): { input: number; output: nu
     if (!json || json === '[DONE]') continue;
     try {
       const obj = JSON.parse(json);
+      // Anthropic SSE: message_start carries message.usage; message_delta carries usage.
       if (obj?.message?.usage?.input_tokens != null) {
         input = Number(obj.message.usage.input_tokens) || input;
       }
@@ -519,6 +520,22 @@ export function extractUsageFromSse(buffer: string): { input: number; output: nu
       }
       if (obj?.usage?.output_tokens != null) {
         output = Number(obj.usage.output_tokens) || output;
+      }
+      // OpenAI Chat Completions stream: terminal chunk has top-level usage with
+      // prompt_tokens / completion_tokens (when stream_options.include_usage=true).
+      if (obj?.usage?.prompt_tokens != null) {
+        input = Number(obj.usage.prompt_tokens) || input;
+      }
+      if (obj?.usage?.completion_tokens != null) {
+        output = Number(obj.usage.completion_tokens) || output;
+      }
+      // OpenAI Responses API stream: response.completed event nests usage under
+      // response.usage.{input_tokens, output_tokens}.
+      if (obj?.response?.usage?.input_tokens != null) {
+        input = Number(obj.response.usage.input_tokens) || input;
+      }
+      if (obj?.response?.usage?.output_tokens != null) {
+        output = Number(obj.response.usage.output_tokens) || output;
       }
     } catch {
       // Skip non-JSON / partial frames

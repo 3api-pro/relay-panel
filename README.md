@@ -23,11 +23,17 @@
 ## What is this?
 
 **3api/relay-panel** is the missing self-hostable control panel for anyone who wants
-to resell access to Claude-compatible LLM APIs. Spin up a branded
+to resell access to Claude / OpenAI compatible LLM APIs. Spin up a branded
 `<your-slug>.3api.pro` (or your own custom domain), let customers self-signup,
-sell them subscriptions or token packs, and route their `/v1/messages` traffic to
-**any** Anthropic-compatible upstream &mdash; your own keys, our wholesale pool,
-or both with failover.
+sell them subscriptions or token packs, and route their traffic to
+**any** compatible upstream &mdash; your own keys, our wholesale pool,
+or both with failover. The relay forwards three protocols transparently:
+
+- `POST /v1/messages` &mdash; Anthropic Messages API (Claude Code, Hermes, IDE plugins)
+- `POST /v1/chat/completions` &mdash; OpenAI Chat Completions (OpenAI SDK, LiteLLM)
+- `POST /v1/responses` &mdash; OpenAI Responses API (Codex CLI `0.130+`)
+
+All three share one storefront, one customer login, one billing pipeline.
 
 Unlike Go-based `one-api` / `new-api`, this is a modern **TypeScript + Postgres +
 Next.js** stack with first-class multi-tenancy, an onboarding wizard, a real
@@ -98,7 +104,10 @@ Full walkthrough (including the hosted path) in
 ## Architecture
 
 ```
-Customer ──▶ <slug>.3api.pro ──▶ Tenant Middleware ──▶ /v1/messages Relay ──▶ Upstream (BYOK or wholesale)
+Customer ──▶ <slug>.3api.pro ──▶ Tenant Middleware ──▶ Multi-protocol Relay ──▶ Upstream (BYOK or wholesale)
+                                                       ├─ /v1/messages          (Anthropic)
+                                                       ├─ /v1/chat/completions  (OpenAI)
+                                                       └─ /v1/responses         (OpenAI/Codex)
                   │                       │
                   ▼                       ▼
               Admin UI                Postgres (tenants/plans/subs/usage)
@@ -112,7 +121,7 @@ Full diagram, multi-tenant strategy, money flow and security boundaries:
 - **Multi-tenant routing** &mdash; tenant resolved from subdomain or custom domain
 - **Admin onboarding wizard** &mdash; upstream config, branding, first plan, first customer
 - **Plans / orders / subscriptions / API tokens** &mdash; full CRUD on both sides
-- **Anthropic-compatible relay** &mdash; `POST /v1/messages` with streaming, billing, usage logging
+- **Multi-protocol relay** &mdash; `/v1/messages` (Anthropic) + `/v1/chat/completions` + `/v1/responses` (OpenAI) with streaming, billing, usage logging on all three
 - **BYOK + wholesale** &mdash; mix your own keys with our pool, priority + failover
 - **Storefront** &mdash; brand-customizable (logo, color, announcement, hero copy)
 - **Checkout** &mdash; Alipay + USDT (Paddle / Stripe on roadmap)

@@ -16,7 +16,10 @@
 - 在 `<你的 slug>.3api.pro`（或自己的域名）上挂自己的店面
 - 让终端用户自助注册、自助下单
 - 卖订阅 / 卖 token 包 / 卖兑换码，任你选
-- 把 `/v1/messages` 流量转发到**任何 Anthropic 兼容上游** —— 你自己的 key、我们的批发号池，或两者混用 + failover
+- 把三套协议的流量（`/v1/messages` Anthropic、`/v1/chat/completions` OpenAI、`/v1/responses` OpenAI Responses）转发到**任何兼容上游** —— 你自己的 key、我们的批发号池，或两者混用 + failover
+  - `/v1/messages` —— Anthropic 协议（Claude Code、Hermes、IDE 插件）
+  - `/v1/chat/completions` —— OpenAI Chat Completions（OpenAI SDK、LiteLLM）
+  - `/v1/responses` —— OpenAI Responses API（Codex CLI `0.130+`）
 
 跟 Go 系的 `one-api` / `new-api` 比，这是个现代化的 **TypeScript + Postgres + Next.js** 栈，原生多租户、有引导向导、有真正像样的店面 UI、原生支持订阅计费（不只是 token 扣额）。
 
@@ -48,7 +51,10 @@ docker compose up -d
 ## 架构
 
 ```
-终端用户 ──▶ <slug>.3api.pro ──▶ 租户中间件 ──▶ /v1/messages 中转 ──▶ 上游 (自带 key 或 我们的批发号池)
+终端用户 ──▶ <slug>.3api.pro ──▶ 租户中间件 ──▶ 多协议中转 ──▶ 上游 (自带 key 或 我们的批发号池)
+                                                ├─ /v1/messages          (Anthropic)
+                                                ├─ /v1/chat/completions  (OpenAI)
+                                                └─ /v1/responses         (OpenAI/Codex)
                   │                     │
                   ▼                     ▼
               管理后台              Postgres (tenants / plans / subs / usage)
