@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Trash2, KeyRound } from 'lucide-react';
+import { Trash2, KeyRound, Pencil, Copy, Check, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -21,6 +22,10 @@ interface Props {
   current: boolean;
   k: ChannelKey;
   onDelete: () => void;
+  /** Replace the secret at this index with a new value. */
+  onEdit?: (newKey: string) => Promise<void>;
+  /** Fetch the plaintext key (for clipboard copy). */
+  onReveal?: () => Promise<string | null>;
   busy?: boolean;
 }
 
@@ -55,10 +60,88 @@ function useCountdown(target: string | null | undefined, restoredLabel: string):
  * One row inside the per-channel keys[] list. Shows masked preview, status
  * badge, cool-down countdown (if any), and a delete button with confirm.
  */
-export function ChannelKeyRow({ idx, current, k, onDelete, busy }: Props) {
+export function ChannelKeyRow({ idx, current, k, onDelete, onEdit, onReveal, busy }: Props) {
   const t = useTranslations('admin.channel.key_row');
   const status = normaliseStatus(k.status);
   const cooldown = useCountdown(k.cooled_until, t('cooldown_restored'));
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function commit() {
+    if (!onEdit || !draft.trim() || draft.trim().length < 8) return;
+    setSaving(true);
+    try {
+      await onEdit(draft.trim());
+      setEditing(false);
+      setDraft('');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function copyPlain() {
+    if (!onReveal) return;
+    const plain = await onReveal();
+    if (!plain) return;
+    try {
+      await navigator.clipboard.writeText(plain);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Fallback: show in prompt so user can manually copy if clipboard
+      // API is blocked (older browser / insecure context).
+      window.prompt(t('copy_fallback_label'), plain);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div
+        className={cn(
+          'flex items-center gap-2 px-3 py-2 border rounded-md text-sm',
+          'border-primary/40 bg-primary/[0.04]',
+        )}
+      >
+        <KeyRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <Input
+          autoFocus
+          type="password"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={t('edit_placeholder')}
+          className="h-7 font-mono text-xs flex-1"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') { setEditing(false); setDraft(''); }
+          }}
+        />
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={commit}
+          disabled={saving || draft.trim().length < 8}
+          className="h-7 w-7 p-0 text-emerald-600 hover:bg-emerald-500/10"
+          aria-label={t('edit_confirm')}
+          title={t('edit_confirm')}
+        >
+          <Check className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => { setEditing(false); setDraft(''); }}
+          disabled={saving}
+          className="h-7 w-7 p-0 text-muted-foreground"
+          aria-label={t('edit_cancel')}
+          title={t('edit_cancel')}
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -105,6 +188,35 @@ export function ChannelKeyRow({ idx, current, k, onDelete, busy }: Props) {
         >
           cooling{cooldown ? ` · ${cooldown}` : ''}
         </Badge>
+      )}
+      {onReveal && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={copyPlain}
+          disabled={busy}
+          className={cn(
+            'h-7 w-7 p-0 text-muted-foreground hover:text-foreground',
+            copied && 'text-emerald-600',
+          )}
+          aria-label={t('copy_aria')}
+          title={copied ? t('copy_done') : t('copy_title')}
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        </Button>
+      )}
+      {onEdit && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => { setEditing(true); setDraft(''); }}
+          disabled={busy}
+          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+          aria-label={t('edit_aria')}
+          title={t('edit_title')}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
       )}
       <Button
         variant="ghost"

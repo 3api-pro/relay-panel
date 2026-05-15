@@ -14,6 +14,8 @@ import {
   addKey,
   removeKey,
   replaceKeys,
+  updateKeyAt,
+  revealKeyAt,
   maskKey,
   ChannelKeyEntry,
 } from '../services/channel-keys';
@@ -360,6 +362,64 @@ channelsRouter.post('/:id/keys', async (req: Request, res: Response) => {
     })),
     keys_total: out.length,
   });
+});
+
+/**
+ * PATCH /admin/channels/:id/keys/:idx   body: { key: string }
+ * Replaces the secret at this index in place. Status is reset to 'active'
+ * and any cool-down is cleared. Returns the masked keys[] just like POST.
+ */
+channelsRouter.patch('/:id/keys/:idx', async (req: Request, res: Response) => {
+  const tenantId = req.resellerAdmin!.tenantId;
+  const id = parseInt(req.params.id, 10);
+  const idx = parseInt(req.params.idx, 10);
+  const key = String((req.body as any)?.key ?? '');
+  if (!id || Number.isNaN(idx) || idx < 0) {
+    res.status(400).json({ error: { type: 'invalid_request_error', message: 'invalid id or idx' } });
+    return;
+  }
+  if (!key || key.length < 8) {
+    res.status(400).json({ error: { type: 'invalid_request_error', message: 'key must be ≥8 chars' } });
+    return;
+  }
+  const out = await updateKeyAt(id, tenantId, idx, key);
+  if (out === null) {
+    res.status(404).json({ error: { type: 'not_found', message: 'channel not found' } });
+    return;
+  }
+  res.json({
+    keys: out.map((e) => ({
+      preview: maskKey(e.key),
+      status: e.status,
+      added_at: e.added_at,
+      cooled_until: e.cooled_until,
+      last_error: e.last_error,
+    })),
+    keys_total: out.length,
+  });
+});
+
+/**
+ * GET /admin/channels/:id/keys/:idx/reveal
+ * Returns the plaintext value of one key so the operator can copy it.
+ * Sensitive — relies on the admin auth + tenantResolver middleware
+ * upstream to gate it. Used for the "copy / view" affordance in the UI.
+ */
+channelsRouter.get('/:id/keys/:idx/reveal', async (req: Request, res: Response) => {
+  const tenantId = req.resellerAdmin!.tenantId;
+  const id = parseInt(req.params.id, 10);
+  const idx = parseInt(req.params.idx, 10);
+  if (!id || Number.isNaN(idx) || idx < 0) {
+    res.status(400).json({ error: { type: 'invalid_request_error', message: 'invalid id or idx' } });
+    return;
+  }
+  const key = await revealKeyAt(id, tenantId, idx);
+  if (key === null) {
+    res.status(404).json({ error: { type: 'not_found', message: 'channel or key not found' } });
+    return;
+  }
+  logger.info({ tenantId, channelId: id, idx }, 'admin:channel:key:reveal');
+  res.json({ key });
 });
 
 /**

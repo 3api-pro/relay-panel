@@ -451,7 +451,7 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
                       disabled={fetchingModels || busy}
                     >
                       <RefreshCw className={cn('w-3.5 h-3.5', fetchingModels && 'animate-spin')} />
-                      {fetchingModels ? t('fetch_models_busy') : t('fetch_models_btn')}
+                      {fetchingModels ? tChannels('fetch_models_busy') : tChannels('fetch_models_btn')}
                     </Button>
                   </div>
                   {fetchedModelsPreview && (
@@ -514,6 +514,23 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
                   current={idx === (channel.current_key_idx ?? 0)}
                   k={k}
                   onDelete={() => deleteKey(idx)}
+                  onEdit={async (newKey) => {
+                    await api(`/admin/channels/${channel.id}/keys/${idx}`, {
+                      method: 'PATCH',
+                      body: JSON.stringify({ key: newKey }),
+                    });
+                    await onChange();
+                  }}
+                  onReveal={async () => {
+                    try {
+                      const r = await api<{ key: string }>(
+                        `/admin/channels/${channel.id}/keys/${idx}/reveal`,
+                      );
+                      return r.key;
+                    } catch {
+                      return null;
+                    }
+                  }}
                 />
               ))
             ) : (

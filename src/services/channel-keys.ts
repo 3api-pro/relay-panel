@@ -201,6 +201,81 @@ export async function addKey(
 }
 
 /**
+ * Admin-side: replace the secret at index `idx` while preserving the
+ * status / cooldown / index pointer. The new key is set to 'active' and
+ * cooldown is cleared (the operator wouldn't be replacing it if the old
+ * one was healthy). Returns the updated keys array.
+ */
+export async function updateKeyAt(
+  channelId: number,
+  tenantId: number,
+  index: number,
+  newKey: string,
+): Promise<ChannelKeyEntry[] | null> {
+  const nowIso = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  return withTransaction(async (client) => {
+    const r = await client.query<ChannelKeysRow>(
+      `SELECT id, COALESCE(keys, '[]'::jsonb) AS keys
+         FROM upstream_channel
+        WHERE id = $1 AND tenant_id = $2
+        FOR UPDATE`,
+      [channelId, tenantId],
+    );
+    if (r.rows.length === 0) return null;
+    const keys = Array.isArray(r.rows[0].keys) ? [...r.rows[0].keys] : [];
+    if (index < 0 || index >= keys.length) return keys;
+    keys[index] = {
+      key: newKey,
+      status: 'active',
+      added_at: nowIso,
+      cooled_until: null,
+      last_error: null,
+    };
+    await client.query(
+      `UPDATE upstream_channel SET keys = $1::jsonb WHERE id = $2`,
+      [JSON.stringify(keys), channelId],
+    );
+    return keys;
+  });
+}
+
+/**
+ * Admin-side: reveal the plaintext key at index `idx`. The caller MUST
+ * already be authenticated as the tenant's admin (the auth middleware
+ * gates this). Returns null if the channel doesn't belong to the tenant
+ * or the index is out of range.
+ *
+ * Note: this is a one-way trapdoor — once a customer hits an upstream
+ * 401 because they used the wrong key, the operator needs to copy the
+ * exact value to re-paste somewhere (a doc, a peer client). Hiding it
+ * forever forces them to rotate, which is unnecessary friction.
+ */
+export async function revealKeyAt(
+  channelId: number,
+  tenantId: number,
+  index: number,
+): Promise<string | null> {
+  const r = await query<{ keys: ChannelKeyEntry[]; api_key: string | null }>(
+    `SELECT COALESCE(keys, '[]'::jsonb) AS keys, api_key
+       FROM upstream_channel
+      WHERE id = $1 AND tenant_id = $2`,
+    [channelId, tenantId],
+  );
+  if (r.length === 0) return null;
+  const keys = Array.isArray(r[0].keys) ? r[0].keys : [];
+  if (index >= 0 && index < keys.length) {
+    return keys[index]?.key ?? null;
+  }
+  // Fall back to legacy single-column api_key when the multi-key array
+  // is empty but the channel was created pre-v0.2 (or via the SSO path
+  // that seeds api_key but lazy-populates keys[]).
+  if (keys.length === 0 && index === 0) {
+    return r[0].api_key || null;
+  }
+  return null;
+}
+
+/**
  * Admin-side: remove a key by index. Returns the updated keys array.
  * Resets current_key_idx if the deletion would push it out of bounds.
  */
