@@ -17,7 +17,7 @@ import {
   maskKey,
   ChannelKeyEntry,
 } from '../services/channel-keys';
-import { testChannel } from '../services/channel-test';
+import { testChannel, fetchUpstreamModels } from '../services/channel-test';
 
 export const channelsRouter = Router();
 
@@ -498,5 +498,41 @@ channelsRouter.post('/:id/test', async (req: Request, res: Response) => {
     return;
   }
   logger.info({ tenantId, channelId: id, ok: result.ok, category: result.category }, 'admin:channel:test');
+  res.json(result);
+});
+
+/**
+ * POST /admin/channels/:id/fetch-models
+ *
+ * Hit the upstream's /models endpoint to enumerate every model id the
+ * channel actually exposes. UI uses this to one-click fill the
+ * `models` allowlist field on the channel-edit form. Does NOT persist
+ * the result — the operator decides whether to save the list back.
+ *
+ * Same auth/tenant guard as the other channel routes (tenantResolver +
+ * authAdmin upstream of this router mount in src/index.ts).
+ */
+channelsRouter.post('/:id/fetch-models', async (req: Request, res: Response) => {
+  const tenantId = req.resellerAdmin!.tenantId;
+  const id = parseInt(req.params.id, 10);
+  if (!id) {
+    res.status(400).json({ error: { type: 'invalid_request_error', message: 'invalid id' } });
+    return;
+  }
+  const result = await fetchUpstreamModels(id, tenantId);
+  if (!result) {
+    res.status(404).json({ error: { type: 'not_found', message: 'channel not found' } });
+    return;
+  }
+  logger.info(
+    {
+      tenantId,
+      channelId: id,
+      ok: result.ok,
+      category: result.category,
+      models_count: result.models_count ?? 0,
+    },
+    'admin:channel:fetch-models',
+  );
   res.json(result);
 });

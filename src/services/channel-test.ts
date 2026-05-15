@@ -344,6 +344,124 @@ async function runProbe(row: ChannelRow): Promise<TestResult> {
 }
 
 /**
+ * Fetch the upstream's model list (full set, not just a 5-id sample) so
+ * the UI can offer "Fill from upstream" on the models-allowlist field.
+ *
+ * Strategy:
+ *   - gemini   → GET {base}/models?key={apikey}, parse models[].name (strip "models/")
+ *   - custom   → unsupported (no known schema) → 501
+ *   - everyone else → GET {base}/models, parse data[].id (OpenAI / Anthropic shape)
+ *
+ * Returns the same TestResult-ish shape so the UI can reuse formatTestError.
+ * Never throws — wraps fetch failures as { ok:false, category:'unreachable' }.
+ */
+export async function fetchUpstreamModels(
+  channelId: number,
+  tenantId: number,
+): Promise<TestResult | null> {
+  const rows = await query<ChannelRow>(
+    `SELECT id, tenant_id, base_url, COALESCE(api_key, '') AS api_key,
+            provider_type, custom_headers, keys
+       FROM upstream_channel
+      WHERE id = $1 AND tenant_id = $2`,
+    [channelId, tenantId],
+  );
+  if (rows.length === 0) return null;
+  const row = rows[0];
+
+  if (row.provider_type === 'custom') {
+    return {
+      ok: false,
+      error: 'custom_provider_no_schema',
+      category: 'not_implemented',
+    };
+  }
+
+  const isGemini = row.provider_type === 'gemini';
+  const apiKey = pickAnyKey(row);
+  const base = effectiveBaseUrl(row);
+  if (!base) {
+    return { ok: false, error: 'no_base_url', category: 'unreachable' };
+  }
+  const url = isGemini
+    ? `${base}/models?key=${encodeURIComponent(apiKey || '')}`
+    : `${base}/models`;
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'User-Agent': '3api-relay-panel-tester/0.5.0',
+  };
+  if (apiKey && !isGemini) headers.Authorization = `Bearer ${apiKey}`;
+  // Anthropic public API additionally accepts x-api-key. Send both — the
+  // upstream picks whichever it likes.
+  if (apiKey && row.provider_type === 'anthropic') {
+    headers['x-api-key'] = apiKey;
+    headers['anthropic-version'] = '2023-06-01';
+  }
+  if (row.custom_headers && typeof row.custom_headers === 'object') {
+    Object.assign(headers, row.custom_headers);
+  }
+
+  const start = Date.now();
+  try {
+    const res = await fetchWithTimeout(url, { method: 'GET', headers }, TEST_TIMEOUT_MS);
+    const latency = Date.now() - start;
+    const text = await res.text();
+
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, status: res.status, latency_ms: latency, error: 'auth_failed', category: 'auth' };
+    }
+    if (res.status === 429) {
+      return { ok: false, status: res.status, latency_ms: latency, error: 'rate_limited', category: 'rate_limit' };
+    }
+    if (res.status >= 500) {
+      return { ok: false, status: res.status, latency_ms: latency, error: `upstream_5xx_${res.status}`, category: 'unreachable' };
+    }
+    if (res.status >= 400) {
+      return { ok: false, status: res.status, latency_ms: latency, error: text.slice(0, 200), category: 'protocol' };
+    }
+
+    let models: string[] = [];
+    try {
+      const j = JSON.parse(text);
+      if (Array.isArray(j?.data)) {
+        // OpenAI / Anthropic shape
+        models = j.data.map((m: any) => String(m?.id ?? '')).filter(Boolean);
+      } else if (Array.isArray(j?.models)) {
+        // Gemini shape: { models: [{ name: 'models/gemini-2.5-pro' }] }
+        models = j.models
+          .map((m: any) => String(m?.name ?? '').replace(/^models\//, ''))
+          .filter(Boolean);
+      }
+    } catch { /* tolerate non-JSON */ }
+
+    // Dedupe + stable sort so UI gets a predictable list.
+    models = Array.from(new Set(models)).sort();
+
+    if (models.length === 0) {
+      return {
+        ok: false,
+        status: res.status,
+        latency_ms: latency,
+        error: 'no_models_in_response',
+        category: 'protocol',
+      };
+    }
+    return {
+      ok: true,
+      status: res.status,
+      latency_ms: latency,
+      models_count: models.length,
+      sample_models: models.slice(0, 5),
+      models,
+      category: 'ok',
+    };
+  } catch (err: any) {
+    return { ok: false, error: err.message || String(err), category: 'unreachable' };
+  }
+}
+
+/**
  * Run a connectivity probe and persist the result. Returns the result.
  * If the channel doesn't exist or doesn't belong to the caller's tenant,
  * returns null.

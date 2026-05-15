@@ -109,6 +109,9 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
   // that ALREADY has non-default advanced values, auto-expand so a power user
   // sees their config without having to click. Pattern stolen from new-api's
   // hasAdvancedSettingsValues() — clean for new channels, frictionless for edits.
+  // "Fill from upstream" — fetch /models live and merge into the allowlist.
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [fetchedModelsPreview, setFetchedModelsPreview] = useState('');
   const hasAdvancedValues = (
     (channel.weight !== 100 && channel.weight !== 0) ||
     (channel.priority !== 100 && channel.priority !== 0 && channel.priority !== 1) ||
@@ -204,6 +207,35 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
       setErr(e.message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Call /fetch-models, write the result into the allowlist field, and
+  // surface a one-line summary so the operator can sanity-check before
+  // hitting Save. We replace whatever was in the field instead of merging;
+  // anything the user typed manually was just a draft anyway.
+  async function fetchModelsFromUpstream() {
+    setFetchingModels(true);
+    setMsg('');
+    setErr('');
+    setFetchedModelsPreview('');
+    try {
+      const r = await api<any>(`/admin/channels/${channel.id}/fetch-models`, { method: 'POST' });
+      if (r.ok && Array.isArray(r.models) && r.models.length > 0) {
+        setForm({ ...form, models: r.models.join(',') });
+        setFetchedModelsPreview(
+          tChannels('fetch_models_ok', {
+            count: r.models.length,
+            sample: r.models.slice(0, 3).join(', '),
+          }),
+        );
+      } else {
+        setErr(`${tChannels('fetch_models_fail_prefix')}${formatTestError(r, tChannels)}`);
+      }
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setFetchingModels(false);
     }
   }
 
@@ -403,12 +435,31 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
 
               {/* Models allowlist */}
               <Field label={t('field_models')} hint={t('models_hint')}>
-                <Input
-                  value={form.models}
-                  onChange={(e) => setForm({ ...form, models: e.target.value })}
-                  className="h-9 font-mono text-xs"
-                  placeholder="claude-sonnet-4-7,claude-opus-4-7"
-                />
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      value={form.models}
+                      onChange={(e) => setForm({ ...form, models: e.target.value })}
+                      className="h-9 font-mono text-xs flex-1"
+                      placeholder="claude-sonnet-4-7,claude-opus-4-7"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 gap-1 shrink-0"
+                      onClick={fetchModelsFromUpstream}
+                      disabled={fetchingModels || busy}
+                    >
+                      <RefreshCw className={cn('w-3.5 h-3.5', fetchingModels && 'animate-spin')} />
+                      {fetchingModels ? t('fetch_models_busy') : t('fetch_models_btn')}
+                    </Button>
+                  </div>
+                  {fetchedModelsPreview && (
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                      {fetchedModelsPreview}
+                    </p>
+                  )}
+                </div>
               </Field>
 
               {/* Model mapping editor */}
