@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Modal } from '@/components/admin/Modal';
 import { ChannelKeyRow, ChannelKey } from '@/components/admin/ChannelKeyRow';
 import { api } from '@/lib/api';
+import { formatTestError } from '@/lib/format-test-error';
 import { cn } from '@/lib/utils';
 import { useTranslations } from '@/lib/i18n';
 
@@ -75,6 +76,7 @@ interface Props {
 export function ChannelDetail({ channel, onChange, onClose }: Props) {
   const t = useTranslations('admin.channel.detail');
   const tCommon = useTranslations('common');
+  const tChannels = useTranslations('admin.channels');
   // Local edit buffer — only flushed to the server on save.
   const [form, setForm] = useState({
     name: channel.name,
@@ -180,7 +182,7 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
         const httpSuffix = r.status ? t('test_http_suffix', { status: r.status }) : '';
         setMsg(`${t('test_ok_prefix')}${r.latency_ms ?? '-'}ms${httpSuffix}`);
       } else {
-        setErr(`${t('test_fail_prefix')}${r.error || r.category || t('test_unknown')}`);
+        setErr(`${t('test_fail_prefix')}${formatTestError(r, tChannels)}`);
       }
       await onChange();
     } catch (e: any) {
@@ -445,8 +447,8 @@ export function ChannelDetail({ channel, onChange, onClose }: Props) {
                 </span>
               )}
             </div>
-            {channel.last_test_result.error && (
-              <p className="mt-1 text-rose-700 dark:text-rose-400 font-mono">{channel.last_test_result.error}</p>
+            {!channel.last_test_result.ok && (
+              <p className="mt-1 text-rose-700 dark:text-rose-400">{formatTestError(channel.last_test_result, tChannels)}</p>
             )}
           </div>
         )}

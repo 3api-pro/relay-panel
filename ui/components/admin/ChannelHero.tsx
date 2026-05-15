@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { api, safe } from '@/lib/api';
+import { formatTestError } from '@/lib/format-test-error';
 import { cn } from '@/lib/utils';
 import { useTranslations } from '@/lib/i18n';
 
@@ -50,6 +51,7 @@ function fmtCents(c: number): string {
 
 export function ChannelHero({ channels, onTest }: Props) {
   const t = useTranslations('admin.channel.hero');
+  const tChannels = useTranslations('admin.channels');
   const [ws, setWs] = useState<WholesaleSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState<number | null>(null);
@@ -165,7 +167,7 @@ export function ChannelHero({ channels, onTest }: Props) {
                   ) : testBad ? (
                     <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-400">
                       <XCircle className="w-3 h-3" />
-                      {lastTest?.error || t('metric_health_unreachable')}
+                      {lastTest ? formatTestError(lastTest, tChannels) : t('metric_health_unreachable')}
                     </span>
                   ) : (
                     <span className="text-muted-foreground">{t('metric_health_untested')}</span>

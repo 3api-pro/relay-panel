@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { api, auth } from '@/lib/api';
+import { formatTestError } from '@/lib/format-test-error';
 import { cn } from '@/lib/utils';
 import { useTranslations } from '@/lib/i18n';
 
@@ -105,7 +106,7 @@ export default function AdminChannelsPage() {
   async function testFromHero(channelId: number): Promise<void> {
     try {
       const r = await api<any>(`/admin/channels/${channelId}/test`, { method: 'POST' });
-      setMsg(r.ok ? t('test_ok_with_latency', { latency: r.latency_ms ?? '-' }) : t('test_fail_prefix') + (r.error || r.category));
+      setMsg(r.ok ? t('test_ok_with_latency', { latency: r.latency_ms ?? '-' }) : t('test_fail_prefix') + formatTestError(r, t));
       await refresh();
     } catch (e: any) {
       setErr(e.message);
@@ -175,7 +176,7 @@ export default function AdminChannelsPage() {
                 onQuickTest={async () => {
                   try {
                     const r = await api<any>(`/admin/channels/${c.id}/test`, { method: 'POST' });
-                    setMsg(r.ok ? t('test_row_ok', { id: c.id }) : t('test_row_fail_prefix', { id: c.id }) + (r.error || r.category));
+                    setMsg(r.ok ? t('test_row_ok', { id: c.id }) : t('test_row_fail_prefix', { id: c.id }) + formatTestError(r, t));
                     await refresh();
                   } catch (e: any) {
                     setErr(e.message);
@@ -221,14 +222,6 @@ export default function AdminChannelsPage() {
       >
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5 col-span-1">
-            <Label>{t('field_name')}</Label>
-            <Input
-              value={newForm.name}
-              onChange={(e) => setNewForm({ ...newForm, name: e.target.value })}
-              placeholder={t('ph_name')}
-            />
-          </div>
-          <div className="space-y-1.5 col-span-1">
             <Label>{t('field_provider_type')}</Label>
             <select
               value={newForm.provider_type}
@@ -250,6 +243,16 @@ export default function AdminChannelsPage() {
                 </option>
               ))}
             </select>
+            <p className="text-[11px] text-muted-foreground">{t('hint_provider_type')}</p>
+          </div>
+          <div className="space-y-1.5 col-span-1">
+            <Label>{t('field_name')}</Label>
+            <Input
+              value={newForm.name}
+              onChange={(e) => setNewForm({ ...newForm, name: e.target.value })}
+              placeholder={t('ph_name')}
+            />
+            <p className="text-[11px] text-muted-foreground">{t('hint_name')}</p>
           </div>
           <div className="space-y-1.5 col-span-2">
             <Label>{t('field_base_url')}</Label>
@@ -259,6 +262,7 @@ export default function AdminChannelsPage() {
               placeholder="https://api.example.com/v1"
               className="font-mono text-sm"
             />
+            <p className="text-[11px] text-muted-foreground">{t('hint_base_url')}</p>
           </div>
           <div className="space-y-1.5 col-span-2">
             <Label>{t('field_api_key')}</Label>
@@ -266,9 +270,10 @@ export default function AdminChannelsPage() {
               type="password"
               value={newForm.api_key}
               onChange={(e) => setNewForm({ ...newForm, api_key: e.target.value })}
-              placeholder="sk-..."
+              placeholder={t('ph_api_key')}
               className="font-mono text-sm"
             />
+            <p className="text-[11px] text-muted-foreground">{t('hint_api_key')}</p>
           </div>
         </div>
       </Modal>
