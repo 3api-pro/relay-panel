@@ -24,7 +24,7 @@
  *   2. find-or-create reseller_admin (by email, lowest tenant_id wins)
  *   3. find-or-create tenant (auto slug)
  *   4. seed plans @ 2x markup + brand_config + wholesale_balance
- *   5. upsert upstream_channel (provider_type='llmapi-sub', is_recommended)
+ *   5. upsert upstream_channel (provider_type='llmapi-wholesale', is_recommended)
  */
 import crypto from 'crypto';
 import type { PoolClient } from 'pg';
@@ -205,7 +205,7 @@ async function generateLlmapiSlug(client: PoolClient): Promise<string> {
 
 /**
  * Upsert upstream_channel pointing to the llmapi sk-key. Idempotent on
- * provider_type='llmapi-sub' per tenant: updates api_key if it changed
+ * provider_type='llmapi-wholesale' per tenant: updates api_key if it changed
  * (e.g. user rotated the key on llmapi side).
  */
 async function upsertLlmapiUpstream(
@@ -240,7 +240,7 @@ async function upsertLlmapiUpstream(
             is_recommended = TRUE,
             is_default = TRUE
       WHERE tenant_id = $1
-        AND provider_type IN ('llmapi-sub','llmapi-wholesale','anthropic')
+        AND provider_type IN ('llmapi-wholesale','anthropic')
         AND is_recommended = TRUE
       RETURNING id`,
     [tenantId, skKey, keysJson, headersJson, baseUrl],
@@ -254,7 +254,7 @@ async function upsertLlmapiUpstream(
         keys, current_key_idx, custom_headers, enabled, is_recommended,
         is_default, priority)
      VALUES
-       ($1, 'llmapi.pro (从你的订阅)', $2, $3, 'wholesale-3api', 'llmapi-sub',
+       ($1, 'llmapi.pro (从你的订阅)', $2, $3, 'wholesale-3api', 'llmapi-wholesale',
         'active', 100, NULL, NULL, 'default',
         $4::jsonb, 0, $5::jsonb, TRUE, TRUE,
         TRUE, 1)

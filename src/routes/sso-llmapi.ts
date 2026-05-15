@@ -5,7 +5,7 @@
  *   1. Pull ?token=... (mandatory)
  *   2. Verify HMAC + TTL + aud/iss + nonce
  *   3. Atomically: consume nonce, find/create reseller_admin + tenant,
- *      seed plans at 2x markup, upsert llmapi-sub upstream channel
+ *      seed plans at 2x markup, upsert llmapi-wholesale upstream channel
  *   4. signSession (admin) + set cookie + render SSO bridge HTML (writes
  *      JWT to localStorage and location.replace('/admin'))
  *
