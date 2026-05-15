@@ -653,7 +653,10 @@
         "low_balance_post": " to avoid blocked orders.",
         "cta_topup": "Top up wholesale balance",
         "cta_test": "Test connection",
-        "cta_test_busy": "Testing…"
+        "cta_test_busy": "Testing…",
+        "no_upstream_title": "No upstream yet?",
+        "no_upstream_desc": "Buy a llmapi.pro plan and your upstream channel is auto-provisioned — Claude / GPT wholesale pricing, zero ops. After purchase click the 3api handoff in your llmapi dashboard to come back here.",
+        "no_upstream_cta": "Buy on llmapi.pro"
       },
       "key_row": {
         "current": "current",

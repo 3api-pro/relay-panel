@@ -653,7 +653,10 @@
         "low_balance_post": "以免阻断订单。",
         "cta_topup": "去充值批发余额",
         "cta_test": "测试连接",
-        "cta_test_busy": "测试中…"
+        "cta_test_busy": "测试中…",
+        "no_upstream_title": "还没绑定上游？",
+        "no_upstream_desc": "购买 llmapi.pro 套餐自动开通为你的上游通道 — Claude / GPT 批发价，零运维，付款后回 llmapi 控制台一键回到这里就好。",
+        "no_upstream_cta": "去 llmapi.pro 购买"
       },
       "key_row": {
         "current": "当前",

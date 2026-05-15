@@ -24,7 +24,26 @@ export async function api<T = any>(
   const t = token();
   if (t) headers['Authorization'] = `Bearer ${t}`;
 
-  const res = await fetch(API_BASE + path, { ...init, headers });
+  const url = API_BASE + path;
+  const method = init.method || 'GET';
+  let res: Response;
+  try {
+    res = await fetch(url, { ...init, headers });
+  } catch (e: any) {
+    // fetch() rejects on network-layer failures (DNS, CORS preflight,
+    // offline, browser extension blocking, etc.) with a TypeError whose
+    // message is the unhelpful "Failed to fetch". Re-throw with context
+    // so the user / support can see what actually broke.
+    const reason = e?.message || String(e);
+    const ts = new Date().toISOString();
+    const hint =
+      typeof navigator !== 'undefined' && navigator.onLine === false
+        ? '(browser reports offline)'
+        : '(possible causes: ad-blocker / extension blocking the request, network drop, or server unreachable)';
+    throw new Error(
+      `Network error: ${method} ${url} failed — ${reason} ${hint} [at ${ts}]`,
+    );
+  }
   if (!res.ok) {
     const text = await res.text();
     let errMsg: string;

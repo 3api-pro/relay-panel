@@ -91,8 +91,12 @@ export async function authToken(
         });
         return;
       }
-    } else {
-      if (!tok.unlimited_quota && Number(tok.remain_quota_cents) <= 0) {
+    } else if (!tok.unlimited_quota) {
+      // Legacy cents-based token, not unlimited: both token-level and
+      // account-level quotas must be positive. Unlimited tokens (admin-minted
+      // free passes / test handouts) bypass both — they were authored exactly
+      // so the holder doesn't get blocked by the end_user's empty balance.
+      if (Number(tok.remain_quota_cents) <= 0) {
         res.status(402).json({
           error: { type: 'insufficient_quota', message: 'Token quota exhausted' },
         });

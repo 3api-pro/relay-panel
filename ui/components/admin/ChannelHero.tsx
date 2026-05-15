@@ -63,7 +63,32 @@ export function ChannelHero({ channels, onTest }: Props) {
   // Filter on the client even though the server already sorts is_recommended
   // first — keeps this card independent of GET-ordering changes.
   const recs = channels.filter((c) => c.is_recommended);
-  if (recs.length === 0) return null;
+  if (recs.length === 0) {
+    // No recommended upstream yet — surface a buy CTA so a 3api-first signup
+    // can discover the llmapi.pro wholesale path. After purchase the user
+    // clicks the 3api handoff inside their llmapi dashboard; SSO auto-mints
+    // sk-relay-* and INSERTs the channel here. See sso-llmapi.ts.
+    return (
+      <Card className="border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/20 dark:border-teal-900">
+        <CardContent className="py-5 px-6 flex items-center gap-4 flex-wrap">
+          <div className="flex-1 min-w-[280px]">
+            <h3 className="text-base font-semibold text-teal-900 dark:text-teal-200 flex items-center gap-2">
+              <Zap className="w-4 h-4" />
+              {t('no_upstream_title')}
+            </h3>
+            <p className="text-sm text-teal-700 dark:text-teal-300/80 mt-1 leading-relaxed">
+              {t('no_upstream_desc')}
+            </p>
+          </div>
+          <a href="https://llmapi.pro/pricing" target="_blank" rel="noopener noreferrer">
+            <Button className="bg-teal-600 hover:bg-teal-700 text-white">
+              {t('no_upstream_cta')}
+            </Button>
+          </a>
+        </CardContent>
+      </Card>
+    );
+  }
 
   // Show at most one hero, the lowest-id recommended channel.
   const c = recs[0];
