@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { api, safe, fmtCNY, fmtDate } from '@/lib/api';
 import { useAutoRefresh } from '@/lib/use-auto-refresh';
 import { OnboardingTour } from '@/components/OnboardingTour';
+import { GettingStarted } from '@/components/admin/GettingStarted';
 import { useTranslations } from '@/lib/i18n';
 
 interface StatsSeries { date: string; cents?: number; value?: number }
@@ -90,6 +91,7 @@ export default function AdminHome() {
   return (
     <AdminShell title={t('title')} subtitle={t('subtitle')}>
       <OnboardingTour autoStart={startTour} force={startTour} />
+      <GettingStarted />
       {lowBalance && (
         <div className="mb-5 rounded-md bg-amber-500/10 border border-amber-500/30 px-4 py-3 text-sm text-amber-700 dark:text-amber-300 flex items-center justify-between">
           <span>{t('low_balance_warn', { threshold: fmtCNY(LOW_WHOLESALE_THRESHOLD), current: fmtCNY(stats!.wholesale_balance_cents) })}</span>

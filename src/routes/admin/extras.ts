@@ -767,6 +767,67 @@ adminExtrasRouter.post('/brand/cloudflare-cname', async (req: Request, res: Resp
   });
 });
 
+// =========================================================================
+// /setup-status — checklist counts for the dashboard "Getting Started" card
+// =========================================================================
+//
+// One-shot snapshot used by the dashboard checklist + /admin/setup wizard.
+// Cheap subqueries; no DNS lookup (verify_domain has its own endpoint).
+
+adminExtrasRouter.get('/setup-status', async (req: Request, res: Response) => {
+  const tenantId = req.resellerAdmin!.tenantId;
+  try {
+    const rows = await query<any>(
+      `SELECT
+         (SELECT slug FROM tenant WHERE id = $1) AS slug,
+         (SELECT custom_domain FROM tenant WHERE id = $1) AS custom_domain,
+         (SELECT COALESCE(config->'payment_config', '{}'::jsonb) FROM tenant WHERE id = $1) AS payment_config,
+         (SELECT store_name FROM brand_config WHERE tenant_id = $1) AS store_name,
+         (SELECT logo_url FROM brand_config WHERE tenant_id = $1) AS logo_url,
+         (SELECT COUNT(*) FROM upstream_channel WHERE tenant_id = $1)::int AS channel_count,
+         (SELECT COUNT(*) FROM upstream_channel WHERE tenant_id = $1 AND status = 'active')::int AS active_channel_count,
+         (SELECT COUNT(*) FROM plans WHERE tenant_id = $1)::int AS plan_count,
+         (SELECT COUNT(*) FROM plans WHERE tenant_id = $1 AND enabled = TRUE)::int AS enabled_plan_count,
+         (SELECT COUNT(*) FROM end_user WHERE tenant_id = $1)::int AS end_user_count,
+         (SELECT COUNT(*) FROM end_token WHERE tenant_id = $1 AND status = 'active')::int AS active_token_count,
+         (SELECT COUNT(*) FROM redemption WHERE tenant_id = $1 AND status = 'unused')::int AS unused_redemption_count,
+         (SELECT COUNT(*) FROM orders WHERE tenant_id = $1 AND status IN ('paid','completed','active'))::int AS paid_order_count
+      `,
+      [tenantId],
+    );
+    const r = rows[0] || {};
+    const pc = (r.payment_config as Record<string, any>) || {};
+    const payment_configured = !!(
+      pc.alipay_app_id ||
+      pc.paypal_client_id ||
+      pc.stripe_secret_key ||
+      pc.usdt_trc20_address ||
+      pc.usdt_erc20_address ||
+      pc.creem_api_key
+    );
+    const brand_configured = !!(r.store_name || r.logo_url);
+    const saas = (process.env.SAAS_DOMAIN || '3api.pro').toLowerCase();
+    res.json({
+      slug: r.slug,
+      default_domain: r.slug ? `${r.slug}.${saas}` : null,
+      custom_domain: r.custom_domain || null,
+      channel_count: r.channel_count || 0,
+      active_channel_count: r.active_channel_count || 0,
+      plan_count: r.plan_count || 0,
+      enabled_plan_count: r.enabled_plan_count || 0,
+      end_user_count: r.end_user_count || 0,
+      active_token_count: r.active_token_count || 0,
+      unused_redemption_count: r.unused_redemption_count || 0,
+      paid_order_count: r.paid_order_count || 0,
+      payment_configured,
+      brand_configured,
+    });
+  } catch (err: any) {
+    logger.error({ err: err.message, tenantId }, 'admin:setup-status:error');
+    res.status(500).json({ error: { type: 'internal_error', message: 'Internal error' } });
+  }
+});
+
 adminExtrasRouter.get('/brand/verify-domain', async (req: Request, res: Response) => {
   const tenantId = req.resellerAdmin!.tenantId;
   const rows = await query<{ slug: string; custom_domain: string | null }>(
