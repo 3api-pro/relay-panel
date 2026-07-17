@@ -147,7 +147,9 @@ export class Sub2apiAdminClient implements EngineAdminClient {
         },
       };
       const created = await this.http.post<S2ARawAccount>('/api/v1/admin/accounts', body);
-      return accountToChannelRecord(created);
+      // create 响应不回显 group_ids（服务端已持久化，实测确认）——回读拿权威记录
+      const fresh = await this.http.get<S2ARawAccount>(`/api/v1/admin/accounts/${created.id}`);
+      return accountToChannelRecord(fresh);
     },
 
     update: async (
