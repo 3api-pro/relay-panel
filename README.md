@@ -63,6 +63,8 @@ Early development. This is a v2 rewrite; it is **not** compatible with the origi
 
 > Today the project ships a **read-only dashboard and a CLI orchestrator only** — there is no web admin backend yet. Follow the `main` branch for updates.
 
+Full milestone plan through v1.0: [ROADMAP.md](ROADMAP.md).
+
 ## Quick start
 
 ```bash
