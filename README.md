@@ -104,6 +104,29 @@ This is a v2 rewrite; it is **not** compatible with the original relay-panel (a 
 
 Full milestone plan through v1.0: [ROADMAP.md](ROADMAP.md).
 
+## Sponsors
+
+relay-panel's development is backed by these LLM API relay platforms — production users of the engines this project orchestrates:
+
+<table align="center">
+<tr>
+<td align="center" width="240">
+<a href="https://llmapi.pro"><b>llmapi.pro</b></a><br/>
+<sub>Unified multi-model LLM API<br/>Claude · GPT · Gemini and more</sub>
+</td>
+<td align="center" width="240">
+<a href="https://tieapi.com"><b>tieapi.com</b></a><br/>
+<sub>High-availability API gateway<br/>for teams and developers</sub>
+</td>
+<td align="center" width="240">
+<a href="https://vipapi.ai"><b>vipapi.ai</b></a><br/>
+<sub>Premium LLM API access<br/>with flexible plans</sub>
+</td>
+</tr>
+</table>
+
+Interested in sponsoring? Open an [issue](https://github.com/3api-pro/relay-panel/issues).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). The **engine adapter layer (`packages/adapter-*`) is the recommended entry point** for outside contributors — it contains no billing, upstream-routing, or credential logic, is self-contained and independently testable, and breaking it cannot touch production billing or tenant isolation. Want to bring a new engine? Follow [docs/ADAPTERS.md](docs/ADAPTERS.md).

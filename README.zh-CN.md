@@ -104,6 +104,29 @@ npm test
 
 到 v1.0 的完整里程碑计划见 [ROADMAP.md](ROADMAP.md)。
 
+## 赞助商
+
+relay-panel 的开发由这些 LLM API 中转平台支持 —— 它们正是本项目所编排引擎的生产用户：
+
+<table align="center">
+<tr>
+<td align="center" width="240">
+<a href="https://llmapi.pro"><b>llmapi.pro</b></a><br/>
+<sub>多模型 LLM API 中转<br/>Claude · GPT · Gemini 等</sub>
+</td>
+<td align="center" width="240">
+<a href="https://tieapi.com"><b>tieapi.com</b></a><br/>
+<sub>高可用 API 网关<br/>面向团队与开发者</sub>
+</td>
+<td align="center" width="240">
+<a href="https://vipapi.ai"><b>vipapi.ai</b></a><br/>
+<sub>灵活套餐的<br/>高端 LLM API 服务</sub>
+</td>
+</tr>
+</table>
+
+有意赞助？欢迎提 [issue](https://github.com/3api-pro/relay-panel/issues)。
+
 ## 贡献
 
 见 [CONTRIBUTING.md](CONTRIBUTING.md)。**引擎适配层（`packages/adapter-*`）是外部贡献首选** —— 不含计费、上游路由、凭据逻辑，自包含且可独立测试，改错也不会波及生产计费或租户隔离。想接入新引擎？照 [docs/ADAPTERS.md](docs/ADAPTERS.md) 一步步来。
