@@ -1,13 +1,13 @@
 {
   "credentialDb": {
     "host": "127.0.0.1",
-    "port": 5440,
+    "port": 5432,
     "user": "postgres",
     "passwordFile": "/path/to/your/db-credentials.md",
     "passwordPattern": "postgres/`([^`]+)`"
   },
   "sites": [
-    { "slug": "site-a", "label": "site-a.example.com", "engine": "sub2api", "baseUrl": "http://127.0.0.1:3272", "credentialRef": "db:sub2api_site_a" },
+    { "slug": "site-a", "label": "site-a.example.com", "engine": "sub2api", "baseUrl": "http://127.0.0.1:8080", "credentialRef": "db:sub2api_site_a" },
     { "slug": "demo", "label": "demo (dev)", "engine": "sub2api", "baseUrl": "http://127.0.0.1:18080", "credentialRef": "devfile:data/sites/demo1/credentials.json" }
   ]
 }
