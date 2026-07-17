@@ -1,9 +1,11 @@
 import { Sub2apiAdapter } from '@relay-panel/adapter-sub2api';
+import { NewapiAdapter } from '@relay-panel/adapter-newapi';
 import type { EngineAdapter } from '@relay-panel/adapter-core';
 import { entryToInstance, makeCredentialStore, type RegistryFile } from './registry.js';
 
 const adapters: Record<string, EngineAdapter> = {
   sub2api: new Sub2apiAdapter(),
+  newapi: new NewapiAdapter(),
 };
 
 export interface SiteCard {

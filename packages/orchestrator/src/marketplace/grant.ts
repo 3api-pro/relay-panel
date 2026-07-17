@@ -1,10 +1,12 @@
 import type { ChannelSpec, EngineAdapter } from '@relay-panel/adapter-core';
 import { Sub2apiAdapter } from '@relay-panel/adapter-sub2api';
+import { NewapiAdapter } from '@relay-panel/adapter-newapi';
 import { entryToInstance, makeCredentialStore, type RegistryFile } from '../registry.js';
 import type { ChannelTemplate, GrantInput, GrantRecord } from './types.js';
 
 const adapters: Record<string, EngineAdapter> = {
   sub2api: new Sub2apiAdapter(),
+  newapi: new NewapiAdapter(),
 };
 
 /** 从模板 + 授权输入构造引擎无关的 ChannelSpec */

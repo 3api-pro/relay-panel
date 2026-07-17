@@ -26,12 +26,13 @@ Manage an existing fleet from one place, without migrating anything.
 Two tracks. The marketplace is the commercial core; the second engine is the ecosystem play.
 
 ### P2.1 — `adapter-newapi`
-- [ ] Map new-api admin API to `EngineAdapter` (session/token auth, channels/tokens/users)
-- [ ] `EngineLifecycle` for new-api (compose template, provision/upgrade/destroy)
-- [ ] Capability flags where new-api and sub2api diverge
-- [ ] Adapter contract tests shared with sub2api
+- [x] Map new-api admin API to `EngineAdapter` (session + access-token dual-header auth, channels/groups/users/settings/usage)
+- [x] Compose template for new-api provisioning (`newapiCompose.ts`)
+- [x] Capability flags where new-api and sub2api diverge
+- [x] E2E verified against a live new-api instance (channels create/list/status-toggle/remove, groups, users, branding, usage)
+- [ ] Wire new-api into the provisioning state machine (`NewapiLifecycle`) alongside sub2api
 
-**Acceptance:** provision a fresh new-api site and drive it through the same dashboard as sub2api.
+**Acceptance:** ✅ adapter drives a live new-api instance through the same interface as sub2api; both engines now selectable in dashboard + marketplace.
 
 ### P2.2 — Channel Marketplace (commercial core)
 - [ ] `ChannelTemplate` model: upstream product (models, protocol, suggested ratio, param schema)

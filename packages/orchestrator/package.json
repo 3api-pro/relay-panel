@@ -12,6 +12,7 @@
   "dependencies": {
     "@relay-panel/adapter-core": "*",
     "@relay-panel/adapter-sub2api": "*",
+    "@relay-panel/adapter-newapi": "*",
     "drizzle-orm": "^0.44.0",
     "fastify": "^5.0.0",
     "pg": "^8.13.0",
