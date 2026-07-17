@@ -2,6 +2,7 @@
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { ComputedRef } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { Plus, Server } from 'lucide-vue-next';
 import { del, get, post } from '../api/client';
 import type { SitesResponse, SiteView } from '../api/types';
@@ -28,6 +29,7 @@ import SiteRowActions from './sites/SiteRowActions.vue';
  * external（外部接管）站隐藏全部生命周期操作。销毁走 ConfirmDanger 逐字确认。
  */
 const router = useRouter();
+const { t } = useI18n();
 const canWrite = inject<ComputedRef<boolean>>('canWrite', computed(() => false));
 
 // ---- 本视图专属请求/响应类型（不污染共享 types.ts） ----
@@ -65,7 +67,7 @@ async function refresh(initial = false): Promise<void> {
     sites.value = Array.isArray(res?.sites) ? res.sites : [];
     loadError.value = '';
   } catch (err) {
-    if (initial) loadError.value = err instanceof Error ? err.message : '加载失败';
+    if (initial) loadError.value = err instanceof Error ? err.message : t('sites.loadFailed');
   } finally {
     loading.value = false;
     refreshing.value = false;
@@ -93,15 +95,15 @@ function asSite(row: Record<string, unknown>): SiteView {
 }
 
 // ---- 展示辅助 ----
-const columns: TableColumn[] = [
-  { key: 'status', label: '状态', width: '92px' },
-  { key: 'site', label: '站点' },
-  { key: 'engine', label: '引擎 / 版本', width: '168px' },
-  { key: 'hostPort', label: '端口', align: 'right', width: '80px' },
-  { key: 'usage', label: '24h 请求 / 成本', align: 'right', width: '176px' },
-  { key: 'job', label: '任务', width: '128px' },
+const columns = computed<TableColumn[]>(() => [
+  { key: 'status', label: t('sites.columns.status'), width: '92px' },
+  { key: 'site', label: t('sites.columns.site') },
+  { key: 'engine', label: t('sites.columns.engine'), width: '168px' },
+  { key: 'hostPort', label: t('sites.columns.hostPort'), align: 'right', width: '80px' },
+  { key: 'usage', label: t('sites.columns.usage'), align: 'right', width: '176px' },
+  { key: 'job', label: t('sites.columns.job'), width: '128px' },
   { key: 'actions', label: '', align: 'right', width: '52px' },
-];
+]);
 
 function siteStatus(s: SiteView): string {
   if (s.status === 'active' && s.ok === false) return 'down';
@@ -116,17 +118,13 @@ function fmtCost(n: number | undefined, unit: string): string {
   return unit ? `${v} ${unit}` : v;
 }
 function jobKindText(kind: string): string {
-  const map: Record<string, string> = {
-    provision: '开站',
-    upgrade: '升级',
-    start: '启动',
-    stop: '停止',
-    destroy: '销毁',
-  };
-  return map[kind] ?? kind;
+  const known = ['provision', 'upgrade', 'start', 'stop', 'destroy'];
+  return known.includes(kind) ? t(`sites.jobKind.${kind}`) : kind;
 }
 function jobStatusText(status: string): string {
-  return status === 'running' ? '执行中' : status === 'queued' ? '排队中' : status;
+  if (status === 'running') return t('sites.jobStatus.running');
+  if (status === 'queued') return t('sites.jobStatus.queued');
+  return status;
 }
 
 function openSite(s: SiteView): void {
@@ -140,7 +138,7 @@ async function lifecycle(s: SiteView, kind: 'start' | 'stop'): Promise<void> {
   busySlug.value = s.slug;
   try {
     await post<JobRef>(`/api/sites/${s.slug}/${kind}`);
-    toast.success('任务已排队，可在任务页跟踪');
+    toast.success(t('sites.toast.queued'));
     await refresh(true);
   } catch {
     /* client 已弹错误 toast */
@@ -167,17 +165,17 @@ async function submitUpgrade(): Promise<void> {
   if (!s) return;
   const v = upgradeVersion.value.trim();
   if (!v) {
-    upgradeErr.value = '请填写目标版本';
+    upgradeErr.value = t('sites.upgrade.errRequired');
     return;
   }
   if (v === s.version) {
-    upgradeErr.value = '目标版本与当前版本相同';
+    upgradeErr.value = t('sites.upgrade.errSame');
     return;
   }
   upgradeBusy.value = true;
   try {
     await post<JobRef>(`/api/sites/${s.slug}/upgrade`, { toVersion: v });
-    toast.success('任务已排队，可在任务页跟踪');
+    toast.success(t('sites.toast.queued'));
     upgradeOpen.value = false;
     await refresh(true);
   } catch {
@@ -199,9 +197,7 @@ function onDestroy(s: SiteView, keepData: boolean): void {
   destroyOpen.value = true;
 }
 const destroyMessage = computed(() =>
-  destroyKeepData.value
-    ? '将停止并移除站点容器，但保留数据卷（数据库/上传），可日后重建恢复。'
-    : '将永久删除该站点的容器与数据卷，数据无法恢复。',
+  destroyKeepData.value ? t('sites.destroy.keepMsg') : t('sites.destroy.purgeMsg'),
 );
 async function submitDestroy(): Promise<void> {
   const s = destroySite.value;
@@ -209,7 +205,7 @@ async function submitDestroy(): Promise<void> {
   destroyBusy.value = true;
   try {
     await del(`/api/sites/${s.slug}`, { confirm: s.slug, keepData: destroyKeepData.value });
-    toast.success('任务已排队，可在任务页跟踪');
+    toast.success(t('sites.toast.queued'));
     destroyOpen.value = false;
     await refresh(true);
   } catch {
@@ -222,10 +218,10 @@ async function submitDestroy(): Promise<void> {
 // ---- 新建站点向导 ----
 const createOpen = ref(false);
 const submitting = ref(false);
-const engineOptions: SelectOption[] = [
-  { value: 'sub2api', label: 'sub2api（推荐）' },
+const engineOptions = computed<SelectOption[]>(() => [
+  { value: 'sub2api', label: t('sites.create.engineRecommended') },
   { value: 'newapi', label: 'newapi' },
-];
+]);
 
 const fEngine = ref<string | number | null>('sub2api');
 const fVersion = ref('');
@@ -255,19 +251,19 @@ function openCreate(): void {
 
 function validateCreate(): boolean {
   const e: Record<string, string> = {};
-  if (!fEngine.value) e.engine = '请选择引擎';
-  if (!fVersion.value.trim()) e.version = '请填写版本';
+  if (!fEngine.value) e.engine = t('sites.create.errEngine');
+  if (!fVersion.value.trim()) e.version = t('sites.create.errVersion');
   const slug = fSlug.value.trim();
-  if (!slug) e.slug = '请填写 slug';
-  else if (!SLUG_RE.test(slug)) e.slug = '仅小写字母/数字/连字符，2–32 位，须以字母或数字开头';
-  if (!fLabel.value.trim()) e.label = '请填写显示名称';
+  if (!slug) e.slug = t('sites.create.errSlugRequired');
+  else if (!SLUG_RE.test(slug)) e.slug = t('sites.create.errSlugFormat');
+  if (!fLabel.value.trim()) e.label = t('sites.create.errLabel');
   if (fPort.value !== '' && fPort.value !== null) {
     const p = Number(fPort.value);
-    if (!Number.isInteger(p) || p < 1 || p > 65535) e.hostPort = '端口需为 1–65535 的整数';
+    if (!Number.isInteger(p) || p < 1 || p > 65535) e.hostPort = t('sites.create.errPort');
   }
   const email = fEmail.value.trim();
-  if (!email) e.adminEmail = '请填写管理员邮箱';
-  else if (!EMAIL_RE.test(email)) e.adminEmail = '邮箱格式不正确';
+  if (!email) e.adminEmail = t('sites.create.errEmailRequired');
+  else if (!EMAIL_RE.test(email)) e.adminEmail = t('sites.create.errEmailFormat');
   errors.value = e;
   return Object.keys(e).length === 0;
 }
@@ -291,7 +287,7 @@ async function submitCreate(): Promise<void> {
       if (announcement) body.branding.announcement = announcement;
     }
     const res = await post<CreateSiteResult>('/api/sites', body);
-    toast.success('开站任务已创建');
+    toast.success(t('sites.toast.created'));
     createOpen.value = false;
     void router.push(`/sites/${res.slug}`);
   } catch {
@@ -307,36 +303,36 @@ async function submitCreate(): Promise<void> {
     <!-- 顶部标题栏 -->
     <div class="flex items-end justify-between gap-3">
       <div>
-        <h1 class="text-[15px] font-semibold">站点</h1>
+        <h1 class="text-[15px] font-semibold">{{ t('sites.title') }}</h1>
         <p class="mt-0.5 text-xs text-muted">
-          共 {{ visibleSites.length }} 个站点<span v-if="downCount" class="text-red">
-            · {{ downCount }} 个异常</span
-          ><span v-if="refreshing" class="ml-1 text-muted/50">· 更新中…</span>
+          {{ t('sites.summaryCount', { n: visibleSites.length }) }}<span v-if="downCount" class="text-red">
+            · {{ t('sites.summaryDown', { n: downCount }) }}</span
+          ><span v-if="refreshing" class="ml-1 text-muted/50">· {{ t('sites.updating') }}</span>
         </p>
       </div>
       <Button v-if="canWrite" variant="primary" @click="openCreate">
         <Plus :size="14" />
-        新建站点
+        {{ t('sites.new') }}
       </Button>
     </div>
 
     <!-- 列表 -->
     <div class="rp-panel overflow-hidden">
       <div v-if="loadError && !loading" class="p-8">
-        <EmptyState title="加载失败" :description="loadError">
-          <Button variant="outline" @click="() => refresh(true)">重试</Button>
+        <EmptyState :title="t('sites.loadFailed')" :description="loadError">
+          <Button variant="outline" @click="() => refresh(true)">{{ t('common.retry') }}</Button>
         </EmptyState>
       </div>
 
       <div v-else-if="!loading && visibleSites.length === 0" class="p-8">
         <EmptyState
-          title="还没有站点"
-          description="新建第一个中转站，或用 CLI 接管已有的存量站点。"
+          :title="t('sites.empty.title')"
+          :description="t('sites.empty.desc')"
           :icon="Server"
         >
           <Button v-if="canWrite" variant="primary" @click="openCreate">
             <Plus :size="14" />
-            新建站点
+            {{ t('sites.new') }}
           </Button>
         </EmptyState>
       </div>
@@ -361,7 +357,7 @@ async function submitCreate(): Promise<void> {
                 <span class="truncate font-sans text-[13px] font-medium text-text">{{
                   asSite(row).label
                 }}</span>
-                <Badge v-if="asSite(row).managed === 'external'" tone="amber" size="sm">外部接管</Badge>
+                <Badge v-if="asSite(row).managed === 'external'" tone="amber" size="sm">{{ t('sites.externalManaged') }}</Badge>
               </div>
               <span class="truncate font-mono text-[11px] text-muted">{{ asSite(row).slug }}</span>
             </div>
@@ -415,17 +411,22 @@ async function submitCreate(): Promise<void> {
     </div>
 
     <!-- 升级弹窗 -->
-    <Modal v-model:open="upgradeOpen" title="升级站点" width="420px">
+    <Modal v-model:open="upgradeOpen" :title="t('sites.upgrade.title')" width="420px">
       <div class="space-y-3">
         <p class="text-[13px] text-muted">
-          站点
-          <code class="mx-0.5 rounded bg-panel-2 px-1.5 py-0.5 font-mono text-xs text-text">{{
+          {{ t('sites.upgrade.descBefore')
+          }}<code class="mx-0.5 rounded bg-panel-2 px-1.5 py-0.5 font-mono text-xs text-text">{{
             upgradeSite?.slug
-          }}</code>
-          将升级到指定版本，当前版本
-          <span class="font-mono text-xs text-muted">{{ upgradeSite?.version }}</span>。
+          }}</code>{{ t('sites.upgrade.descMid')
+          }}<span class="font-mono text-xs text-muted">{{ upgradeSite?.version }}</span
+          >{{ t('sites.upgrade.descAfter') }}
         </p>
-        <Field label="目标版本" required :error="upgradeErr" hint="镜像 tag，如 v0.1.160">
+        <Field
+          :label="t('sites.upgrade.versionLabel')"
+          required
+          :error="upgradeErr"
+          :hint="t('sites.upgrade.versionHint')"
+        >
           <Input
             v-model="upgradeVersion"
             mono
@@ -436,30 +437,35 @@ async function submitCreate(): Promise<void> {
         </Field>
       </div>
       <template #footer>
-        <Button variant="ghost" :disabled="upgradeBusy" @click="upgradeOpen = false">取消</Button>
-        <Button variant="primary" :loading="upgradeBusy" @click="submitUpgrade">升级</Button>
+        <Button variant="ghost" :disabled="upgradeBusy" @click="upgradeOpen = false">{{ t('common.cancel') }}</Button>
+        <Button variant="primary" :loading="upgradeBusy" @click="submitUpgrade">{{ t('sites.upgrade.submit') }}</Button>
       </template>
     </Modal>
 
     <!-- 销毁确认（逐字输入 slug） -->
     <ConfirmDanger
       v-model:open="destroyOpen"
-      title="销毁站点"
+      :title="t('sites.destroy.title')"
       :confirm-text="destroySite?.slug ?? ''"
       :message="destroyMessage"
-      action-label="销毁站点"
+      :action-label="t('sites.destroy.action')"
       :loading="destroyBusy"
       @confirm="submitDestroy"
     />
 
     <!-- 新建站点向导 -->
-    <Modal v-model:open="createOpen" title="新建站点" width="560px">
+    <Modal v-model:open="createOpen" :title="t('sites.create.title')" width="560px">
       <div class="space-y-4">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="引擎" required :error="errors.engine">
+          <Field :label="t('sites.create.engineLabel')" required :error="errors.engine">
             <Select v-model="fEngine" :options="engineOptions" :disabled="submitting" />
           </Field>
-          <Field label="版本" required :error="errors.version" hint="镜像 tag，如 v0.1.160">
+          <Field
+            :label="t('sites.create.versionLabel')"
+            required
+            :error="errors.version"
+            :hint="t('sites.create.versionHint')"
+          >
             <Input v-model="fVersion" mono placeholder="v0.1.160" :disabled="submitting" />
           </Field>
         </div>
@@ -469,39 +475,44 @@ async function submitCreate(): Promise<void> {
             label="slug"
             required
             :error="errors.slug"
-            hint="小写字母/数字/连字符，2–32 位，URL 与容器标识"
+            :hint="t('sites.create.slugHint')"
           >
             <Input v-model="fSlug" mono placeholder="my-site" :disabled="submitting" />
           </Field>
-          <Field label="显示名称" required :error="errors.label">
-            <Input v-model="fLabel" placeholder="我的中转站" :disabled="submitting" />
+          <Field :label="t('sites.create.labelLabel')" required :error="errors.label">
+            <Input v-model="fLabel" :placeholder="t('sites.create.labelPlaceholder')" :disabled="submitting" />
           </Field>
         </div>
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="端口" :error="errors.hostPort" hint="留空则自动分配可用端口">
-            <Input v-model="fPort" type="number" placeholder="自动分配" :disabled="submitting" />
+          <Field :label="t('sites.create.portLabel')" :error="errors.hostPort" :hint="t('sites.create.portHint')">
+            <Input v-model="fPort" type="number" :placeholder="t('sites.create.portPlaceholder')" :disabled="submitting" />
           </Field>
-          <Field label="管理员邮箱" required :error="errors.adminEmail" hint="站点初始管理员账号">
+          <Field
+            :label="t('sites.create.emailLabel')"
+            required
+            :error="errors.adminEmail"
+            :hint="t('sites.create.emailHint')"
+          >
             <Input v-model="fEmail" type="email" placeholder="admin@example.com" :disabled="submitting" />
           </Field>
         </div>
 
         <div class="border-t border-border/70 pt-4">
-          <p class="rp-microlabel mb-3">品牌（可选）</p>
+          <p class="rp-microlabel mb-3">{{ t('sites.create.brandSection') }}</p>
           <div class="space-y-4">
-            <Field label="站点名称" :error="errors.siteName">
-              <Input v-model="fSiteName" placeholder="展示在站点前台的名称" :disabled="submitting" />
+            <Field :label="t('sites.create.siteNameLabel')" :error="errors.siteName">
+              <Input v-model="fSiteName" :placeholder="t('sites.create.siteNamePlaceholder')" :disabled="submitting" />
             </Field>
-            <Field label="公告" hint="展示在站点前台的公告文案">
-              <Input v-model="fAnnouncement" placeholder="可留空" :disabled="submitting" />
+            <Field :label="t('sites.create.announcementLabel')" :hint="t('sites.create.announcementHint')">
+              <Input v-model="fAnnouncement" :placeholder="t('sites.create.announcementPlaceholder')" :disabled="submitting" />
             </Field>
           </div>
         </div>
       </div>
       <template #footer>
-        <Button variant="ghost" :disabled="submitting" @click="createOpen = false">取消</Button>
-        <Button variant="primary" :loading="submitting" @click="submitCreate">创建站点</Button>
+        <Button variant="ghost" :disabled="submitting" @click="createOpen = false">{{ t('common.cancel') }}</Button>
+        <Button variant="primary" :loading="submitting" @click="submitCreate">{{ t('sites.create.submit') }}</Button>
       </template>
     </Modal>
   </div>

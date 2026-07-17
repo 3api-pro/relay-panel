@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { Button, Drawer, EmptyState, StatusDot, Table, type TableColumn } from '../../components/ui';
 import { get } from '../../api/client';
 import type { SiteAuditEvent, SiteAuditResponse } from './types';
@@ -7,6 +8,7 @@ import { fmtDateTime, relTime } from './format';
 
 /** 审计页：最近 50 条事件；点击行查看 payload 详情（默认折叠在抽屉内）。 */
 const props = defineProps<{ slug: string }>();
+const { t } = useI18n();
 
 const events = ref<SiteAuditEvent[]>([]);
 const loading = ref(true);
@@ -23,7 +25,7 @@ async function load(): Promise<void> {
     events.value = Array.isArray(res.events) ? res.events : [];
     loadError.value = '';
   } catch (err) {
-    loadError.value = err instanceof Error ? err.message : '加载失败';
+    loadError.value = err instanceof Error ? err.message : t('siteDetail.loadFailed');
   } finally {
     loading.value = false;
   }
@@ -36,12 +38,12 @@ function asEvent(row: Record<string, unknown>): SiteAuditEvent {
 }
 const selectedEvent = computed(() => events.value.find((e) => e.id === selectedId.value) ?? null);
 
-const columns: TableColumn[] = [
-  { key: 'action', label: '动作' },
-  { key: 'ok', label: '结果' },
-  { key: 'actor', label: '操作者' },
-  { key: 'createdAt', label: '时间', align: 'right' },
-];
+const columns = computed<TableColumn[]>(() => [
+  { key: 'action', label: t('siteDetail.audit.colAction') },
+  { key: 'ok', label: t('siteDetail.audit.colResult') },
+  { key: 'actor', label: t('siteDetail.audit.colActor') },
+  { key: 'createdAt', label: t('siteDetail.audit.colTime'), align: 'right' },
+]);
 
 function payloadText(payload: unknown): string {
   if (payload === undefined || payload === null) return '';
@@ -56,12 +58,12 @@ function payloadText(payload: unknown): string {
 <template>
   <div class="space-y-4">
     <p class="text-xs text-muted">
-      最近 <span class="tnum text-text">{{ events.length }}</span> 条操作记录
+      {{ t('siteDetail.audit.count', { n: events.length }) }}
     </p>
 
     <div v-if="loadError" class="rp-panel p-8">
-      <EmptyState title="加载失败" :description="loadError">
-        <Button size="sm" @click="load">重试</Button>
+      <EmptyState :title="t('siteDetail.loadFailed')" :description="loadError">
+        <Button size="sm" @click="load">{{ t('common.retry') }}</Button>
       </EmptyState>
     </div>
 
@@ -71,7 +73,7 @@ function payloadText(payload: unknown): string {
         :rows="rows"
         row-key="id"
         :loading="loading"
-        empty="暂无审计记录"
+        :empty="t('siteDetail.audit.empty')"
         clickable
         @row-click="(row) => (selectedId = asEvent(row).id)"
       >
@@ -79,7 +81,7 @@ function payloadText(payload: unknown): string {
           <span class="font-mono text-xs">{{ asEvent(row).action }}</span>
         </template>
         <template #cell-ok="{ row }">
-          <StatusDot :status="asEvent(row).ok ? 'ok' : 'failed'" :label="asEvent(row).ok ? '成功' : '失败'" />
+          <StatusDot :status="asEvent(row).ok ? 'ok' : 'failed'" :label="asEvent(row).ok ? t('siteDetail.audit.resultOk') : t('siteDetail.audit.resultFail')" />
         </template>
         <template #cell-actor="{ row }">
           <span class="text-muted">{{ asEvent(row).actor || '—' }}</span>
@@ -90,25 +92,25 @@ function payloadText(payload: unknown): string {
       </Table>
     </div>
 
-    <Drawer :open="selectedId !== null" title="审计详情" width="520px" @update:open="selectedId = null">
+    <Drawer :open="selectedId !== null" :title="t('siteDetail.audit.detailTitle')" width="520px" @update:open="selectedId = null">
       <div v-if="selectedEvent" class="space-y-5">
         <dl class="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[13px]">
           <div class="col-span-2">
-            <dt class="rp-microlabel">动作</dt>
+            <dt class="rp-microlabel">{{ t('siteDetail.audit.fAction') }}</dt>
             <dd class="mt-0.5 font-mono text-xs">{{ selectedEvent.action }}</dd>
           </div>
           <div>
-            <dt class="rp-microlabel">结果</dt>
+            <dt class="rp-microlabel">{{ t('siteDetail.audit.fResult') }}</dt>
             <dd class="mt-0.5">
-              <StatusDot :status="selectedEvent.ok ? 'ok' : 'failed'" :label="selectedEvent.ok ? '成功' : '失败'" />
+              <StatusDot :status="selectedEvent.ok ? 'ok' : 'failed'" :label="selectedEvent.ok ? t('siteDetail.audit.resultOk') : t('siteDetail.audit.resultFail')" />
             </dd>
           </div>
           <div>
-            <dt class="rp-microlabel">操作者</dt>
+            <dt class="rp-microlabel">{{ t('siteDetail.audit.fActor') }}</dt>
             <dd class="mt-0.5">{{ selectedEvent.actor || '—' }}</dd>
           </div>
           <div class="col-span-2">
-            <dt class="rp-microlabel">时间</dt>
+            <dt class="rp-microlabel">{{ t('siteDetail.audit.fTime') }}</dt>
             <dd class="tnum mt-0.5">{{ fmtDateTime(selectedEvent.createdAt) }}</dd>
           </div>
         </dl>

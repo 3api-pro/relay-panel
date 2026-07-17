@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { ArrowUpCircle, Check, MoreHorizontal, Play, Square, Trash2 } from 'lucide-vue-next';
 import type { SiteView } from '../../api/types';
+
+const { t } = useI18n();
 
 /**
  * 站点行内操作菜单（SitesView 专属局部组件）。
@@ -99,7 +102,7 @@ onBeforeUnmount(() => {
     class="inline-flex size-7 items-center justify-center rounded-lg border border-transparent text-muted transition-colors hover:border-border hover:bg-panel-2 hover:text-text"
     :class="open ? 'border-border bg-panel-2 text-text' : ''"
     :disabled="props.busy"
-    aria-label="更多操作"
+    :aria-label="t('sites.rowActions.more')"
     @click="toggle"
   >
     <MoreHorizontal :size="16" />
@@ -121,7 +124,7 @@ onBeforeUnmount(() => {
           @click="pick('upgrade')"
         >
           <ArrowUpCircle :size="14" class="text-muted" />
-          升级版本…
+          {{ t('sites.rowActions.upgrade') }}
         </button>
 
         <button
@@ -132,7 +135,7 @@ onBeforeUnmount(() => {
           @click="pick('stop')"
         >
           <Square :size="14" class="text-muted" />
-          停止站点
+          {{ t('sites.rowActions.stop') }}
         </button>
         <button
           v-else-if="canStart"
@@ -142,7 +145,7 @@ onBeforeUnmount(() => {
           @click="pick('start')"
         >
           <Play :size="14" class="text-muted" />
-          启动站点
+          {{ t('sites.rowActions.start') }}
         </button>
 
         <div class="my-1 border-t border-border/70" />
@@ -160,7 +163,7 @@ onBeforeUnmount(() => {
           >
             <Check v-if="keepData" :size="11" />
           </span>
-          保留数据卷
+          {{ t('sites.rowActions.keepData') }}
         </button>
         <button
           type="button"
@@ -169,7 +172,7 @@ onBeforeUnmount(() => {
           @click="pickDestroy"
         >
           <Trash2 :size="14" />
-          销毁站点…
+          {{ t('sites.rowActions.destroy') }}
         </button>
       </div>
     </Transition>

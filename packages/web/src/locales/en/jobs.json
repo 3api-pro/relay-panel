@@ -1,0 +1,49 @@
+{
+  "title": "Jobs",
+  "subtitle": "Orchestration records for provision / upgrade / start-stop / destroy",
+  "activePolling": "Jobs in progress, refreshing every 5s",
+  "loadFailed": "Failed to load",
+  "emptyList": "No job records yet",
+  "col": {
+    "kind": "Type",
+    "slug": "Site",
+    "status": "Status",
+    "createdBy": "Created by",
+    "createdAt": "Created",
+    "duration": "Duration"
+  },
+  "kind": {
+    "provision": "Provision",
+    "upgrade": "Upgrade",
+    "start": "Start",
+    "stop": "Stop",
+    "destroy": "Destroy"
+  },
+  "relTime": {
+    "justNow": "just now",
+    "minAgo": "{n}m ago",
+    "hourAgo": "{n}h ago",
+    "dayAgo": "{n}d ago"
+  },
+  "detail": {
+    "titleWithId": "Job #{id}",
+    "title": "Job detail",
+    "createdBy": "Created by",
+    "duration": "Duration",
+    "createdAt": "Created at",
+    "finishedAt": "Finished at",
+    "refreshFailed": "Failed to refresh detail: {msg}",
+    "errorLabel": "Error",
+    "stepsLabel": "Steps",
+    "liveRefresh": "Live",
+    "noSteps": "No step records"
+  },
+  "step": {
+    "failed": "Failed",
+    "done": "Done",
+    "running": "Running",
+    "queued": "Queued",
+    "provisioning": "Preparing",
+    "skipped": "Skipped"
+  }
+}

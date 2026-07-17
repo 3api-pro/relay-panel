@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { KeyRound, ShieldCheck } from 'lucide-vue-next';
 import { get, post } from '../../api/client';
 import { toast } from '../../components/ui/toast';
@@ -24,6 +25,8 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{ 'update:open': [boolean]; created: [MarketplaceGrant] }>();
+
+const { t } = useI18n();
 
 const siteSlug = ref('');
 const channelName = ref('');
@@ -92,11 +95,11 @@ function close(): void {
 
 function validate(): boolean {
   const e: typeof errors.value = {};
-  if (!siteSlug.value) e.site = '请选择目标站点';
+  if (!siteSlug.value) e.site = t('marketplace.wizard.errSite');
   if (isByo.value) {
-    if (!baseUrl.value.trim()) e.baseUrl = '请填写上游 Base URL';
-    else if (!/^https?:\/\//i.test(baseUrl.value.trim())) e.baseUrl = '需为 http(s) 开头的完整地址';
-    if (!apiKey.value) e.apiKey = '请填写上游 API Key';
+    if (!baseUrl.value.trim()) e.baseUrl = t('marketplace.wizard.errBaseUrl');
+    else if (!/^https?:\/\//i.test(baseUrl.value.trim())) e.baseUrl = t('marketplace.wizard.errBaseUrlFormat');
+    if (!apiKey.value) e.apiKey = t('marketplace.wizard.errApiKey');
   }
   errors.value = e;
   return Object.keys(e).length === 0;
@@ -116,7 +119,7 @@ async function submit(): Promise<void> {
   };
   try {
     const grant = await post<MarketplaceGrant>('/api/marketplace/grants', body);
-    toast.success(`已启用到「${grant.siteLabel}」`);
+    toast.success(t('marketplace.toast.grantCreated', { site: grant.siteLabel }));
     apiKey.value = '';
     emit('created', grant);
     emit('update:open', false);
@@ -131,7 +134,7 @@ async function submit(): Promise<void> {
 <template>
   <Modal
     :open="props.open"
-    :title="template ? `启用模板 · ${template.title}` : '启用模板'"
+    :title="template ? t('marketplace.wizard.titleWith', { title: template.title }) : t('marketplace.wizard.title')"
     width="560px"
     :closable="!submitting"
     @update:open="close"
@@ -139,19 +142,21 @@ async function submit(): Promise<void> {
     <div v-if="template" class="space-y-4">
       <!-- 模板摘要 -->
       <div class="rp-panel flex items-center gap-2 bg-panel-2/40 px-3 py-2.5">
-        <Badge :tone="isByo ? 'default' : 'accent'" size="sm">{{ isByo ? '自带上游' : '计量托管' }}</Badge>
+        <Badge :tone="isByo ? 'default' : 'accent'" size="sm">
+          {{ isByo ? t('marketplace.source.byo') : t('marketplace.source.managed') }}
+        </Badge>
         <Badge tone="muted" size="sm" mono>{{ template.protocol }}</Badge>
-        <span class="text-xs text-muted">{{ template.models.length }} 个模型</span>
+        <span class="text-xs text-muted">{{ t('marketplace.wizard.modelCount', { n: template.models.length }) }}</span>
         <span v-if="template.suggestedRatio != null" class="tnum text-xs text-muted">
-          · 建议倍率 ×{{ template.suggestedRatio }}
+          {{ t('marketplace.wizard.suggestedRatio', { ratio: template.suggestedRatio }) }}
         </span>
       </div>
 
-      <Field label="目标站点" required :error="errors.site">
+      <Field :label="t('marketplace.wizard.targetSite')" required :error="errors.site">
         <Select
           :model-value="siteSlug"
           :options="siteOptions"
-          placeholder="选择要注入渠道的站点"
+          :placeholder="t('marketplace.wizard.targetSitePlaceholder')"
           :disabled="submitting"
           @update:model-value="(v) => (siteSlug = String(v))"
         />
@@ -159,7 +164,12 @@ async function submit(): Promise<void> {
 
       <!-- byo：自带上游凭据 -->
       <template v-if="isByo">
-        <Field label="上游 Base URL" required :error="errors.baseUrl" hint="站长自带上游的 API 地址">
+        <Field
+          :label="t('marketplace.wizard.baseUrl')"
+          required
+          :error="errors.baseUrl"
+          :hint="t('marketplace.wizard.baseUrlHint')"
+        >
           <Input
             v-model="baseUrl"
             type="url"
@@ -168,7 +178,12 @@ async function submit(): Promise<void> {
             :disabled="submitting"
           />
         </Field>
-        <Field label="上游 API Key" required :error="errors.apiKey" hint="仅注入目标站引擎，提交后不回显、不入库">
+        <Field
+          :label="t('marketplace.wizard.apiKey')"
+          required
+          :error="errors.apiKey"
+          :hint="t('marketplace.wizard.apiKeyHint')"
+        >
           <Input v-model="apiKey" type="password" mono placeholder="sk-..." :disabled="submitting" />
         </Field>
       </template>
@@ -180,25 +195,25 @@ async function submit(): Promise<void> {
       >
         <ShieldCheck :size="16" class="mt-0.5 shrink-0 text-accent" />
         <p class="leading-relaxed text-muted">
-          该模板为托管计量渠道，将通过计量网关为本站签发专属接入凭据，无需填写上游 Key。用量由网关回传用于分账。
+          {{ t('marketplace.wizard.managedNote') }}
         </p>
       </div>
 
       <!-- 可选项 -->
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="渠道名（可选）" hint="留空使用模板标题">
+        <Field :label="t('marketplace.wizard.channelName')" :hint="t('marketplace.wizard.channelNameHint')">
           <Input v-model="channelName" :placeholder="template.title" :disabled="submitting" />
         </Field>
-        <Field label="优先级（可选）" hint="数字越大越优先">
+        <Field :label="t('marketplace.wizard.priority')" :hint="t('marketplace.wizard.priorityHint')">
           <Input v-model="priority" type="number" placeholder="0" :disabled="submitting" />
         </Field>
       </div>
 
       <!-- 分组注入（可选，取决于站点分组） -->
-      <Field label="注入到分组（可选）" hint="不选则按引擎默认分组生效">
-        <div v-if="groupsLoading" class="text-xs text-muted/70">加载分组…</div>
+      <Field :label="t('marketplace.wizard.groups')" :hint="t('marketplace.wizard.groupsHint')">
+        <div v-if="groupsLoading" class="text-xs text-muted/70">{{ t('marketplace.wizard.groupsLoading') }}</div>
         <div v-else-if="groups.length === 0" class="text-xs text-muted/70">
-          {{ siteSlug ? '该站点暂无可选分组' : '选择站点后加载分组' }}
+          {{ siteSlug ? t('marketplace.wizard.groupsEmptyWithSite') : t('marketplace.wizard.groupsEmptyNoSite') }}
         </div>
         <div v-else class="flex flex-wrap gap-1.5">
           <button
@@ -222,9 +237,9 @@ async function submit(): Promise<void> {
     </div>
 
     <template #footer>
-      <Button variant="ghost" :disabled="submitting" @click="close">取消</Button>
+      <Button variant="ghost" :disabled="submitting" @click="close">{{ t('common.cancel') }}</Button>
       <Button variant="primary" :loading="submitting" :disabled="!template" @click="submit">
-        <KeyRound :size="14" />确认启用
+        <KeyRound :size="14" />{{ t('marketplace.wizard.confirm') }}
       </Button>
     </template>
   </Modal>

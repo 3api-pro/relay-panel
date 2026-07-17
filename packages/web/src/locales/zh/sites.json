@@ -1,0 +1,91 @@
+{
+  "title": "站点",
+  "new": "新建站点",
+  "summaryCount": "共 {n} 个站点",
+  "summaryDown": "{n} 个异常",
+  "updating": "更新中…",
+  "loadFailed": "加载失败",
+  "empty": {
+    "title": "还没有站点",
+    "desc": "新建第一个中转站，或用 CLI 接管已有的存量站点。"
+  },
+  "externalManaged": "外部接管",
+  "columns": {
+    "status": "状态",
+    "site": "站点",
+    "engine": "引擎 / 版本",
+    "hostPort": "端口",
+    "usage": "24h 请求 / 成本",
+    "job": "任务"
+  },
+  "jobKind": {
+    "provision": "开站",
+    "upgrade": "升级",
+    "start": "启动",
+    "stop": "停止",
+    "destroy": "销毁"
+  },
+  "jobStatus": {
+    "running": "执行中",
+    "queued": "排队中"
+  },
+  "toast": {
+    "queued": "任务已排队，可在任务页跟踪",
+    "created": "开站任务已创建"
+  },
+  "upgrade": {
+    "title": "升级站点",
+    "descBefore": "站点 ",
+    "descMid": " 将升级到指定版本，当前版本 ",
+    "descAfter": "。",
+    "versionLabel": "目标版本",
+    "versionHint": "镜像 tag，如 v0.1.160",
+    "submit": "升级",
+    "errRequired": "请填写目标版本",
+    "errSame": "目标版本与当前版本相同"
+  },
+  "destroy": {
+    "title": "销毁站点",
+    "action": "销毁站点",
+    "keepMsg": "将停止并移除站点容器，但保留数据卷（数据库/上传），可日后重建恢复。",
+    "purgeMsg": "将永久删除该站点的容器与数据卷，数据无法恢复。"
+  },
+  "create": {
+    "title": "新建站点",
+    "submit": "创建站点",
+    "engineLabel": "引擎",
+    "engineRecommended": "sub2api（推荐）",
+    "versionLabel": "版本",
+    "versionHint": "镜像 tag，如 v0.1.160",
+    "slugHint": "小写字母/数字/连字符，2–32 位，URL 与容器标识",
+    "labelLabel": "显示名称",
+    "labelPlaceholder": "我的中转站",
+    "portLabel": "端口",
+    "portHint": "留空则自动分配可用端口",
+    "portPlaceholder": "自动分配",
+    "emailLabel": "管理员邮箱",
+    "emailHint": "站点初始管理员账号",
+    "brandSection": "品牌（可选）",
+    "siteNameLabel": "站点名称",
+    "siteNamePlaceholder": "展示在站点前台的名称",
+    "announcementLabel": "公告",
+    "announcementHint": "展示在站点前台的公告文案",
+    "announcementPlaceholder": "可留空",
+    "errEngine": "请选择引擎",
+    "errVersion": "请填写版本",
+    "errSlugRequired": "请填写 slug",
+    "errSlugFormat": "仅小写字母/数字/连字符，2–32 位，须以字母或数字开头",
+    "errLabel": "请填写显示名称",
+    "errPort": "端口需为 1–65535 的整数",
+    "errEmailRequired": "请填写管理员邮箱",
+    "errEmailFormat": "邮箱格式不正确"
+  },
+  "rowActions": {
+    "more": "更多操作",
+    "upgrade": "升级版本…",
+    "stop": "停止站点",
+    "start": "启动站点",
+    "keepData": "保留数据卷",
+    "destroy": "销毁站点…"
+  }
+}

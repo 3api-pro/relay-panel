@@ -11,7 +11,7 @@ const props = withDefaults(
     height?: number;
     color?: string;
   }>(),
-  { height: 28, color: '#6d8bff' },
+  { height: 28, color: 'var(--color-accent)' },
 );
 
 const gradId = `spark-grad-${useId()}`;

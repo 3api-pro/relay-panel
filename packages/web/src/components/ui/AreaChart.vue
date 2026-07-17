@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 /**
  * 单序列面积图（手写 SVG，无图表库）：2px 线 + 渐变面积 + 克制网格，
@@ -15,12 +18,12 @@ const props = withDefaults(
   defineProps<{
     points: AreaPoint[];
     height?: number;
-    /** 序列色（默认 accent） */
+    /** 序列色（默认 accent，随主题变） */
     color?: string;
     /** 数值格式化（提示框与 y 轴共用） */
     formatValue?: (v: number) => string;
   }>(),
-  { height: 180, color: '#6d8bff', formatValue: undefined },
+  { height: 180, color: 'var(--color-accent)', formatValue: undefined },
 );
 
 const gradId = `area-grad-${useId()}`;
@@ -155,7 +158,7 @@ const tipStyle = computed(() => {
 
       <!-- 网格（虚线、退居背景）与 y 轴刻度 -->
       <g v-for="g in gridLevels" :key="g.v">
-        <line :x1="PAD.left" :x2="width - PAD.right" :y1="g.y" :y2="g.y" stroke="#1f2430" stroke-dasharray="3 4" />
+        <line :x1="PAD.left" :x2="width - PAD.right" :y1="g.y" :y2="g.y" stroke="var(--rp-grid)" stroke-dasharray="3 4" />
         <text :x="PAD.left - 8" :y="g.y + 3.5" text-anchor="end" class="fill-muted tnum" font-size="10.5">
           {{ fmt(g.v) }}
         </text>
@@ -166,7 +169,7 @@ const tipStyle = computed(() => {
         :x2="width - PAD.right"
         :y1="PAD.top + plotH"
         :y2="PAD.top + plotH"
-        stroke="#1f2430"
+        stroke="var(--rp-grid)"
       />
       <text :x="PAD.left - 8" :y="PAD.top + plotH + 3.5" text-anchor="end" class="fill-muted tnum" font-size="10.5">
         0
@@ -191,12 +194,12 @@ const tipStyle = computed(() => {
 
       <!-- 悬停：十字线 + 数据点（2px 底色描边圈出重叠） -->
       <g v-if="hover">
-        <line :x1="hover.x" :x2="hover.x" :y1="PAD.top" :y2="PAD.top + plotH" stroke="#2b3142" />
-        <circle :cx="hover.x" :cy="hover.y" r="4" :fill="props.color" stroke="#101218" stroke-width="2" />
+        <line :x1="hover.x" :x2="hover.x" :y1="PAD.top" :y2="PAD.top + plotH" stroke="var(--rp-grid-strong)" />
+        <circle :cx="hover.x" :cy="hover.y" r="4" :fill="props.color" stroke="var(--rp-plot-bg)" stroke-width="2" />
       </g>
     </svg>
 
-    <div v-else class="flex h-full items-center justify-center text-xs text-muted">暂无数据</div>
+    <div v-else class="flex h-full items-center justify-center text-xs text-muted">{{ t('common.empty') }}</div>
 
     <!-- 提示框（HTML 覆盖层） -->
     <div

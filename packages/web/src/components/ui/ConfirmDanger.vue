@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { TriangleAlert } from 'lucide-vue-next';
+
+const { t } = useI18n();
 import Modal from './Modal.vue';
 import Button from './Button.vue';
 import Input from './Input.vue';
@@ -21,7 +24,7 @@ const props = withDefaults(
     actionLabel?: string;
     loading?: boolean;
   }>(),
-  { message: '', actionLabel: '确认执行', loading: false },
+  { message: '', actionLabel: '', loading: false },
 );
 
 const emit = defineEmits<{ 'update:open': [v: boolean]; confirm: [] }>();
@@ -50,17 +53,17 @@ function close(): void {
       <div class="min-w-0 flex-1 space-y-3">
         <p v-if="props.message" class="text-[13px] leading-relaxed text-muted">{{ props.message }}</p>
         <p class="text-[13px] text-muted">
-          此操作不可撤销。请输入
+          {{ t('common.confirmDanger.instructionBefore') }}
           <code class="mx-0.5 rounded bg-panel-2 px-1.5 py-0.5 font-mono text-xs text-red">{{ props.confirmText }}</code>
-          以确认：
+          {{ t('common.confirmDanger.instructionAfter') }}
         </p>
         <Input v-model="typed" mono :placeholder="props.confirmText" :disabled="props.loading" autofocus />
       </div>
     </div>
     <template #footer>
-      <Button variant="ghost" :disabled="props.loading" @click="close">取消</Button>
+      <Button variant="ghost" :disabled="props.loading" @click="close">{{ t('common.cancel') }}</Button>
       <Button variant="danger" :disabled="!matched" :loading="props.loading" @click="emit('confirm')">
-        {{ props.actionLabel }}
+        {{ props.actionLabel || t('common.confirmDanger.action') }}
       </Button>
     </template>
   </Modal>

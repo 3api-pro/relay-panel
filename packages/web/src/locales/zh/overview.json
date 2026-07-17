@@ -1,0 +1,42 @@
+{
+  "statSites": "站点总数",
+  "statSitesHint": "不含已销毁",
+  "statHealthy": "健康站点",
+  "healthyAll": "全部在线",
+  "healthyDown": "{n} 个站点异常",
+  "healthyNoData": "暂无探测数据",
+  "stat24hReq": "24h 请求",
+  "stat24hCost": "24h 成本",
+  "statAllSites": "全部站点合计",
+  "openAlerts": "未解决告警 · {n}",
+  "allAlerts": "全部告警",
+  "sitesSection": "站点",
+  "siteManage": "站点管理",
+  "latency": "延迟",
+  "req24h": "24h 请求",
+  "cost24h": "24h 成本",
+  "loadFailed": "加载失败",
+  "noSites": "还没有站点",
+  "noSitesDesc": "到「站点」页新建第一个站点，或用 CLI 接管存量站。",
+  "externalManaged": "外部接管",
+  "jobRunning": "{kind}任务 · 执行中",
+  "jobQueued": "{kind}任务 · 排队中",
+  "severity": {
+    "critical": "严重",
+    "warning": "警告",
+    "info": "提示"
+  },
+  "jobKind": {
+    "provision": "开站",
+    "upgrade": "升级",
+    "start": "启动",
+    "stop": "停止",
+    "destroy": "销毁"
+  },
+  "relTime": {
+    "justNow": "刚刚",
+    "minAgo": "{n} 分钟前",
+    "hourAgo": "{n} 小时前",
+    "dayAgo": "{n} 天前"
+  }
+}

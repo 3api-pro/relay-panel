@@ -1,0 +1,15 @@
+{
+  "overview": "概要",
+  "sites": "サイト",
+  "marketplace": "チャネルマーケット",
+  "ledger": "台帳",
+  "alerts": "アラート",
+  "jobs": "ジョブ",
+  "operators": "オペレーター",
+  "billing": "請求",
+  "settings": "設定",
+  "logout": "ログアウト",
+  "roleRoot": "管理者",
+  "roleOperator": "オペレーター",
+  "roleViewer": "閲覧のみ"
+}

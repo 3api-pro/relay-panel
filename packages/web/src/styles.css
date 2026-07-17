@@ -1,28 +1,42 @@
 @import 'tailwindcss';
 
 /*
- * relay-panel 设计系统（规格 §11）
- * 对标 Linear/Vercel 深色产品站：深场 + 细边框 + 微渐变面板 + 克制动效。
- * token 延续既有看板调色，全部经 @theme 暴露为 Tailwind 工具类：
+ * relay-panel 设计系统 v2 —— 液态玻璃（liquid glass）+ 明暗双主题
+ * ------------------------------------------------------------------
+ * 设计语言：Apple visionOS / macOS 控制中心的高级磨砂玻璃。
+ *   半透明面板 + backdrop-filter 模糊 + 顶部内高光玻璃描边 + 柔和景深阴影
+ *   + 环境色透过玻璃折射。信息密度对标 Linear / Vercel（tabular-nums、克制留白）。
+ *
+ * 主题机制：
+ *   - Tailwind v4 的 @theme 里注册「深色」为默认 token（工具类由此生成）。
+ *   - `:root[data-theme="light"]` 覆盖同名 --color-* 变量；工具类以 var() 引用，
+ *     故主题切换零重编译即生效。data-theme 由 useTheme.ts 在挂载前写到 <html>。
+ *   - 玻璃/氛围用独立 --glass-* / --rp-* 变量（不进 @theme，仅自定义 CSS 引用）。
+ *
+ * 工具类契约（旧视图依赖，勿删）：
  *   bg-bg / bg-panel / bg-panel-2 / border-border / border-border-2
  *   text-text / text-muted / text-accent / text-green / text-red / text-amber
- *   rounded-panel（14px）
+ *   from-accent / to-accent-dim / text-violet / rounded-panel
+ * 视觉原语类：.rp-panel .rp-glass .rp-panel-hover .rp-microlabel .rp-page .rp-shimmer
  */
+
 @theme {
-  --color-bg: #08090c;
-  --color-panel: #101218;
-  --color-panel-2: #151822;
-  --color-border: #1f2430;
-  --color-border-2: #2b3142;
-  --color-text: #e7e9ee;
-  --color-muted: #8b91a1;
+  /* ---- 深色为默认（工具类由这些名字生成） ---- */
+  --color-bg: #06070a;
+  --color-panel: #14161e;
+  --color-panel-2: #1b1e28;
+  --color-border: #262b38;
+  --color-border-2: #333b4d;
+  --color-text: #e8eaf0;
+  --color-muted: #9298a8;
   --color-accent: #6d8bff;
   --color-accent-dim: #5a78f0;
-  --color-green: #43d17f;
-  --color-red: #ff5c6c;
+  --color-violet: #a78bff;
+  --color-green: #3fd18a;
+  --color-red: #ff5f6e;
   --color-amber: #f0b74a;
 
-  --radius-panel: 14px;
+  --radius-panel: 16px;
 
   --font-sans:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
@@ -30,13 +44,13 @@
   --font-mono:
     ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
-  --animate-fade-up: fade-up 0.18s ease-out both;
+  --animate-fade-up: fade-up 0.2s ease-out both;
   --animate-shimmer: shimmer 1.6s linear infinite;
 
   @keyframes fade-up {
     from {
       opacity: 0;
-      transform: translateY(4px);
+      transform: translateY(5px);
     }
     to {
       opacity: 1;
@@ -53,13 +67,94 @@
   }
 }
 
+/* ====================================================================
+ * 玻璃 + 氛围变量：深色（默认）
+ * ==================================================================== */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* 玻璃面板（更透以显折射） */
+  --glass-bg: rgb(22 25 36 / 0.44);
+  --glass-bg-strong: rgb(18 21 31 / 0.66); /* 顶栏/侧栏/弹层：更实以保可读 */
+  --glass-border: rgb(255 255 255 / 0.1);
+  --glass-border-hover: rgb(255 255 255 / 0.2);
+  --glass-highlight: rgb(255 255 255 / 0.16); /* 顶部内高光 */
+  --glass-shadow: 0 10px 34px rgb(2 4 12 / 0.5);
+  --glass-shadow-lg: 0 28px 70px rgb(2 4 12 / 0.62);
+  --glass-blur: 30px;
+  --glass-saturate: 160%;
+
+  /* 环境背景：深蓝黑上叠 深蓝 / 紫 / 青 四团大范围光晕（玻璃靠它折射） */
+  --rp-canvas: #070811;
+  --rp-ambient:
+    radial-gradient(920px 640px at 8% -10%, rgb(84 108 255 / 0.34), transparent 62%),
+    radial-gradient(860px 700px at 94% -2%, rgb(150 108 255 / 0.27), transparent 64%),
+    radial-gradient(940px 780px at 58% 114%, rgb(52 202 216 / 0.22), transparent 62%),
+    radial-gradient(720px 720px at 80% 60%, rgb(108 139 255 / 0.12), transparent 60%);
+  --rp-noise-opacity: 0.035;
+
+  /* 图表用（SVG 内 var 引用，随主题变） */
+  --rp-grid: rgb(255 255 255 / 0.07);
+  --rp-grid-strong: rgb(255 255 255 / 0.14);
+  --rp-plot-bg: var(--color-panel);
+  --scrollbar-thumb: rgb(255 255 255 / 0.14);
+}
+
+/* ====================================================================
+ * 玻璃 + 氛围变量 + token 覆盖：浅色
+ * ==================================================================== */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* 覆盖 Tailwind 颜色 token（工具类随之翻转） */
+  --color-bg: #e9edf4;
+  --color-panel: #ffffff;
+  --color-panel-2: #eef1f7;
+  --color-border: #dce1ea;
+  --color-border-2: #c7cedb;
+  --color-text: #1a1d27;
+  --color-muted: #5b6273;
+  --color-accent: #4d6bf0;
+  --color-accent-dim: #3f5ce4;
+  --color-violet: #7c5cf0;
+  --color-green: #129d63;
+  --color-red: #e0454b;
+  --color-amber: #b8811a;
+
+  /* 玻璃面板：白玻璃 + 冷色柔影（略透以显折射） */
+  --glass-bg: rgb(255 255 255 / 0.55);
+  --glass-bg-strong: rgb(255 255 255 / 0.74);
+  --glass-border: rgb(18 24 46 / 0.09);
+  --glass-border-hover: rgb(18 24 46 / 0.18);
+  --glass-highlight: rgb(255 255 255 / 0.85);
+  --glass-shadow: 0 10px 32px rgb(30 44 80 / 0.12);
+  --glass-shadow-lg: 0 28px 64px rgb(30 44 80 / 0.18);
+  --glass-blur: 26px;
+  --glass-saturate: 165%;
+
+  /* 环境背景：柔和浅灰上叠 蓝 / 薰衣草 / 青 四团光晕（白玻璃靠它显色） */
+  --rp-canvas: #e7ebf3;
+  --rp-ambient:
+    radial-gradient(900px 620px at 8% -10%, rgb(84 120 255 / 0.26), transparent 62%),
+    radial-gradient(840px 680px at 94% -2%, rgb(150 120 255 / 0.22), transparent 64%),
+    radial-gradient(920px 760px at 58% 114%, rgb(56 196 214 / 0.2), transparent 62%),
+    radial-gradient(700px 700px at 80% 58%, rgb(120 140 255 / 0.1), transparent 60%);
+  --rp-noise-opacity: 0.02;
+
+  --rp-grid: rgb(18 24 46 / 0.08);
+  --rp-grid-strong: rgb(18 24 46 / 0.16);
+  --rp-plot-bg: var(--color-panel);
+  --scrollbar-thumb: rgb(18 24 46 / 0.18);
+}
+
 /* ---- 基座 ---- */
 html {
-  color-scheme: dark;
+  background-color: var(--rp-canvas);
 }
 
 body {
-  background-color: var(--color-bg);
+  background-color: var(--rp-canvas);
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: 14px;
@@ -68,16 +163,25 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* 深场氛围：极淡的顶部辉光，避免纯平死黑（不可交互，纯背景层） */
+/* 环境光晕层：三团大范围有色光晕，玻璃面板浮其上产生折射感（不可交互） */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
-  pointer-events: none;
   z-index: 0;
-  background:
-    radial-gradient(1100px 420px at 18% -8%, rgb(109 139 255 / 0.055), transparent 62%),
-    radial-gradient(900px 380px at 92% -12%, rgb(67 209 127 / 0.028), transparent 58%);
+  pointer-events: none;
+  background: var(--rp-ambient);
+}
+
+/* 极轻噪点纹理层：消除大色块的塑料感（SVG feTurbulence data URI） */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--rp-noise-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 #app {
@@ -98,7 +202,7 @@ body::before {
 
 /* 统一 focus ring（键盘可达性；鼠标点击不闪圈） */
 :focus-visible {
-  outline: 2px solid rgb(109 139 255 / 0.55);
+  outline: 2px solid rgb(109 139 255 / 0.6);
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -106,31 +210,57 @@ body::before {
 /* 细滚动条 */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2b3142 transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #2b3142;
+  background: var(--scrollbar-thumb);
   border-radius: 8px;
 }
 *::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* ---- 复用视觉原语（组件内以 class 引用，避免每个 SFC 重复写渐变） ---- */
+/* ====================================================================
+ * 视觉原语（组件以 class 引用，避免每个 SFC 重复写玻璃）
+ * ==================================================================== */
 
-/* 面板：微渐变 + 细边框，hover 提亮边框 */
+/*
+ * 玻璃面板核心。.rp-panel 与 .rp-glass 同款；.rp-panel 保留兼容旧视图。
+ * 组成：半透明底 + backdrop 模糊&提饱和 + 玻璃描边 + 顶部内高光 + 景深阴影。
+ */
+.rp-glass,
 .rp-panel {
-  background: linear-gradient(180deg, #12141c 0%, var(--color-panel) 100%);
-  border: 1px solid var(--color-border);
+  position: relative;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-panel);
-  transition: border-color 0.15s ease;
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-highlight),
+    var(--glass-shadow);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
+
+/* 更实的玻璃（顶栏/侧栏/弹层，需保证叠层文字可读） */
+.rp-glass-strong {
+  background: var(--glass-bg-strong);
+}
+
+/* 可交互面板：hover 提亮描边 + 轻微抬升 */
 .rp-panel-hover:hover {
-  border-color: var(--color-border-2);
+  border-color: var(--glass-border-hover);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-highlight),
+    var(--glass-shadow-lg);
+  transform: translateY(-2px);
 }
 
 /* 微标签：大写字距小字，Linear 式分区标题 */
@@ -147,9 +277,14 @@ body::before {
   animation: var(--animate-fade-up);
 }
 
-/* 骨架屏底纹 */
+/* 骨架屏底纹（玻璃上的微光扫过） */
 .rp-shimmer {
-  background: linear-gradient(90deg, #151822 25%, #1b1f2b 50%, #151822 75%);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-text) 5%, transparent) 25%,
+    color-mix(in oklab, var(--color-text) 12%, transparent) 50%,
+    color-mix(in oklab, var(--color-text) 5%, transparent) 75%
+  );
   background-size: 200% 100%;
   animation: var(--animate-shimmer);
 }
@@ -157,7 +292,7 @@ body::before {
 /* ---- 过渡（Modal/Drawer/Toast 共用） ---- */
 .rp-fade-enter-active,
 .rp-fade-leave-active {
-  transition: opacity 0.15s ease;
+  transition: opacity 0.18s ease;
 }
 .rp-fade-enter-from,
 .rp-fade-leave-to {
@@ -167,8 +302,8 @@ body::before {
 .rp-pop-enter-active,
 .rp-pop-leave-active {
   transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 .rp-pop-enter-from,
 .rp-pop-leave-to {
@@ -178,7 +313,7 @@ body::before {
 
 .rp-slide-enter-active,
 .rp-slide-leave-active {
-  transition: transform 0.18s ease;
+  transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .rp-slide-enter-from,
 .rp-slide-leave-to {
@@ -187,19 +322,27 @@ body::before {
 
 .rp-toast-enter-active {
   transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 .rp-toast-leave-active {
   transition:
-    opacity 0.12s ease,
-    transform 0.12s ease;
+    opacity 0.14s ease,
+    transform 0.14s ease;
 }
 .rp-toast-enter-from {
   opacity: 0;
-  transform: translateY(6px);
+  transform: translateY(8px);
 }
 .rp-toast-leave-to {
   opacity: 0;
   transform: translateY(-4px);
+}
+
+/* 降级：不支持 backdrop-filter 时用更实底色兜底可读性 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .rp-glass,
+  .rp-panel {
+    background: var(--glass-bg-strong);
+  }
 }

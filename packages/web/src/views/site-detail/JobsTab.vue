@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { get } from '../../api/client';
 import { Button, Drawer, EmptyState, StatusDot, Table, type TableColumn } from '../../components/ui';
 import type { JobsResponse, JobView } from './types';
@@ -7,6 +8,7 @@ import { fmtDateTime, jobKindText, relTime } from './format';
 
 /** 任务页：列表 + 步骤时间线抽屉；存在进行中任务时 2s 轮询。 */
 const props = defineProps<{ slug: string }>();
+const { t } = useI18n();
 
 const jobs = ref<JobView[]>([]);
 const loading = ref(true);
@@ -23,7 +25,7 @@ async function load(initial = false): Promise<void> {
     jobs.value = Array.isArray(res.jobs) ? res.jobs : [];
     loadError.value = '';
   } catch (err) {
-    if (initial) loadError.value = err instanceof Error ? err.message : '加载失败';
+    if (initial) loadError.value = err instanceof Error ? err.message : t('siteDetail.loadFailed');
   } finally {
     if (initial) loading.value = false;
   }
@@ -50,26 +52,26 @@ function asJob(row: Record<string, unknown>): JobView {
 }
 const selectedJob = computed(() => jobs.value.find((j) => j.id === selectedId.value) ?? null);
 
-const columns: TableColumn[] = [
-  { key: 'kind', label: '类型' },
-  { key: 'status', label: '状态' },
-  { key: 'createdBy', label: '创建者' },
-  { key: 'createdAt', label: '创建时间', align: 'right' },
-];
+const columns = computed<TableColumn[]>(() => [
+  { key: 'kind', label: t('siteDetail.jobs.colKind') },
+  { key: 'status', label: t('siteDetail.jobs.colStatus') },
+  { key: 'createdBy', label: t('siteDetail.jobs.colCreatedBy') },
+  { key: 'createdAt', label: t('siteDetail.jobs.colCreatedAt'), align: 'right' },
+]);
 </script>
 
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-3">
       <p class="text-xs text-muted">
-        共 <span class="tnum text-text">{{ jobs.length }}</span> 条任务
-        <span v-if="hasRunning" class="ml-2 text-accent">· 有进行中任务，自动刷新中</span>
+        {{ t('siteDetail.jobs.count', { n: jobs.length }) }}
+        <span v-if="hasRunning" class="ml-2 text-accent">{{ t('siteDetail.jobs.autoRefresh') }}</span>
       </p>
     </div>
 
     <div v-if="loadError" class="rp-panel p-8">
-      <EmptyState title="加载失败" :description="loadError">
-        <Button size="sm" @click="load(true)">重试</Button>
+      <EmptyState :title="t('siteDetail.loadFailed')" :description="loadError">
+        <Button size="sm" @click="load(true)">{{ t('common.retry') }}</Button>
       </EmptyState>
     </div>
 
@@ -79,7 +81,7 @@ const columns: TableColumn[] = [
         :rows="rows"
         row-key="id"
         :loading="loading"
-        empty="暂无任务"
+        :empty="t('siteDetail.jobs.empty')"
         clickable
         @row-click="(row) => (selectedId = asJob(row).id)"
       >
@@ -101,28 +103,28 @@ const columns: TableColumn[] = [
     <Drawer :open="selectedId !== null" width="520px" @update:open="selectedId = null">
       <template #title>
         <div v-if="selectedJob" class="flex items-center gap-2">
-          <h2 class="text-sm font-semibold">{{ jobKindText(selectedJob.kind) }}任务 · #{{ selectedJob.id }}</h2>
+          <h2 class="text-sm font-semibold">{{ t('siteDetail.jobs.drawerTitle', { kind: jobKindText(selectedJob.kind), id: selectedJob.id }) }}</h2>
           <StatusDot :status="selectedJob.status" />
         </div>
-        <h2 v-else class="text-sm font-semibold">任务详情</h2>
+        <h2 v-else class="text-sm font-semibold">{{ t('siteDetail.jobs.detailTitle') }}</h2>
       </template>
 
       <div v-if="selectedJob" class="space-y-5">
         <dl class="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[13px]">
           <div>
-            <dt class="rp-microlabel">创建者</dt>
+            <dt class="rp-microlabel">{{ t('siteDetail.jobs.fCreatedBy') }}</dt>
             <dd class="mt-0.5">{{ selectedJob.createdBy || '—' }}</dd>
           </div>
           <div>
-            <dt class="rp-microlabel">站点</dt>
+            <dt class="rp-microlabel">{{ t('siteDetail.jobs.fSite') }}</dt>
             <dd class="mt-0.5 font-mono text-xs">{{ selectedJob.slug }}</dd>
           </div>
           <div>
-            <dt class="rp-microlabel">创建时间</dt>
+            <dt class="rp-microlabel">{{ t('siteDetail.jobs.fCreatedAt') }}</dt>
             <dd class="tnum mt-0.5">{{ fmtDateTime(selectedJob.createdAt) }}</dd>
           </div>
           <div>
-            <dt class="rp-microlabel">结束时间</dt>
+            <dt class="rp-microlabel">{{ t('siteDetail.jobs.fFinishedAt') }}</dt>
             <dd class="tnum mt-0.5">{{ selectedJob.finishedAt ? fmtDateTime(selectedJob.finishedAt) : '—' }}</dd>
           </div>
         </dl>
@@ -135,7 +137,7 @@ const columns: TableColumn[] = [
         </div>
 
         <div>
-          <p class="rp-microlabel mb-3">执行步骤</p>
+          <p class="rp-microlabel mb-3">{{ t('siteDetail.jobs.steps') }}</p>
           <ol v-if="selectedJob.steps.length > 0" class="relative space-y-4 border-l border-border pl-5">
             <li v-for="(s, i) in selectedJob.steps" :key="i" class="relative">
               <span class="absolute -left-[22px] top-0.5">
@@ -148,12 +150,12 @@ const columns: TableColumn[] = [
               <p v-if="s.detail" class="mt-0.5 break-all text-xs leading-relaxed text-muted">{{ s.detail }}</p>
             </li>
           </ol>
-          <p v-else class="text-xs text-muted">暂无步骤记录。</p>
+          <p v-else class="text-xs text-muted">{{ t('siteDetail.jobs.noSteps') }}</p>
         </div>
       </div>
 
       <template #footer>
-        <Button variant="ghost" @click="selectedId = null">关闭</Button>
+        <Button variant="ghost" @click="selectedId = null">{{ t('common.close') }}</Button>
       </template>
     </Drawer>
   </div>

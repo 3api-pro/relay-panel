@@ -1,0 +1,91 @@
+{
+  "title": "Sites",
+  "new": "New Site",
+  "summaryCount": "{n} sites",
+  "summaryDown": "{n} down",
+  "updating": "updating…",
+  "loadFailed": "Failed to load",
+  "empty": {
+    "title": "No sites yet",
+    "desc": "Create your first relay site, or take over an existing one via the CLI."
+  },
+  "externalManaged": "External",
+  "columns": {
+    "status": "Status",
+    "site": "Site",
+    "engine": "Engine / Version",
+    "hostPort": "Port",
+    "usage": "24h Requests / Cost",
+    "job": "Job"
+  },
+  "jobKind": {
+    "provision": "Provision",
+    "upgrade": "Upgrade",
+    "start": "Start",
+    "stop": "Stop",
+    "destroy": "Destroy"
+  },
+  "jobStatus": {
+    "running": "Running",
+    "queued": "Queued"
+  },
+  "toast": {
+    "queued": "Job queued — track it on the Jobs page.",
+    "created": "Provision job created."
+  },
+  "upgrade": {
+    "title": "Upgrade Site",
+    "descBefore": "Site ",
+    "descMid": " will be upgraded to the target version. Current version: ",
+    "descAfter": ".",
+    "versionLabel": "Target version",
+    "versionHint": "Image tag, e.g. v0.1.160",
+    "submit": "Upgrade",
+    "errRequired": "Enter a target version.",
+    "errSame": "Target version matches the current version."
+  },
+  "destroy": {
+    "title": "Destroy Site",
+    "action": "Destroy Site",
+    "keepMsg": "Stops and removes the site container but keeps the data volumes (database/uploads), so it can be rebuilt and restored later.",
+    "purgeMsg": "Permanently deletes the site container and data volumes. This cannot be undone."
+  },
+  "create": {
+    "title": "New Site",
+    "submit": "Create Site",
+    "engineLabel": "Engine",
+    "engineRecommended": "sub2api (recommended)",
+    "versionLabel": "Version",
+    "versionHint": "Image tag, e.g. v0.1.160",
+    "slugHint": "Lowercase letters/digits/hyphens, 2–32 chars, used for URL and container ID",
+    "labelLabel": "Display name",
+    "labelPlaceholder": "My relay site",
+    "portLabel": "Port",
+    "portHint": "Leave empty to auto-assign an available port",
+    "portPlaceholder": "Auto",
+    "emailLabel": "Admin email",
+    "emailHint": "Initial admin account for the site",
+    "brandSection": "Branding (optional)",
+    "siteNameLabel": "Site name",
+    "siteNamePlaceholder": "Name shown on the site's front end",
+    "announcementLabel": "Announcement",
+    "announcementHint": "Announcement text shown on the site's front end",
+    "announcementPlaceholder": "Optional",
+    "errEngine": "Select an engine.",
+    "errVersion": "Enter a version.",
+    "errSlugRequired": "Enter a slug.",
+    "errSlugFormat": "Lowercase letters/digits/hyphens only, 2–32 chars, must start with a letter or digit.",
+    "errLabel": "Enter a display name.",
+    "errPort": "Port must be an integer between 1 and 65535.",
+    "errEmailRequired": "Enter an admin email.",
+    "errEmailFormat": "Invalid email format."
+  },
+  "rowActions": {
+    "more": "More actions",
+    "upgrade": "Upgrade version…",
+    "stop": "Stop site",
+    "start": "Start site",
+    "keepData": "Keep data volumes",
+    "destroy": "Destroy site…"
+  }
+}

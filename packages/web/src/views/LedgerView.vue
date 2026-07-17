@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, reactive, ref, watch, type ComputedRef } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { Activity, CircleDollarSign, Hash, Plus, TrendingUp, Wallet } from 'lucide-vue-next';
 import { get, post } from '../api/client';
 import { session } from '../api/session';
@@ -29,6 +30,7 @@ import type { TableColumn } from '../components/ui/Table.vue';
  * root 额外可「手工补账」（POST /api/marketplace/ledger/import，source=manual）。
  * 全部为运营方内部对账数据，页面已用模板对外名（templateTitle），不暴露上游供应商。
  */
+const { t } = useI18n();
 const canWrite = inject<ComputedRef<boolean>>(
   'canWrite',
   computed(() => false),
@@ -45,7 +47,7 @@ const siteFilter = ref<string | number>('all');
 
 const siteList = ref<SiteView[]>([]);
 const siteOptions = computed<SelectOption[]>(() => [
-  { value: 'all', label: '全部站点' },
+  { value: 'all', label: t('ledger.allSites') },
   ...siteList.value.map((s) => ({ value: s.slug, label: s.label })),
 ]);
 
@@ -83,7 +85,7 @@ async function loadLedger(): Promise<void> {
   } catch (err) {
     rows.value = [];
     totals.value = emptyTotals();
-    loadError.value = err instanceof Error ? err.message : '加载失败';
+    loadError.value = err instanceof Error ? err.message : t('ledger.loadFailed');
   } finally {
     loading.value = false;
   }
@@ -119,15 +121,15 @@ function marginClass(n: number): string {
 }
 
 // ---- 明细表 ----
-const columns: TableColumn[] = [
-  { key: 'siteSlug', label: '站点', mono: true },
-  { key: 'templateTitle', label: '模板' },
-  { key: 'requests', label: '请求', align: 'right' },
-  { key: 'tokens', label: 'Tokens', align: 'right' },
-  { key: 'upstreamCost', label: '上游成本', align: 'right' },
-  { key: 'billedCost', label: '应收', align: 'right' },
-  { key: 'margin', label: '毛利', align: 'right' },
-];
+const columns = computed<TableColumn[]>(() => [
+  { key: 'siteSlug', label: t('ledger.colSite'), mono: true },
+  { key: 'templateTitle', label: t('ledger.colTemplate') },
+  { key: 'requests', label: t('ledger.colRequests'), align: 'right' },
+  { key: 'tokens', label: t('ledger.colTokens'), align: 'right' },
+  { key: 'upstreamCost', label: t('ledger.colUpstream'), align: 'right' },
+  { key: 'billedCost', label: t('ledger.colBilled'), align: 'right' },
+  { key: 'margin', label: t('ledger.colMargin'), align: 'right' },
+]);
 const tableRows = computed<Record<string, unknown>[]>(
   () => rows.value as unknown as Record<string, unknown>[],
 );
@@ -197,7 +199,7 @@ async function submitImport(): Promise<void> {
         },
       ],
     });
-    toast.success(`已录入 ${res?.imported ?? 1} 条补账记录`);
+    toast.success(t('ledger.importedToast', { n: res?.imported ?? 1 }));
     importOpen.value = false;
     await loadLedger();
   } catch {
@@ -217,16 +219,22 @@ const fieldCls =
     <!-- 工具条 -->
     <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <p class="rp-microlabel">渠道市场分账账本</p>
-        <p class="mt-1 text-xs text-muted">按月核算各站点各模板的上游成本、应收与毛利</p>
+        <p class="rp-microlabel">{{ t('ledger.microlabel') }}</p>
+        <p class="mt-1 text-xs text-muted">{{ t('ledger.subtitle') }}</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <input v-model="month" type="month" :max="currentMonth()" :class="[fieldCls, 'w-[160px]']" aria-label="账单月份" />
+        <input
+          v-model="month"
+          type="month"
+          :max="currentMonth()"
+          :class="[fieldCls, 'w-[160px]']"
+          :aria-label="t('ledger.monthAria')"
+        />
         <div class="w-[176px]">
           <Select v-model="siteFilter" :options="siteOptions" />
         </div>
         <Button v-if="isRoot && canWrite" variant="outline" @click="openImport">
-          <Plus :size="14" /> 手工补账
+          <Plus :size="14" /> {{ t('ledger.manualImport') }}
         </Button>
       </div>
     </div>
@@ -234,50 +242,53 @@ const fieldCls =
     <!-- 合计统计卡 -->
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
       <StatCard
-        label="总请求"
+        :label="t('ledger.statRequests')"
         :value="loading ? '' : loadError ? '—' : fmtInt(totals.requests)"
         :loading="loading"
         :icon="Activity"
       />
       <StatCard
-        label="总 Tokens"
+        :label="t('ledger.statTokens')"
         :value="loading ? '' : loadError ? '—' : fmtInt(totals.tokens)"
         :loading="loading"
         :icon="Hash"
       />
       <StatCard
-        label="上游成本"
+        :label="t('ledger.statUpstream')"
         :value="loading ? '' : loadError ? '—' : fmtMoney(totals.upstreamCost)"
         :loading="loading"
         :icon="CircleDollarSign"
       />
       <StatCard
-        label="应收"
+        :label="t('ledger.statBilled')"
         :value="loading ? '' : loadError ? '—' : fmtMoney(totals.billedCost)"
         :loading="loading"
         :icon="Wallet"
       />
       <StatCard
-        label="毛利"
+        :label="t('ledger.statMargin')"
         :value="loading ? '' : loadError ? '—' : fmtMoney(totals.margin)"
         :loading="loading"
         :tone="loadError ? 'default' : marginTone(totals.margin)"
         :icon="TrendingUp"
-        hint="应收 − 上游成本"
+        :hint="t('ledger.marginHint')"
       />
     </div>
 
     <!-- 分账明细 -->
     <div class="rp-panel overflow-hidden">
       <header class="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
-        <p class="rp-microlabel">分账明细{{ !loading && !loadError ? ` · ${rows.length} 条` : '' }}</p>
+        <p class="rp-microlabel">
+          {{ t('ledger.detailTitle')
+          }}{{ !loading && !loadError ? t('ledger.detailCount', { n: rows.length }) : '' }}
+        </p>
         <p class="tnum truncate text-xs text-muted">
           {{ month }}<span v-if="siteFilter !== 'all'"> · {{ siteFilter }}</span>
         </p>
       </header>
 
       <div v-if="loadError" class="p-8">
-        <EmptyState title="加载失败" :description="loadError" />
+        <EmptyState :title="t('ledger.loadFailed')" :description="loadError" />
       </div>
 
       <Table
@@ -286,7 +297,7 @@ const fieldCls =
         :rows="tableRows"
         row-key="grantId"
         :loading="loading"
-        empty="该月暂无分账记录，可切换月份或站点查看"
+        :empty="t('ledger.tableEmpty')"
       >
         <template #cell-templateTitle="{ row }">
           {{ asRow(row).templateTitle || asRow(row).templateKey }}
@@ -302,53 +313,53 @@ const fieldCls =
     </div>
 
     <!-- 手工补账 Modal（root）-->
-    <Modal v-model:open="importOpen" title="手工补账" width="560px">
+    <Modal v-model:open="importOpen" :title="t('ledger.modalTitle')" width="560px">
       <div class="space-y-4">
         <p class="text-[13px] leading-relaxed text-muted">
-          为指定授权（grant）录入一条补账流水，来源标记为
-          <code class="mx-0.5 rounded bg-panel-2 px-1.5 py-0.5 font-mono text-xs text-accent">manual</code
-          >，用于线下结算或对账缺口补录。
+          {{ t('ledger.modalDescBefore')
+          }}<code class="mx-0.5 rounded bg-panel-2 px-1.5 py-0.5 font-mono text-xs text-accent">manual</code
+          >{{ t('ledger.modalDescAfter') }}
         </p>
 
-        <Field label="授权 ID（grantId）" required hint="渠道市场里该授权的数字 ID">
-          <Input v-model="form.grantId" type="number" placeholder="如 128" />
+        <Field :label="t('ledger.fieldGrant')" required :hint="t('ledger.fieldGrantHint')">
+          <Input v-model="form.grantId" type="number" :placeholder="t('ledger.grantPlaceholder')" />
         </Field>
 
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="周期开始" required>
+          <Field :label="t('ledger.fieldPeriodStart')" required>
             <input v-model="form.periodStart" type="date" :class="[fieldCls, 'w-full']" />
           </Field>
-          <Field label="周期结束" required>
+          <Field :label="t('ledger.fieldPeriodEnd')" required>
             <input v-model="form.periodEnd" type="date" :class="[fieldCls, 'w-full']" />
           </Field>
         </div>
 
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Field label="请求数">
+          <Field :label="t('ledger.fieldRequests')">
             <Input v-model="form.requests" type="number" placeholder="0" />
           </Field>
-          <Field label="Prompt tokens">
+          <Field :label="t('ledger.fieldPromptTokens')">
             <Input v-model="form.promptTokens" type="number" placeholder="0" />
           </Field>
-          <Field label="Completion tokens">
+          <Field :label="t('ledger.fieldCompletionTokens')">
             <Input v-model="form.completionTokens" type="number" placeholder="0" />
           </Field>
         </div>
 
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="上游成本" hint="上游实际计费金额">
+          <Field :label="t('ledger.fieldUpstream')" :hint="t('ledger.fieldUpstreamHint')">
             <Input v-model="form.upstreamCost" type="number" placeholder="0.00" />
           </Field>
-          <Field label="应收" hint="按分账比例应向客户收取">
+          <Field :label="t('ledger.fieldBilled')" :hint="t('ledger.fieldBilledHint')">
             <Input v-model="form.billedCost" type="number" placeholder="0.00" />
           </Field>
         </div>
       </div>
 
       <template #footer>
-        <Button variant="ghost" :disabled="importing" @click="importOpen = false">取消</Button>
+        <Button variant="ghost" :disabled="importing" @click="importOpen = false">{{ t('common.cancel') }}</Button>
         <Button variant="primary" :disabled="!canSubmit" :loading="importing" @click="submitImport">
-          录入补账
+          {{ t('ledger.submit') }}
         </Button>
       </template>
     </Modal>

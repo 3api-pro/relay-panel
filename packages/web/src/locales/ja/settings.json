@@ -1,0 +1,35 @@
+{
+  "loadFailed": "読み込みに失敗しました",
+  "loadErrorNoAccount": "アカウント情報を取得できませんでした。再度サインインしてください。",
+  "changePassword": "パスワードの変更",
+  "currentPassword": "現在のパスワード",
+  "currentPasswordPlaceholder": "現在のパスワードを入力",
+  "newPassword": "新しいパスワード",
+  "newPasswordPlaceholder": "新しいパスワードを設定",
+  "confirmPassword": "新しいパスワードの確認",
+  "confirmPasswordPlaceholder": "新しいパスワードを再入力",
+  "pwHint": "8 文字以上",
+  "pwMinLength": "パスワードは 8 文字以上で入力してください",
+  "pwMismatch": "パスワードが一致しません",
+  "pwNote": "変更後、他のサインイン済み端末はサインアウトされます。",
+  "updatePassword": "パスワードを更新",
+  "pwUpdated": "パスワードを更新しました。他の端末では再度サインインが必要です。",
+  "accountInfo": "アカウント情報",
+  "email": "メールアドレス",
+  "displayName": "表示名",
+  "notSet": "未設定",
+  "roleLabel": "ロール",
+  "role": {
+    "root": "スーパー管理者",
+    "operator": "オペレーター",
+    "viewer": "閲覧者"
+  },
+  "instanceConfig": "インスタンス設定",
+  "signupModeLabel": "登録モード",
+  "signupMode": {
+    "closed": "登録停止",
+    "invite": "招待制のみ",
+    "open": "公開登録"
+  },
+  "alertsHint": "サイト障害時に通知を受け取るには、「アラート」ページで通知 webhook を設定してください。"
+}

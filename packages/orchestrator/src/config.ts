@@ -44,6 +44,8 @@ export interface Config {
   webDist: string;
   /** 设置后 /metrics 可用 Bearer token 免 session 访问 */
   metricsToken?: string;
+  /** RP_DEMO==='1' 时进入演示模式：纯罐装数据、不连生产、不起容器、公开一键登录（见 src/demo/*） */
+  demo: boolean;
 }
 
 const envSchema = z.object({
@@ -69,6 +71,7 @@ const envSchema = z.object({
   RP_CADDY_ADMIN_URL: z.string().url().optional(),
   RP_WEB_DIST: z.string().default('../web/dist'),
   RP_METRICS_TOKEN: z.string().min(1).optional(),
+  RP_DEMO: z.enum(['0', '1']).default('0'),
 });
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -113,5 +116,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     ...(e.RP_CADDY_ADMIN_URL !== undefined ? { caddyAdminUrl: e.RP_CADDY_ADMIN_URL } : {}),
     webDist: e.RP_WEB_DIST,
     ...(e.RP_METRICS_TOKEN !== undefined ? { metricsToken: e.RP_METRICS_TOKEN } : {}),
+    demo: e.RP_DEMO === '1',
   };
 }

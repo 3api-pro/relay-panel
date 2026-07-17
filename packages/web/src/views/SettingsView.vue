@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { ArrowRight, KeyRound, ServerCog, UserRound } from 'lucide-vue-next';
 import { post } from '../api/client';
 import { session } from '../api/session';
@@ -11,6 +12,8 @@ import { Badge, Button, Card, EmptyState, Field, Input, Skeleton, toast } from '
  * 账户信息只读、root 额外实例配置摘要（signupMode 等非敏感项 + 告警 webhook 指引）。
  */
 
+const { t } = useI18n();
+
 const isRoot = session.isRoot;
 
 const loading = ref(true);
@@ -19,7 +22,7 @@ const loadError = ref('');
 onMounted(async () => {
   try {
     await session.ensureLoaded();
-    if (!session.state.user) loadError.value = '无法获取账户信息，请重新登录。';
+    if (!session.state.user) loadError.value = t('settings.loadErrorNoAccount');
   } finally {
     loading.value = false;
   }
@@ -29,12 +32,7 @@ const me = computed<Me | null>(() => session.state.user);
 
 // ---- 展示映射 ----
 function roleText(role: OperatorRole | undefined): string {
-  const map: Record<OperatorRole, string> = {
-    root: '超级管理员',
-    operator: '操作员',
-    viewer: '只读访客',
-  };
-  return role ? map[role] : '—';
+  return role ? t(`settings.role.${role}`) : '—';
 }
 function roleTone(role: OperatorRole | undefined): 'accent' | 'default' | 'muted' {
   if (role === 'root') return 'accent';
@@ -42,12 +40,7 @@ function roleTone(role: OperatorRole | undefined): 'accent' | 'default' | 'muted
   return 'default';
 }
 function signupModeText(mode: Me['signupMode'] | undefined): string {
-  const map: Record<Me['signupMode'], string> = {
-    closed: '关闭注册',
-    invite: '仅邀请注册',
-    open: '开放注册',
-  };
-  return mode ? map[mode] : '—';
+  return mode ? t(`settings.signupMode.${mode}`) : '—';
 }
 
 // ---- 修改密码 ----
@@ -56,9 +49,11 @@ const next = ref('');
 const confirm = ref('');
 const submitting = ref(false);
 
-const nextErr = computed(() => (next.value !== '' && next.value.length < 8 ? '密码至少 8 位' : ''));
+const nextErr = computed(() =>
+  next.value !== '' && next.value.length < 8 ? t('settings.pwMinLength') : '',
+);
 const confirmErr = computed(() =>
-  confirm.value !== '' && confirm.value !== next.value ? '两次输入不一致' : '',
+  confirm.value !== '' && confirm.value !== next.value ? t('settings.pwMismatch') : '',
 );
 const canSubmit = computed(
   () =>
@@ -73,7 +68,7 @@ async function submitPassword(): Promise<void> {
   submitting.value = true;
   try {
     await post('/api/auth/password', { current: current.value, next: next.value });
-    toast.success('密码已更新，其他设备需重新登录');
+    toast.success(t('settings.pwUpdated'));
     current.value = '';
     next.value = '';
     confirm.value = '';
@@ -92,7 +87,7 @@ async function submitPassword(): Promise<void> {
     </div>
 
     <div v-else-if="loadError" class="rp-panel p-8">
-      <EmptyState title="加载失败" :description="loadError" />
+      <EmptyState :title="t('settings.loadFailed')" :description="loadError" />
     </div>
 
     <div v-else class="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -100,24 +95,24 @@ async function submitPassword(): Promise<void> {
       <Card>
         <template #title>
           <span class="flex items-center gap-2">
-            <KeyRound :size="15" class="text-muted" /> 修改密码
+            <KeyRound :size="15" class="text-muted" /> {{ t('settings.changePassword') }}
           </span>
         </template>
 
         <form class="space-y-4" @submit.prevent="submitPassword">
-          <Field label="当前密码" required>
-            <Input v-model="current" type="password" placeholder="输入当前密码" autocomplete="current-password" />
+          <Field :label="t('settings.currentPassword')" required>
+            <Input v-model="current" type="password" :placeholder="t('settings.currentPasswordPlaceholder')" autocomplete="current-password" />
           </Field>
-          <Field label="新密码" required :error="nextErr" hint="至少 8 位">
-            <Input v-model="next" type="password" placeholder="设置新密码" autocomplete="new-password" />
+          <Field :label="t('settings.newPassword')" required :error="nextErr" :hint="t('settings.pwHint')">
+            <Input v-model="next" type="password" :placeholder="t('settings.newPasswordPlaceholder')" autocomplete="new-password" />
           </Field>
-          <Field label="确认新密码" required :error="confirmErr">
-            <Input v-model="confirm" type="password" placeholder="再次输入新密码" autocomplete="new-password" />
+          <Field :label="t('settings.confirmPassword')" required :error="confirmErr">
+            <Input v-model="confirm" type="password" :placeholder="t('settings.confirmPasswordPlaceholder')" autocomplete="new-password" />
           </Field>
           <div class="flex items-center justify-between gap-3 border-t border-border/60 pt-4">
-            <p class="text-xs text-muted/80">修改后其他已登录设备将失效。</p>
+            <p class="text-xs text-muted/80">{{ t('settings.pwNote') }}</p>
             <Button type="submit" variant="primary" :disabled="!canSubmit" :loading="submitting">
-              更新密码
+              {{ t('settings.updatePassword') }}
             </Button>
           </div>
         </form>
@@ -128,21 +123,21 @@ async function submitPassword(): Promise<void> {
         <Card>
           <template #title>
             <span class="flex items-center gap-2">
-              <UserRound :size="15" class="text-muted" /> 账户信息
+              <UserRound :size="15" class="text-muted" /> {{ t('settings.accountInfo') }}
             </span>
           </template>
 
           <dl class="divide-y divide-border/60 text-[13px]">
             <div class="flex items-center justify-between gap-3 py-2.5">
-              <dt class="text-muted">邮箱</dt>
+              <dt class="text-muted">{{ t('settings.email') }}</dt>
               <dd class="min-w-0 truncate font-mono text-xs">{{ me?.email ?? '—' }}</dd>
             </div>
             <div class="flex items-center justify-between gap-3 py-2.5">
-              <dt class="text-muted">显示名</dt>
-              <dd class="min-w-0 truncate">{{ me?.displayName || '未设置' }}</dd>
+              <dt class="text-muted">{{ t('settings.displayName') }}</dt>
+              <dd class="min-w-0 truncate">{{ me?.displayName || t('settings.notSet') }}</dd>
             </div>
             <div class="flex items-center justify-between gap-3 py-2.5">
-              <dt class="text-muted">角色</dt>
+              <dt class="text-muted">{{ t('settings.roleLabel') }}</dt>
               <dd>
                 <Badge :tone="roleTone(me?.role)" size="sm">{{ roleText(me?.role) }}</Badge>
               </dd>
@@ -154,13 +149,13 @@ async function submitPassword(): Promise<void> {
         <Card v-if="isRoot">
           <template #title>
             <span class="flex items-center gap-2">
-              <ServerCog :size="15" class="text-muted" /> 实例配置
+              <ServerCog :size="15" class="text-muted" /> {{ t('settings.instanceConfig') }}
             </span>
           </template>
 
           <dl class="divide-y divide-border/60 text-[13px]">
             <div class="flex items-center justify-between gap-3 py-2.5">
-              <dt class="text-muted">注册模式</dt>
+              <dt class="text-muted">{{ t('settings.signupModeLabel') }}</dt>
               <dd>
                 <Badge tone="default" size="sm">{{ signupModeText(me?.signupMode) }}</Badge>
               </dd>
@@ -172,7 +167,7 @@ async function submitPassword(): Promise<void> {
             class="mt-3 flex items-center justify-between gap-2 rounded-lg border border-border bg-panel-2/40 px-3 py-2.5 text-xs transition-colors hover:border-border-2 hover:bg-panel-2/70"
           >
             <span class="min-w-0 text-muted">
-              告警通知 webhook 在「告警」页配置，站点异常时推送通知。
+              {{ t('settings.alertsHint') }}
             </span>
             <ArrowRight :size="14" class="shrink-0 text-accent" />
           </RouterLink>

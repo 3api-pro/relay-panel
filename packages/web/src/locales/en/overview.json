@@ -1,0 +1,42 @@
+{
+  "statSites": "Total sites",
+  "statSitesHint": "Excluding destroyed",
+  "statHealthy": "Healthy sites",
+  "healthyAll": "All online",
+  "healthyDown": "{n} site(s) unhealthy",
+  "healthyNoData": "No probe data yet",
+  "stat24hReq": "24h requests",
+  "stat24hCost": "24h cost",
+  "statAllSites": "Across all sites",
+  "openAlerts": "Open alerts · {n}",
+  "allAlerts": "All alerts",
+  "sitesSection": "Sites",
+  "siteManage": "Manage sites",
+  "latency": "Latency",
+  "req24h": "24h req",
+  "cost24h": "24h cost",
+  "loadFailed": "Failed to load",
+  "noSites": "No sites yet",
+  "noSitesDesc": "Create your first site on the Sites page, or adopt an existing one via CLI.",
+  "externalManaged": "External",
+  "jobRunning": "{kind} · running",
+  "jobQueued": "{kind} · queued",
+  "severity": {
+    "critical": "Critical",
+    "warning": "Warning",
+    "info": "Info"
+  },
+  "jobKind": {
+    "provision": "Provision",
+    "upgrade": "Upgrade",
+    "start": "Start",
+    "stop": "Stop",
+    "destroy": "Destroy"
+  },
+  "relTime": {
+    "justNow": "just now",
+    "minAgo": "{n}m ago",
+    "hourAgo": "{n}h ago",
+    "dayAgo": "{n}d ago"
+  }
+}

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, reactive, ref, type ComputedRef } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { Check, Copy, Pencil, Plus, ShieldAlert, Trash2, TriangleAlert } from 'lucide-vue-next';
 import { del, get, patch, post } from '../api/client';
 import { session } from '../api/session';
@@ -35,6 +36,7 @@ import { toast } from '../components/ui/toast';
  * - 新建邀请响应含完整一次性 token，展示层强提示「仅此一次立即保存」+ 复制
  * 非 root 误入显示无权限空态。
  */
+const { t } = useI18n();
 const isRoot = session.isRoot;
 const canWrite = inject<ComputedRef<boolean>>('canWrite', computed(() => false));
 
@@ -55,7 +57,7 @@ async function loadOperators(): Promise<void> {
     const res = await get<OperatorsResponse>('/api/operators', { silent: true });
     operators.value = Array.isArray(res?.operators) ? res.operators : [];
   } catch (err) {
-    errOps.value = err instanceof Error ? err.message : '加载失败';
+    errOps.value = err instanceof Error ? err.message : t('operators.loadFailed');
   } finally {
     loadingOps.value = false;
   }
@@ -68,7 +70,7 @@ async function loadInvites(): Promise<void> {
     const res = await get<InvitesResponse>('/api/invites', { silent: true });
     invites.value = Array.isArray(res?.invites) ? res.invites : [];
   } catch (err) {
-    errInv.value = err instanceof Error ? err.message : '加载失败';
+    errInv.value = err instanceof Error ? err.message : t('operators.loadFailed');
   } finally {
     loadingInv.value = false;
   }
@@ -81,18 +83,22 @@ onMounted(() => {
 });
 
 // ---- 角色 / 状态 展示 ----
-const roleOptions: SelectOption[] = [
-  { value: 'root', label: 'Root 超管' },
-  { value: 'operator', label: '操作员' },
-  { value: 'viewer', label: '只读' },
-];
-const statusOptions: SelectOption[] = [
-  { value: 'active', label: '启用' },
-  { value: 'disabled', label: '禁用' },
-];
+const roleOptions = computed<SelectOption[]>(() => [
+  { value: 'root', label: t('operators.role.root') },
+  { value: 'operator', label: t('operators.role.operator') },
+  { value: 'viewer', label: t('operators.role.viewer') },
+]);
+const statusOptions = computed<SelectOption[]>(() => [
+  { value: 'active', label: t('operators.status.active') },
+  { value: 'disabled', label: t('operators.status.disabled') },
+]);
 
 function roleLabel(role: string): string {
-  const map: Record<string, string> = { root: 'Root 超管', operator: '操作员', viewer: '只读' };
+  const map: Record<string, string> = {
+    root: t('operators.role.root'),
+    operator: t('operators.role.operator'),
+    viewer: t('operators.role.viewer'),
+  };
   return map[role] ?? role;
 }
 function roleTone(role: string): 'accent' | 'default' | 'muted' {
@@ -125,42 +131,42 @@ function fmtDateTime(iso?: string | null): string {
   });
 }
 function relTime(iso?: string | null): string {
-  if (!iso) return '从未登录';
-  const t = parse(iso).getTime();
-  if (Number.isNaN(t)) return iso;
-  const diff = Date.now() - t;
+  if (!iso) return t('operators.relTime.never');
+  const ts = parse(iso).getTime();
+  if (Number.isNaN(ts)) return iso;
+  const diff = Date.now() - ts;
   const min = Math.floor(diff / 60_000);
-  if (min < 1) return '刚刚';
-  if (min < 60) return `${min} 分钟前`;
+  if (min < 1) return t('operators.relTime.justNow');
+  if (min < 60) return t('operators.relTime.minAgo', { n: min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h} 小时前`;
+  if (h < 24) return t('operators.relTime.hourAgo', { n: h });
   const days = Math.floor(h / 24);
-  if (days < 30) return `${days} 天前`;
+  if (days < 30) return t('operators.relTime.dayAgo', { n: days });
   return fmtDate(iso);
 }
 
 // ---- 表格列 ----
-const opColumns: TableColumn[] = [
-  { key: 'email', label: '邮箱' },
-  { key: 'displayName', label: '显示名' },
-  { key: 'role', label: '角色' },
-  { key: 'status', label: '状态' },
-  { key: 'siteCount', label: '站点', align: 'right' },
-  { key: 'subscription', label: '当前订阅' },
-  { key: 'lastLoginAt', label: '最近登录' },
-  { key: 'createdAt', label: '创建时间' },
+const opColumns = computed<TableColumn[]>(() => [
+  { key: 'email', label: t('operators.col.email') },
+  { key: 'displayName', label: t('operators.col.displayName') },
+  { key: 'role', label: t('operators.col.role') },
+  { key: 'status', label: t('operators.col.status') },
+  { key: 'siteCount', label: t('operators.col.siteCount'), align: 'right' },
+  { key: 'subscription', label: t('operators.col.subscription') },
+  { key: 'lastLoginAt', label: t('operators.col.lastLoginAt') },
+  { key: 'createdAt', label: t('operators.col.createdAt') },
   { key: 'actions', label: '', align: 'right', width: '72px' },
-];
-const inviteColumns: TableColumn[] = [
-  { key: 'tokenPrefix', label: '令牌前缀', mono: true },
-  { key: 'role', label: '角色' },
-  { key: 'note', label: '备注' },
-  { key: 'state', label: '状态' },
-  { key: 'expiresAt', label: '到期' },
-  { key: 'usedBy', label: '使用者' },
-  { key: 'createdAt', label: '创建时间' },
+]);
+const inviteColumns = computed<TableColumn[]>(() => [
+  { key: 'tokenPrefix', label: t('operators.col.tokenPrefix'), mono: true },
+  { key: 'role', label: t('operators.col.role') },
+  { key: 'note', label: t('operators.col.note') },
+  { key: 'state', label: t('operators.col.state') },
+  { key: 'expiresAt', label: t('operators.col.expiresAt') },
+  { key: 'usedBy', label: t('operators.col.usedBy') },
+  { key: 'createdAt', label: t('operators.col.createdAt') },
   { key: 'actions', label: '', align: 'right', width: '56px' },
-];
+]);
 
 // Table rows 需 Record<string, unknown>[]（接口无索引签名，转型后传入）
 const opRows = computed(() => operators.value as unknown as Record<string, unknown>[]);
@@ -170,10 +176,10 @@ const asInvite = (row: Record<string, unknown>): InviteView => row as unknown as
 
 // 邀请状态：已使用 / 已过期 / 有效
 function inviteState(inv: InviteView): { label: string; tone: 'muted' | 'red' | 'green' } {
-  if (inv.usedBy) return { label: '已使用', tone: 'muted' };
+  if (inv.usedBy) return { label: t('operators.inviteState.used'), tone: 'muted' };
   const exp = parse(inv.expiresAt).getTime();
-  if (!Number.isNaN(exp) && exp < Date.now()) return { label: '已过期', tone: 'red' };
-  return { label: '有效', tone: 'green' };
+  if (!Number.isNaN(exp) && exp < Date.now()) return { label: t('operators.inviteState.expired'), tone: 'red' };
+  return { label: t('operators.inviteState.valid'), tone: 'green' };
 }
 
 // ---- 编辑操作员（Drawer）----
@@ -191,21 +197,21 @@ function openEdit(op: OperatorView): void {
 }
 
 async function saveEdit(): Promise<void> {
-  const t = editTarget.value;
-  if (!t) return;
+  const target = editTarget.value;
+  if (!target) return;
   const body: OperatorPatchBody = {};
-  if (editForm.role !== t.role) body.role = editForm.role as OperatorRole;
-  if (editForm.status !== t.status) body.status = editForm.status as 'active' | 'disabled';
+  if (editForm.role !== target.role) body.role = editForm.role as OperatorRole;
+  if (editForm.status !== target.status) body.status = editForm.status as 'active' | 'disabled';
   const name = editForm.displayName.trim();
-  if (name !== (t.displayName ?? '')) body.displayName = name;
+  if (name !== (target.displayName ?? '')) body.displayName = name;
   if (Object.keys(body).length === 0) {
     editOpen.value = false;
     return;
   }
   saving.value = true;
   try {
-    await patch(`/api/operators/${t.id}`, body);
-    toast.success('操作员已更新');
+    await patch(`/api/operators/${target.id}`, body);
+    toast.success(t('operators.opUpdated'));
     editOpen.value = false;
     await loadOperators();
   } catch {
@@ -263,9 +269,9 @@ async function copyToken(): Promise<void> {
   try {
     await navigator.clipboard.writeText(token);
     copied.value = true;
-    toast.success('邀请令牌已复制');
+    toast.success(t('operators.tokenCopied'));
   } catch {
-    toast.error('复制失败，请手动选择令牌文本复制');
+    toast.error(t('operators.copyFailed'));
   }
 }
 
@@ -283,7 +289,7 @@ async function confirmDelete(): Promise<void> {
   deleting.value = true;
   try {
     await del(`/api/invites/${encodeURIComponent(inv.tokenPrefix)}`);
-    toast.success('邀请已删除');
+    toast.success(t('operators.inviteDeleted'));
     delTarget.value = null;
     await loadInvites();
   } catch {
@@ -298,8 +304,8 @@ async function confirmDelete(): Promise<void> {
   <!-- 非 root 无权限 -->
   <div v-if="!isRoot" class="rp-panel p-10">
     <EmptyState
-      title="无权限访问"
-      description="操作员与邀请管理仅对 Root 超管开放。如需相关权限，请联系你的 Root 管理员。"
+      :title="t('operators.noAccessTitle')"
+      :description="t('operators.noAccessDesc')"
       :icon="ShieldAlert"
     />
   </div>
@@ -308,31 +314,31 @@ async function confirmDelete(): Promise<void> {
     <!-- 页头 -->
     <div class="flex items-end justify-between gap-4">
       <div>
-        <h1 class="text-lg font-semibold tracking-tight">操作员与邀请</h1>
-        <p class="mt-0.5 text-xs text-muted">管理团队成员的角色与登录权限，签发一次性注册邀请。</p>
+        <h1 class="text-lg font-semibold tracking-tight">{{ t('operators.title') }}</h1>
+        <p class="mt-0.5 text-xs text-muted">{{ t('operators.subtitle') }}</p>
       </div>
       <Button
         v-if="canWrite && activeTab === 'invites'"
         variant="primary"
         @click="openCreate"
       >
-        <Plus :size="14" /> 新建邀请
+        <Plus :size="14" /> {{ t('operators.newInvite') }}
       </Button>
     </div>
 
     <Tabs
       v-model="activeTab"
       :tabs="[
-        { key: 'operators', label: '操作员', count: operators.length },
-        { key: 'invites', label: '邀请', count: invites.length },
+        { key: 'operators', label: t('operators.tabOperators'), count: operators.length },
+        { key: 'invites', label: t('operators.tabInvites'), count: invites.length },
       ]"
     />
 
     <!-- 操作员 Tab -->
     <template v-if="activeTab === 'operators'">
       <div v-if="errOps" class="rp-panel p-8">
-        <EmptyState title="加载失败" :description="errOps">
-          <Button @click="loadOperators">重试</Button>
+        <EmptyState :title="t('operators.loadFailed')" :description="errOps">
+          <Button @click="loadOperators">{{ t('common.retry') }}</Button>
         </EmptyState>
       </div>
       <div v-else class="rp-panel overflow-hidden">
@@ -341,11 +347,11 @@ async function confirmDelete(): Promise<void> {
           :rows="opRows"
           row-key="id"
           :loading="loadingOps"
-          empty="还没有操作员"
+          :empty="t('operators.opEmpty')"
         >
           <template #cell-displayName="{ value }">
             <span v-if="value">{{ value }}</span>
-            <span v-else class="text-muted/60">未设置</span>
+            <span v-else class="text-muted/60">{{ t('operators.notSet') }}</span>
           </template>
           <template #cell-role="{ value }">
             <Badge :tone="roleTone(String(value))" size="sm">{{ roleLabel(String(value)) }}</Badge>
@@ -353,7 +359,7 @@ async function confirmDelete(): Promise<void> {
           <template #cell-status="{ value }">
             <StatusDot
               :tone="String(value) === 'active' ? 'green' : 'muted'"
-              :label="String(value) === 'active' ? '启用' : '禁用'"
+              :label="String(value) === 'active' ? t('operators.status.active') : t('operators.status.disabled')"
             />
           </template>
           <template #cell-siteCount="{ value }">
@@ -364,11 +370,11 @@ async function confirmDelete(): Promise<void> {
               <div class="flex flex-col gap-0.5">
                 <Badge tone="accent" size="sm" mono>{{ asOperator(row).subscription?.planKey }}</Badge>
                 <span class="text-[11px] text-muted/70">
-                  {{ asOperator(row).subscription?.currentPeriodEnd ? `到期 ${fmtDate(asOperator(row).subscription?.currentPeriodEnd)}` : '长期有效' }}
+                  {{ asOperator(row).subscription?.currentPeriodEnd ? t('operators.subExpire', { date: fmtDate(asOperator(row).subscription?.currentPeriodEnd) }) : t('operators.subForever') }}
                 </span>
               </div>
             </template>
-            <span v-else class="text-muted/50">无</span>
+            <span v-else class="text-muted/50">{{ t('operators.subNone') }}</span>
           </template>
           <template #cell-lastLoginAt="{ value }">
             <span class="text-muted">{{ relTime(value ? String(value) : null) }}</span>
@@ -384,7 +390,7 @@ async function confirmDelete(): Promise<void> {
                 size="sm"
                 @click="openEdit(asOperator(row))"
               >
-                <Pencil :size="13" /> 编辑
+                <Pencil :size="13" /> {{ t('common.edit') }}
               </Button>
             </div>
           </template>
@@ -395,8 +401,8 @@ async function confirmDelete(): Promise<void> {
     <!-- 邀请 Tab -->
     <template v-else>
       <div v-if="errInv" class="rp-panel p-8">
-        <EmptyState title="加载失败" :description="errInv">
-          <Button @click="loadInvites">重试</Button>
+        <EmptyState :title="t('operators.loadFailed')" :description="errInv">
+          <Button @click="loadInvites">{{ t('common.retry') }}</Button>
         </EmptyState>
       </div>
       <div v-else class="rp-panel overflow-hidden">
@@ -405,7 +411,7 @@ async function confirmDelete(): Promise<void> {
           :rows="inviteRows"
           row-key="tokenPrefix"
           :loading="loadingInv"
-          empty="还没有邀请，点右上角「新建邀请」签发一个"
+          :empty="t('operators.inviteEmpty')"
         >
           <template #cell-tokenPrefix="{ value }">
             <span class="font-mono text-xs">{{ value }}…</span>
@@ -451,27 +457,27 @@ async function confirmDelete(): Promise<void> {
   </div>
 
   <!-- 编辑操作员抽屉 -->
-  <Drawer v-model:open="editOpen" title="编辑操作员" width="440px">
+  <Drawer v-model:open="editOpen" :title="t('operators.editTitle')" width="440px">
     <div v-if="editTarget" class="space-y-4">
       <div class="rp-panel p-3">
         <p class="truncate text-[13px] font-medium">{{ editTarget.email }}</p>
-        <p class="mt-0.5 text-xs text-muted">操作员 ID {{ editTarget.id }} · 创建于 {{ fmtDate(editTarget.createdAt) }}</p>
+        <p class="mt-0.5 text-xs text-muted">{{ t('operators.editMeta', { id: editTarget.id, date: fmtDate(editTarget.createdAt) }) }}</p>
       </div>
-      <Field label="显示名">
+      <Field :label="t('operators.fieldDisplayName')">
         <Input
           :model-value="editForm.displayName"
-          placeholder="未设置"
+          :placeholder="t('operators.notSet')"
           @update:model-value="(v) => (editForm.displayName = String(v))"
         />
       </Field>
-      <Field label="角色" hint="降级最后一个在用 Root 会被后端拒绝。">
+      <Field :label="t('operators.fieldRole')" :hint="t('operators.roleHintDowngrade')">
         <Select
           :model-value="editForm.role"
           :options="roleOptions"
           @update:model-value="(v) => (editForm.role = String(v))"
         />
       </Field>
-      <Field label="状态" hint="禁用后该操作员将无法登录。">
+      <Field :label="t('operators.fieldStatus')" :hint="t('operators.statusHintDisable')">
         <Select
           :model-value="editForm.status"
           :options="statusOptions"
@@ -480,29 +486,29 @@ async function confirmDelete(): Promise<void> {
       </Field>
     </div>
     <template #footer>
-      <Button variant="ghost" :disabled="saving" @click="editOpen = false">取消</Button>
-      <Button variant="primary" :loading="saving" @click="saveEdit">保存变更</Button>
+      <Button variant="ghost" :disabled="saving" @click="editOpen = false">{{ t('common.cancel') }}</Button>
+      <Button variant="primary" :loading="saving" @click="saveEdit">{{ t('operators.saveChanges') }}</Button>
     </template>
   </Drawer>
 
   <!-- 新建邀请 -->
-  <Modal v-model:open="createOpen" title="新建邀请">
+  <Modal v-model:open="createOpen" :title="t('operators.createTitle')">
     <div class="space-y-4">
-      <Field label="角色" required hint="被邀请者注册后获得的初始角色。">
+      <Field :label="t('operators.fieldRole')" required :hint="t('operators.createRoleHint')">
         <Select
           :model-value="createForm.role"
           :options="roleOptions"
           @update:model-value="(v) => (createForm.role = String(v))"
         />
       </Field>
-      <Field label="备注" hint="可选，便于识别该邀请用途（如同事姓名/团队）。">
+      <Field :label="t('operators.fieldNote')" :hint="t('operators.createNoteHint')">
         <Input
           :model-value="createForm.note"
-          placeholder="可选"
+          :placeholder="t('operators.notePlaceholder')"
           @update:model-value="(v) => (createForm.note = String(v))"
         />
       </Field>
-      <Field label="有效期（小时）" hint="默认 168 小时（7 天），到期后邀请自动失效。">
+      <Field :label="t('operators.fieldTtl')" :hint="t('operators.ttlHint')">
         <Input
           type="number"
           :model-value="createForm.ttlHours"
@@ -512,70 +518,70 @@ async function confirmDelete(): Promise<void> {
       </Field>
     </div>
     <template #footer>
-      <Button variant="ghost" :disabled="creating" @click="createOpen = false">取消</Button>
-      <Button variant="primary" :loading="creating" @click="submitCreate">创建邀请</Button>
+      <Button variant="ghost" :disabled="creating" @click="createOpen = false">{{ t('common.cancel') }}</Button>
+      <Button variant="primary" :loading="creating" @click="submitCreate">{{ t('operators.createSubmit') }}</Button>
     </template>
   </Modal>
 
   <!-- 一次性 token 展示 -->
-  <Modal v-model:open="tokenOpen" title="邀请已创建" width="560px">
+  <Modal v-model:open="tokenOpen" :title="t('operators.tokenTitle')" width="560px">
     <div class="space-y-4">
       <div class="flex items-start gap-2.5 rounded-lg border border-amber/30 bg-amber/10 p-3">
         <TriangleAlert :size="16" class="mt-0.5 shrink-0 text-amber" />
         <p class="text-[13px] leading-relaxed text-amber">
-          请立即复制并保存下方邀请令牌，<span class="font-semibold">仅此一次可见</span>；关闭本窗口后将无法再次查看完整令牌。
+          {{ t('operators.tokenWarnBefore') }}<span class="font-semibold">{{ t('operators.tokenWarnEmph') }}</span>{{ t('operators.tokenWarnAfter') }}
         </p>
       </div>
       <div>
-        <p class="rp-microlabel mb-1.5">邀请令牌</p>
+        <p class="rp-microlabel mb-1.5">{{ t('operators.tokenLabel') }}</p>
         <div class="flex items-stretch gap-2">
           <code
             class="min-w-0 flex-1 select-all break-all rounded-lg border border-border bg-bg/60 px-3 py-2.5 font-mono text-xs leading-relaxed text-text"
           >{{ tokenResult?.token }}</code>
           <Button variant="primary" @click="copyToken">
-            <component :is="copied ? Check : Copy" :size="14" /> {{ copied ? '已复制' : '复制' }}
+            <component :is="copied ? Check : Copy" :size="14" /> {{ copied ? t('common.copied') : t('common.copy') }}
           </Button>
         </div>
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <p class="rp-microlabel mb-1.5">角色</p>
+          <p class="rp-microlabel mb-1.5">{{ t('operators.fieldRole') }}</p>
           <Badge :tone="roleTone(tokenResult?.role ?? 'operator')" size="sm">
             {{ roleLabel(tokenResult?.role ?? 'operator') }}
           </Badge>
         </div>
         <div>
-          <p class="rp-microlabel mb-1.5">到期</p>
+          <p class="rp-microlabel mb-1.5">{{ t('operators.col.expiresAt') }}</p>
           <p class="tnum text-[13px]">{{ fmtDateTime(tokenResult?.expiresAt) }}</p>
         </div>
       </div>
       <div v-if="tokenResult?.note">
-        <p class="rp-microlabel mb-1.5">备注</p>
+        <p class="rp-microlabel mb-1.5">{{ t('operators.fieldNote') }}</p>
         <p class="text-[13px] text-muted">{{ tokenResult.note }}</p>
       </div>
     </div>
     <template #footer>
-      <Button variant="ghost" @click="copyToken">复制令牌</Button>
-      <Button variant="primary" @click="tokenOpen = false">我已保存</Button>
+      <Button variant="ghost" @click="copyToken">{{ t('operators.copyToken') }}</Button>
+      <Button variant="primary" @click="tokenOpen = false">{{ t('operators.tokenSaved') }}</Button>
     </template>
   </Modal>
 
   <!-- 删除邀请确认 -->
   <Modal
     :open="delTarget !== null"
-    title="删除邀请"
+    :title="t('operators.deleteTitle')"
     width="420px"
     :closable="!deleting"
     @update:open="closeDelete"
   >
     <p class="text-[13px] leading-relaxed text-muted">
-      确认删除邀请
+      {{ t('operators.deleteConfirmBefore') }}
       <code class="mx-0.5 rounded bg-panel-2 px-1.5 py-0.5 font-mono text-xs text-text">{{ delTarget?.tokenPrefix }}…</code>
-      ？删除后该邀请链接将立即失效，无法再用于注册。
+      {{ t('operators.deleteConfirmAfter') }}
     </p>
     <template #footer>
-      <Button variant="ghost" :disabled="deleting" @click="delTarget = null">取消</Button>
-      <Button variant="danger" :loading="deleting" @click="confirmDelete">删除邀请</Button>
+      <Button variant="ghost" :disabled="deleting" @click="delTarget = null">{{ t('common.cancel') }}</Button>
+      <Button variant="danger" :loading="deleting" @click="confirmDelete">{{ t('operators.deleteTitle') }}</Button>
     </template>
   </Modal>
 </template>

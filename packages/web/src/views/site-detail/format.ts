@@ -1,4 +1,8 @@
 /** SiteDetailView 子组件共用的轻量格式化助手（本地）。 */
+import { i18n } from '../../i18n';
+
+const tr = (key: string, named?: Record<string, unknown>): string =>
+  named ? (i18n.global.t(key, named) as string) : (i18n.global.t(key) as string);
 
 export function fmtInt(n: number): string {
   return n.toLocaleString('en-US');
@@ -28,23 +32,17 @@ export function relTime(iso: string): string {
   const t = parseIso(iso);
   if (Number.isNaN(t)) return iso;
   const min = Math.floor((Date.now() - t) / 60_000);
-  if (min < 1) return '刚刚';
-  if (min < 60) return `${min} 分钟前`;
+  if (min < 1) return tr('siteDetail.relTime.justNow');
+  if (min < 60) return tr('siteDetail.relTime.minAgo', { n: min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h} 小时前`;
+  if (h < 24) return tr('siteDetail.relTime.hourAgo', { n: h });
   const day = Math.floor(h / 24);
-  if (day < 30) return `${day} 天前`;
+  if (day < 30) return tr('siteDetail.relTime.dayAgo', { n: day });
   return fmtDateTime(iso);
 }
 
-/** 任务/生命周期动作类型中文名。 */
+/** Localized label for a job / lifecycle action kind. */
 export function jobKindText(kind: string): string {
-  const map: Record<string, string> = {
-    provision: '开站',
-    upgrade: '升级',
-    start: '启动',
-    stop: '停止',
-    destroy: '销毁',
-  };
-  return map[kind] ?? kind;
+  const known = ['provision', 'upgrade', 'start', 'stop', 'destroy'];
+  return known.includes(kind) ? tr(`siteDetail.jobKind.${kind}`) : kind;
 }

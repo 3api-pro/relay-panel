@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 /**
  * 状态点：传 status（站点/任务/告警通用词表自动映射色与呼吸动画），
@@ -18,43 +21,52 @@ const props = withDefaults(
 interface Mapped {
   tone: NonNullable<typeof props.tone>;
   pulse: boolean;
-  text: string;
+  /** common.status.<key>；空串表示回退到原始 status 文本 */
+  key: string;
 }
 
 /** 站点 status / 任务 status / 通用词的映射表 */
 function mapStatus(s: string): Mapped {
-  if (s.startsWith('failed')) return { tone: 'red', pulse: false, text: '失败' };
+  if (s.startsWith('failed')) return { tone: 'red', pulse: false, key: 'failed' };
   switch (s) {
     case 'active':
     case 'ok':
+      return { tone: 'green', pulse: false, key: 'active' };
     case 'succeeded':
+      return { tone: 'green', pulse: false, key: 'succeeded' };
     case 'resolved':
-      return { tone: 'green', pulse: false, text: s === 'succeeded' ? '成功' : s === 'resolved' ? '已解决' : '运行中' };
+      return { tone: 'green', pulse: false, key: 'resolved' };
     case 'running':
-      return { tone: 'accent', pulse: true, text: '执行中' };
+      return { tone: 'accent', pulse: true, key: 'running' };
     case 'provisioning':
     case 'pending':
+      return { tone: 'amber', pulse: true, key: 'pending' };
     case 'queued':
-      return { tone: 'amber', pulse: true, text: s === 'queued' ? '排队中' : '准备中' };
+      return { tone: 'amber', pulse: true, key: 'queued' };
     case 'stopped':
+      return { tone: 'muted', pulse: false, key: 'stopped' };
     case 'cancelled':
-      return { tone: 'muted', pulse: false, text: s === 'cancelled' ? '已取消' : '已停止' };
+      return { tone: 'muted', pulse: false, key: 'cancelled' };
     case 'destroyed':
-      return { tone: 'muted', pulse: false, text: '已销毁' };
+      return { tone: 'muted', pulse: false, key: 'destroyed' };
     case 'down':
     case 'error':
-      return { tone: 'red', pulse: false, text: '不可达' };
+      return { tone: 'red', pulse: false, key: 'unreachable' };
     case 'open':
-      return { tone: 'red', pulse: true, text: '未解决' };
+      return { tone: 'red', pulse: true, key: 'unresolved' };
     default:
-      return { tone: 'muted', pulse: false, text: s };
+      return { tone: 'muted', pulse: false, key: '' };
   }
 }
 
 const mapped = computed<Mapped>(() => mapStatus(props.status));
 const tone = computed(() => props.tone ?? mapped.value.tone);
 const pulse = computed(() => props.pulse ?? mapped.value.pulse);
-const text = computed(() => props.label || (props.status ? mapped.value.text : ''));
+const text = computed(() => {
+  if (props.label) return props.label;
+  if (!props.status) return '';
+  return mapped.value.key ? t(`common.status.${mapped.value.key}`) : props.status;
+});
 
 const dotClass = computed(() => {
   switch (tone.value) {

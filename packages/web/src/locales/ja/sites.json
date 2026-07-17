@@ -1,0 +1,91 @@
+{
+  "title": "サイト",
+  "new": "サイトを作成",
+  "summaryCount": "サイト {n} 件",
+  "summaryDown": "異常 {n} 件",
+  "updating": "更新中…",
+  "loadFailed": "読み込みに失敗しました",
+  "empty": {
+    "title": "サイトがまだありません",
+    "desc": "最初の中継サイトを作成するか、CLI で既存のサイトを引き継いでください。"
+  },
+  "externalManaged": "外部管理",
+  "columns": {
+    "status": "状態",
+    "site": "サイト",
+    "engine": "エンジン / バージョン",
+    "hostPort": "ポート",
+    "usage": "24時間 リクエスト / コスト",
+    "job": "ジョブ"
+  },
+  "jobKind": {
+    "provision": "作成",
+    "upgrade": "アップグレード",
+    "start": "起動",
+    "stop": "停止",
+    "destroy": "破棄"
+  },
+  "jobStatus": {
+    "running": "実行中",
+    "queued": "待機中"
+  },
+  "toast": {
+    "queued": "ジョブをキューに追加しました。ジョブページで進捗を確認できます。",
+    "created": "サイト作成ジョブを作成しました。"
+  },
+  "upgrade": {
+    "title": "サイトをアップグレード",
+    "descBefore": "サイト ",
+    "descMid": " を指定したバージョンにアップグレードします。現在のバージョン: ",
+    "descAfter": "。",
+    "versionLabel": "対象バージョン",
+    "versionHint": "イメージタグ（例: v0.1.160）",
+    "submit": "アップグレード",
+    "errRequired": "対象バージョンを入力してください。",
+    "errSame": "対象バージョンが現在のバージョンと同じです。"
+  },
+  "destroy": {
+    "title": "サイトを破棄",
+    "action": "サイトを破棄",
+    "keepMsg": "サイトのコンテナを停止・削除しますが、データボリューム（データベース／アップロード）は保持され、後で再構築して復元できます。",
+    "purgeMsg": "サイトのコンテナとデータボリュームを完全に削除します。復元できません。"
+  },
+  "create": {
+    "title": "サイトを作成",
+    "submit": "サイトを作成",
+    "engineLabel": "エンジン",
+    "engineRecommended": "sub2api（推奨）",
+    "versionLabel": "バージョン",
+    "versionHint": "イメージタグ（例: v0.1.160）",
+    "slugHint": "小文字・数字・ハイフン、2〜32文字。URL とコンテナ識別子に使用",
+    "labelLabel": "表示名",
+    "labelPlaceholder": "私の中継サイト",
+    "portLabel": "ポート",
+    "portHint": "空欄の場合は利用可能なポートを自動割り当て",
+    "portPlaceholder": "自動割り当て",
+    "emailLabel": "管理者メール",
+    "emailHint": "サイトの初期管理者アカウント",
+    "brandSection": "ブランド（任意）",
+    "siteNameLabel": "サイト名",
+    "siteNamePlaceholder": "サイトのフロントに表示される名前",
+    "announcementLabel": "お知らせ",
+    "announcementHint": "サイトのフロントに表示されるお知らせ文",
+    "announcementPlaceholder": "空欄可",
+    "errEngine": "エンジンを選択してください。",
+    "errVersion": "バージョンを入力してください。",
+    "errSlugRequired": "slug を入力してください。",
+    "errSlugFormat": "小文字・数字・ハイフンのみ、2〜32文字、先頭は英字または数字。",
+    "errLabel": "表示名を入力してください。",
+    "errPort": "ポートは 1〜65535 の整数で入力してください。",
+    "errEmailRequired": "管理者メールを入力してください。",
+    "errEmailFormat": "メールアドレスの形式が正しくありません。"
+  },
+  "rowActions": {
+    "more": "その他の操作",
+    "upgrade": "バージョンをアップグレード…",
+    "stop": "サイトを停止",
+    "start": "サイトを起動",
+    "keepData": "データボリュームを保持",
+    "destroy": "サイトを破棄…"
+  }
+}

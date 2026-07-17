@@ -1,0 +1,35 @@
+{
+  "loadFailed": "Failed to load",
+  "loadErrorNoAccount": "Unable to load your account. Please sign in again.",
+  "changePassword": "Change password",
+  "currentPassword": "Current password",
+  "currentPasswordPlaceholder": "Enter current password",
+  "newPassword": "New password",
+  "newPasswordPlaceholder": "Set a new password",
+  "confirmPassword": "Confirm new password",
+  "confirmPasswordPlaceholder": "Re-enter new password",
+  "pwHint": "At least 8 characters",
+  "pwMinLength": "Password must be at least 8 characters",
+  "pwMismatch": "Passwords do not match",
+  "pwNote": "Other signed-in devices will be signed out after the change.",
+  "updatePassword": "Update password",
+  "pwUpdated": "Password updated. Other devices must sign in again.",
+  "accountInfo": "Account",
+  "email": "Email",
+  "displayName": "Display name",
+  "notSet": "Not set",
+  "roleLabel": "Role",
+  "role": {
+    "root": "Super admin",
+    "operator": "Operator",
+    "viewer": "Viewer"
+  },
+  "instanceConfig": "Instance config",
+  "signupModeLabel": "Signup mode",
+  "signupMode": {
+    "closed": "Closed",
+    "invite": "Invite only",
+    "open": "Open"
+  },
+  "alertsHint": "Configure the alert webhook on the Alerts page to get notified when a site goes down."
+}

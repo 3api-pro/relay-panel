@@ -1,0 +1,49 @@
+{
+  "title": "任务中心",
+  "subtitle": "开站 / 升级 / 启停 / 销毁 的编排执行记录",
+  "activePolling": "有任务进行中，5s 刷新",
+  "loadFailed": "加载失败",
+  "emptyList": "暂无任务记录",
+  "col": {
+    "kind": "类型",
+    "slug": "站点",
+    "status": "状态",
+    "createdBy": "创建者",
+    "createdAt": "创建时间",
+    "duration": "耗时"
+  },
+  "kind": {
+    "provision": "开站",
+    "upgrade": "升级",
+    "start": "启动",
+    "stop": "停止",
+    "destroy": "销毁"
+  },
+  "relTime": {
+    "justNow": "刚刚",
+    "minAgo": "{n} 分钟前",
+    "hourAgo": "{n} 小时前",
+    "dayAgo": "{n} 天前"
+  },
+  "detail": {
+    "titleWithId": "任务 #{id}",
+    "title": "任务详情",
+    "createdBy": "创建者",
+    "duration": "耗时",
+    "createdAt": "创建时间",
+    "finishedAt": "完成时间",
+    "refreshFailed": "详情刷新失败：{msg}",
+    "errorLabel": "错误",
+    "stepsLabel": "执行步骤",
+    "liveRefresh": "实时刷新中",
+    "noSteps": "暂无步骤记录"
+  },
+  "step": {
+    "failed": "失败",
+    "done": "完成",
+    "running": "执行中",
+    "queued": "排队中",
+    "provisioning": "准备中",
+    "skipped": "已跳过"
+  }
+}

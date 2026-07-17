@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { ChevronDown } from 'lucide-vue-next';
+
+const { t } = useI18n();
 
 /** 下拉选择：v-model；options 传值/文案对 */
 export interface SelectOption {
@@ -16,7 +19,7 @@ const props = withDefaults(
     placeholder?: string;
     disabled?: boolean;
   }>(),
-  { placeholder: '请选择', disabled: false },
+  { placeholder: '', disabled: false },
 );
 
 const emit = defineEmits<{ 'update:modelValue': [v: string | number] }>();
@@ -39,7 +42,7 @@ function onChange(ev: Event): void {
       class="h-8.5 w-full appearance-none rounded-lg border border-border bg-bg/60 pl-3 pr-8 text-[13px] text-text transition-colors hover:border-border-2 focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:pointer-events-none disabled:opacity-45"
       @change="onChange"
     >
-      <option v-if="current === ''" value="" disabled>{{ props.placeholder }}</option>
+      <option v-if="current === ''" value="" disabled>{{ props.placeholder || t('common.pleaseSelect') }}</option>
       <option v-for="o in props.options" :key="String(o.value)" :value="String(o.value)" :disabled="o.disabled === true">
         {{ o.label }}
       </option>

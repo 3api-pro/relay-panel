@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, onMounted, ref, type ComputedRef } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { BellRing, Check, CircleCheck, RefreshCw, ShieldCheck, TriangleAlert, Webhook } from 'lucide-vue-next';
 import { get, post, put, ApiError } from '../api/client';
 import { session } from '../api/session';
@@ -25,6 +26,8 @@ import {
  * - 30s 自刷新；加载 / 空 / 错误态齐全。
  */
 
+const { t } = useI18n();
+
 // viewer 只读：Shell 以 provide('canWrite') 注入
 const canWrite = inject<ComputedRef<boolean>>(
   'canWrite',
@@ -33,11 +36,11 @@ const canWrite = inject<ComputedRef<boolean>>(
 
 // ---- 状态筛选 ----
 const statusTab = ref<string>('open');
-const statusTabs: TabItem[] = [
-  { key: 'open', label: '未解决' },
-  { key: 'resolved', label: '已解决' },
-  { key: 'all', label: '全部' },
-];
+const statusTabs = computed<TabItem[]>(() => [
+  { key: 'open', label: t('common.status.unresolved') },
+  { key: 'resolved', label: t('common.status.resolved') },
+  { key: 'all', label: t('common.all') },
+]);
 
 // ---- 列表数据 ----
 const alerts = ref<AlertView[]>([]);
@@ -60,7 +63,7 @@ async function refresh(initial = false): Promise<void> {
     loadError.value = '';
   } catch (err) {
     // 初次加载失败展示错误态；自刷新失败静默保留旧数据
-    if (initial) loadError.value = err instanceof Error ? err.message : '加载失败';
+    if (initial) loadError.value = err instanceof Error ? err.message : t('alerts.loadFailed');
   } finally {
     loading.value = false;
     refreshing.value = false;
@@ -88,31 +91,26 @@ function severityTone(sev: string): 'red' | 'amber' | 'accent' {
   return 'accent';
 }
 function severityText(sev: string): string {
-  if (sev === 'critical') return '严重';
-  if (sev === 'warning') return '警告';
-  return '提示';
+  if (sev === 'critical') return t('alerts.severity.critical');
+  if (sev === 'warning') return t('alerts.severity.warning');
+  return t('alerts.severity.info');
 }
 
-const KIND_TEXT: Record<string, string> = {
-  site_down: '站点不可达',
-  channel_disabled: '渠道被停用',
-  low_balance: '上游余额偏低',
-  job_failed: '任务失败',
-};
+const KIND_KEYS = ['site_down', 'channel_disabled', 'low_balance', 'job_failed'];
 function kindText(kind: string): string {
-  return KIND_TEXT[kind] ?? kind;
+  return KIND_KEYS.includes(kind) ? t(`alerts.kind.${kind}`) : kind;
 }
 
 function relTime(iso: string): string {
-  const t = new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`).getTime();
-  if (Number.isNaN(t)) return iso;
-  const diff = Date.now() - t;
+  const time = new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`).getTime();
+  if (Number.isNaN(time)) return iso;
+  const diff = Date.now() - time;
   const min = Math.floor(diff / 60_000);
-  if (min < 1) return '刚刚';
-  if (min < 60) return `${min} 分钟前`;
+  if (min < 1) return t('alerts.relTime.justNow');
+  if (min < 60) return t('alerts.relTime.minAgo', { n: min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h} 小时前`;
-  return `${Math.floor(h / 24)} 天前`;
+  if (h < 24) return t('alerts.relTime.hourAgo', { n: h });
+  return t('alerts.relTime.dayAgo', { n: Math.floor(h / 24) });
 }
 
 // ---- 标记已解决 ----
@@ -121,7 +119,7 @@ async function resolveAlert(a: AlertView): Promise<void> {
   resolvingId.value = a.id;
   try {
     await post<AlertResolveResponse>(`/api/alerts/${a.id}/resolve`);
-    toast.success('告警已标记为解决');
+    toast.success(t('alerts.resolvedToast'));
     await refresh();
   } catch {
     // client 已自动弹出后端中文错误文案（已解决再点 400 等）
@@ -146,7 +144,7 @@ async function openSettings(): Promise<void> {
     webhookUrl.value = res?.webhookUrl ?? '';
   } catch (err) {
     webhookUrl.value = '';
-    toast.error(err instanceof ApiError ? err.message : '读取通知设置失败');
+    toast.error(err instanceof ApiError ? err.message : t('alerts.settingsLoadFailed'));
     settingsOpen.value = false;
   } finally {
     settingsLoading.value = false;
@@ -156,7 +154,7 @@ async function openSettings(): Promise<void> {
 async function saveSettings(): Promise<void> {
   const trimmed = webhookUrl.value.trim();
   if (trimmed && !/^https?:\/\//i.test(trimmed)) {
-    webhookError.value = '仅支持 http:// 或 https:// 开头的地址';
+    webhookError.value = t('alerts.webhookInvalid');
     return;
   }
   webhookError.value = '';
@@ -164,7 +162,7 @@ async function saveSettings(): Promise<void> {
   try {
     // 清空 = 停用推送
     await put<AlertSettings>('/api/settings/alerts', { webhookUrl: trimmed || null });
-    toast.success(trimmed ? '通知 webhook 已保存' : '已停用告警推送');
+    toast.success(trimmed ? t('alerts.webhookSaved') : t('alerts.pushDisabled'));
     settingsOpen.value = false;
   } catch {
     // client 已弹错误
@@ -184,11 +182,11 @@ async function saveSettings(): Promise<void> {
           v-if="refreshing"
           :size="13"
           class="animate-spin text-muted/70"
-          aria-label="刷新中"
+          :aria-label="t('alerts.refreshing')"
         />
         <Button v-if="session.isRoot.value" size="sm" @click="openSettings">
           <BellRing :size="14" />
-          通知设置
+          {{ t('alerts.notifySettings') }}
         </Button>
       </div>
     </div>
@@ -200,11 +198,11 @@ async function saveSettings(): Promise<void> {
         v-if="!loading && !loadError && alerts.length > 0"
         class="hidden items-center gap-3 border-b border-border px-4 py-2.5 md:flex"
       >
-        <span class="rp-microlabel w-[64px] shrink-0">级别</span>
-        <span class="rp-microlabel w-[96px] shrink-0">类型</span>
-        <span class="rp-microlabel min-w-0 flex-1">告警</span>
-        <span class="rp-microlabel w-[132px] shrink-0">站点</span>
-        <span class="rp-microlabel w-[112px] shrink-0 text-right">最近</span>
+        <span class="rp-microlabel w-[64px] shrink-0">{{ t('alerts.colSeverity') }}</span>
+        <span class="rp-microlabel w-[96px] shrink-0">{{ t('alerts.colKind') }}</span>
+        <span class="rp-microlabel min-w-0 flex-1">{{ t('alerts.colAlert') }}</span>
+        <span class="rp-microlabel w-[132px] shrink-0">{{ t('alerts.colSite') }}</span>
+        <span class="rp-microlabel w-[112px] shrink-0 text-right">{{ t('alerts.colRecent') }}</span>
         <span v-if="canWrite" class="w-[92px] shrink-0" />
       </div>
 
@@ -217,10 +215,10 @@ async function saveSettings(): Promise<void> {
 
       <!-- 错误态 -->
       <div v-else-if="loadError" class="p-8">
-        <EmptyState title="加载失败" :description="loadError" :icon="TriangleAlert">
+        <EmptyState :title="t('alerts.loadFailed')" :description="loadError" :icon="TriangleAlert">
           <Button size="sm" @click="refresh(true)">
             <RefreshCw :size="14" />
-            重试
+            {{ t('common.retry') }}
           </Button>
         </EmptyState>
       </div>
@@ -229,13 +227,13 @@ async function saveSettings(): Promise<void> {
       <div v-else-if="alerts.length === 0" class="p-8">
         <EmptyState
           :icon="ShieldCheck"
-          :title="statusTab === 'resolved' ? '暂无已解决告警' : '暂无告警，一切正常'"
+          :title="statusTab === 'resolved' ? t('alerts.emptyResolvedTitle') : t('alerts.emptyOkTitle')"
           :description="
             statusTab === 'open'
-              ? '所有站点运行正常，出现异常时会在此汇总。'
+              ? t('alerts.emptyOpenDesc')
               : statusTab === 'resolved'
-                ? '尚未有告警被标记为已解决。'
-                : '当前没有任何告警记录。'
+                ? t('alerts.emptyResolvedDesc')
+                : t('alerts.emptyAllDesc')
           "
         />
       </div>
@@ -271,7 +269,7 @@ async function saveSettings(): Promise<void> {
 
           <!-- 时间 -->
           <div class="w-[112px] shrink-0 md:text-right">
-            <p class="tnum text-xs text-muted/90" :title="`首次 ${relTime(a.firstSeenAt)}`">
+            <p class="tnum text-xs text-muted/90" :title="t('alerts.firstSeen', { time: relTime(a.firstSeenAt) })">
               {{ relTime(a.lastSeenAt) }}
             </p>
           </div>
@@ -286,11 +284,11 @@ async function saveSettings(): Promise<void> {
               @click="resolveAlert(a)"
             >
               <Check :size="14" />
-              解决
+              {{ t('alerts.resolve') }}
             </Button>
             <span v-else class="inline-flex items-center gap-1 text-xs text-green/90">
               <CircleCheck :size="13" />
-              已解决
+              {{ t('common.status.resolved') }}
             </span>
           </div>
         </li>
@@ -298,14 +296,14 @@ async function saveSettings(): Promise<void> {
     </section>
 
     <!-- 通知设置弹窗（root） -->
-    <Modal v-model:open="settingsOpen" title="告警通知设置" width="480px" :closable="!settingsSaving">
+    <Modal v-model:open="settingsOpen" :title="t('alerts.settingsTitle')" width="480px" :closable="!settingsSaving">
       <div class="space-y-4">
         <div class="flex items-start gap-3">
           <div class="mt-0.5 rounded-lg border border-accent/25 bg-accent/10 p-2 text-accent">
             <Webhook :size="16" />
           </div>
           <p class="text-[13px] leading-relaxed text-muted">
-            配置后，新的严重 / 警告告警将推送到该 webhook。留空并保存即停用推送。
+            {{ t('alerts.settingsDesc') }}
           </p>
         </div>
 
@@ -314,9 +312,9 @@ async function saveSettings(): Promise<void> {
         </div>
         <Field
           v-else
-          label="Webhook 地址"
+          :label="t('alerts.webhookLabel')"
           :error="webhookError"
-          hint="支持 http(s):// 地址，如企业微信 / 飞书 / Slack 机器人。留空 = 停用。"
+          :hint="t('alerts.webhookHint')"
         >
           <Input
             v-model="webhookUrl"
@@ -330,14 +328,14 @@ async function saveSettings(): Promise<void> {
       </div>
 
       <template #footer>
-        <Button variant="ghost" :disabled="settingsSaving" @click="settingsOpen = false">取消</Button>
+        <Button variant="ghost" :disabled="settingsSaving" @click="settingsOpen = false">{{ t('common.cancel') }}</Button>
         <Button
           variant="primary"
           :loading="settingsSaving"
           :disabled="settingsLoading"
           @click="saveSettings"
         >
-          保存
+          {{ t('common.save') }}
         </Button>
       </template>
     </Modal>

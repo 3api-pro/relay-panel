@@ -1,0 +1,15 @@
+{
+  "overview": "Overview",
+  "sites": "Sites",
+  "marketplace": "Marketplace",
+  "ledger": "Ledger",
+  "alerts": "Alerts",
+  "jobs": "Jobs",
+  "operators": "Operators",
+  "billing": "Billing",
+  "settings": "Settings",
+  "logout": "Sign out",
+  "roleRoot": "Admin",
+  "roleOperator": "Operator",
+  "roleViewer": "Read-only"
+}

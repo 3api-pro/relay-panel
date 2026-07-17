@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { watch, onBeforeUnmount } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { X } from 'lucide-vue-next';
+
+const { t } = useI18n();
 
 /** 右侧滑出抽屉：v-model:open；任务详情/明细查看用 */
 const props = withDefaults(
@@ -44,7 +47,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
     <Transition name="rp-slide">
       <aside
         v-if="props.open"
-        class="fixed inset-y-0 right-0 z-[65] flex w-full flex-col border-l border-border bg-panel shadow-[-16px_0_48px_rgb(0_0_0/0.45)]"
+        class="rp-drawer fixed inset-y-0 right-0 z-[65] flex w-full flex-col"
         :style="{ maxWidth: props.width }"
         role="dialog"
         aria-modal="true"
@@ -56,7 +59,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
           <button
             type="button"
             class="rounded-md p-1 text-muted transition-colors hover:bg-panel-2 hover:text-text"
-            aria-label="关闭"
+            :aria-label="t('common.close')"
             @click="close"
           >
             <X :size="16" />
@@ -72,3 +75,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
     </Transition>
   </Teleport>
 </template>
+
+<style scoped>
+/* 玻璃抽屉：贴右边缘全高，左描边 + 模糊 + 内高光，无圆角 */
+.rp-drawer {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-left: 1px solid var(--glass-border);
+  box-shadow:
+    inset 1px 0 0 0 var(--glass-highlight),
+    -16px 0 48px rgb(0 0 0 / 0.32);
+}
+</style>

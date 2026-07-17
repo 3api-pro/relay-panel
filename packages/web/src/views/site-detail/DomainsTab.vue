@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, ref, type ComputedRef } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { Globe, Plus, Trash2 } from 'lucide-vue-next';
 import { del, get, post } from '../../api/client';
 import { toast } from '../../components/ui/toast';
@@ -8,6 +9,7 @@ import type { SiteDomainsResponse } from './types';
 
 /** 域名页：列表 + 添加 / 删除（普通确认）。需在 Caddy 配置反代方可生效。 */
 const props = defineProps<{ slug: string }>();
+const { t } = useI18n();
 const canWrite = inject<ComputedRef<boolean>>('canWrite', computed(() => false));
 
 const domains = ref<string[]>([]);
@@ -21,7 +23,7 @@ async function load(): Promise<void> {
     domains.value = Array.isArray(res.domains) ? res.domains : [];
     loadError.value = '';
   } catch (err) {
-    loadError.value = err instanceof Error ? err.message : '加载失败';
+    loadError.value = err instanceof Error ? err.message : t('siteDetail.loadFailed');
   } finally {
     loading.value = false;
   }
@@ -33,7 +35,7 @@ const adding = ref(false);
 async function addDomain(): Promise<void> {
   const d = newDomain.value.trim();
   if (!d) {
-    toast.error('请输入域名');
+    toast.error(t('siteDetail.domains.toastNeedDomain'));
     return;
   }
   adding.value = true;
@@ -41,7 +43,7 @@ async function addDomain(): Promise<void> {
     const res = await post<SiteDomainsResponse>(`/api/sites/${props.slug}/domains`, { domain: d });
     domains.value = Array.isArray(res.domains) ? res.domains : domains.value;
     newDomain.value = '';
-    toast.success('域名已添加');
+    toast.success(t('siteDetail.domains.toastAdded'));
   } catch {
     /* toast 已弹 */
   } finally {
@@ -59,7 +61,7 @@ async function removeDomain(): Promise<void> {
       `/api/sites/${props.slug}/domains/${encodeURIComponent(removeTarget.value)}`,
     );
     domains.value = Array.isArray(res.domains) ? res.domains : domains.value;
-    toast.success('域名已删除');
+    toast.success(t('siteDetail.domains.toastDeleted'));
     removeTarget.value = null;
   } catch {
     /* toast 已弹 */
@@ -72,7 +74,7 @@ async function removeDomain(): Promise<void> {
 <template>
   <div class="space-y-4">
     <div class="rounded-lg border border-border bg-panel-2/40 px-3.5 py-2.5 text-xs leading-relaxed text-muted">
-      绑定自定义域名后，仍需在 Caddy 中配置指向本站的反向代理（含证书签发）才能对外访问。
+      {{ t('siteDetail.domains.banner') }}
     </div>
 
     <div v-if="canWrite" class="flex items-center gap-2">
@@ -80,20 +82,20 @@ async function removeDomain(): Promise<void> {
         <Input v-model="newDomain" mono placeholder="api.example.com" @keydown.enter="addDomain" />
       </div>
       <Button variant="primary" size="sm" :loading="adding" @click="addDomain">
-        <Plus :size="14" /> 添加域名
+        <Plus :size="14" /> {{ t('siteDetail.domains.add') }}
       </Button>
     </div>
 
     <div v-if="loading" class="rp-panel p-4"><Skeleton :lines="3" /></div>
 
     <div v-else-if="loadError" class="rp-panel p-8">
-      <EmptyState title="加载失败" :description="loadError">
-        <Button size="sm" @click="load">重试</Button>
+      <EmptyState :title="t('siteDetail.loadFailed')" :description="loadError">
+        <Button size="sm" @click="load">{{ t('common.retry') }}</Button>
       </EmptyState>
     </div>
 
     <div v-else-if="domains.length === 0" class="rp-panel p-8">
-      <EmptyState :icon="Globe" title="尚未绑定域名" description="添加自定义域名后可通过它访问该站点。" />
+      <EmptyState :icon="Globe" :title="t('siteDetail.domains.emptyTitle')" :description="t('siteDetail.domains.emptyDesc')" />
     </div>
 
     <ul v-else class="rp-panel divide-y divide-border/60 overflow-hidden">
@@ -101,20 +103,20 @@ async function removeDomain(): Promise<void> {
         <Globe :size="15" class="shrink-0 text-muted/70" />
         <span class="min-w-0 flex-1 truncate font-mono text-[13px]">{{ d }}</span>
         <Button v-if="canWrite" size="sm" variant="ghost" @click="removeTarget = d">
-          <Trash2 :size="14" /> 删除
+          <Trash2 :size="14" /> {{ t('common.delete') }}
         </Button>
       </li>
     </ul>
 
-    <Modal :open="removeTarget !== null" title="删除域名" width="420px" @update:open="removeTarget = null">
+    <Modal :open="removeTarget !== null" :title="t('siteDetail.domains.deleteTitle')" width="420px" @update:open="removeTarget = null">
       <p class="text-[13px] leading-relaxed text-muted">
-        确认删除域名
+        {{ t('siteDetail.domains.deleteConfirmPre') }}
         <code class="mx-0.5 rounded bg-panel-2 px-1.5 py-0.5 font-mono text-xs text-text">{{ removeTarget }}</code>
-        ？删除后需自行清理 Caddy 中对应的反代配置。
+        {{ t('siteDetail.domains.deleteConfirmPost') }}
       </p>
       <template #footer>
-        <Button variant="ghost" @click="removeTarget = null">取消</Button>
-        <Button variant="danger" :loading="removing" @click="removeDomain">确认删除</Button>
+        <Button variant="ghost" @click="removeTarget = null">{{ t('common.cancel') }}</Button>
+        <Button variant="danger" :loading="removing" @click="removeDomain">{{ t('siteDetail.domains.deleteAction') }}</Button>
       </template>
     </Modal>
   </div>

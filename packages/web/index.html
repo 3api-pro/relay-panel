@@ -3,8 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#08090c" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#06070a" />
+    <!-- 首帧前同步定主题，杜绝亮色用户闪暗（FOUC）。与 useTheme.ts 逻辑一致。 -->
+    <script>
+      (function () {
+        try {
+          var p = localStorage.getItem('rp-theme');
+          var t =
+            p === 'light' || p === 'dark'
+              ? p
+              : window.matchMedia('(prefers-color-scheme: light)').matches
+                ? 'light'
+                : 'dark';
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
     <link
       rel="icon"
       type="image/svg+xml"

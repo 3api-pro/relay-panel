@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, ref, type ComputedRef } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { Check, CreditCard, Plus } from 'lucide-vue-next';
 import { del, get, post } from '../api/client';
 import { session } from '../api/session';
@@ -57,6 +58,7 @@ interface SubscriptionsResponse {
   subscriptions: SubscriptionRow[];
 }
 
+const { t } = useI18n();
 const canWrite = inject<ComputedRef<boolean>>('canWrite');
 const isRoot = session.isRoot;
 
@@ -86,7 +88,7 @@ async function loadSubscriptions(): Promise<void> {
     const r = await get<SubscriptionsResponse>('/api/billing/subscriptions', { silent: true });
     subscriptions.value = Array.isArray(r?.subscriptions) ? r.subscriptions : [];
   } catch (err) {
-    subsError.value = err instanceof Error ? err.message : '加载失败';
+    subsError.value = err instanceof Error ? err.message : t('billing.loadFailed');
   } finally {
     subsLoading.value = false;
   }
@@ -99,7 +101,7 @@ async function refresh(initial = false): Promise<void> {
     await loadCore();
     if (isRoot.value) void loadSubscriptions();
   } catch (err) {
-    if (initial) loadError.value = err instanceof Error ? err.message : '加载失败';
+    if (initial) loadError.value = err instanceof Error ? err.message : t('billing.loadFailed');
   } finally {
     loading.value = false;
   }
@@ -127,26 +129,26 @@ function daysLeft(iso: string | null | undefined): number | null {
   return Math.ceil((t - Date.now()) / 86_400_000);
 }
 function priceText(p: number | null | undefined): string {
-  if (p === null || p === undefined || p <= 0) return '免费';
-  return `¥${p.toLocaleString('en-US')} / 月`;
+  if (p === null || p === undefined || p <= 0) return t('billing.free');
+  return t('billing.pricePerMonth', { price: p.toLocaleString('en-US') });
 }
 function quotaText(q: number | null | undefined): string {
-  return q === null || q === undefined ? '不限' : String(q);
+  return q === null || q === undefined ? t('billing.unlimited') : String(q);
 }
 function planTitle(key: string): string {
   return plans.value.find((p) => p.key === key)?.title ?? key;
 }
 
 // ---- 我的套餐派生 ----
-const planTitleDisplay = computed(() => sub.value?.plan?.title ?? '免费版');
+const planTitleDisplay = computed(() => sub.value?.plan?.title ?? t('billing.freePlan'));
 const priceDisplay = computed(() => priceText(sub.value?.plan?.priceMonthly ?? 0));
 const expiryDisplay = computed(() => {
   const end = sub.value?.periodEnd ?? null;
-  if (!end) return '长期有效';
+  if (!end) return t('billing.permanent');
   const left = daysLeft(end);
   if (left === null) return fmtDate(end);
-  if (left < 0) return `${fmtDate(end)}（已过期）`;
-  return `${fmtDate(end)}（剩 ${left} 天）`;
+  if (left < 0) return t('billing.expiredOn', { date: fmtDate(end) });
+  return t('billing.expiresIn', { date: fmtDate(end), n: left });
 });
 const usedSites = computed(() => sub.value?.usedSites ?? 0);
 const quota = computed(() => sub.value?.quota ?? null);
@@ -169,14 +171,14 @@ function isCurrentPlan(key: string): boolean {
 }
 
 // ---- root：订阅管理 ----
-const subColumns: TableColumn[] = [
-  { key: 'operatorEmail', label: '操作员邮箱' },
-  { key: 'planKey', label: '套餐' },
-  { key: 'status', label: '状态', width: '110px' },
-  { key: 'currentPeriodEnd', label: '到期', align: 'right', width: '190px' },
-  { key: 'createdAt', label: '创建', align: 'right', width: '120px' },
+const subColumns = computed<TableColumn[]>(() => [
+  { key: 'operatorEmail', label: t('billing.colOperatorEmail') },
+  { key: 'planKey', label: t('billing.plan') },
+  { key: 'status', label: t('billing.colStatus'), width: '110px' },
+  { key: 'currentPeriodEnd', label: t('billing.expires'), align: 'right', width: '190px' },
+  { key: 'createdAt', label: t('billing.colCreated'), align: 'right', width: '120px' },
   { key: 'actions', label: '', align: 'right', width: '80px' },
-];
+]);
 const subRows = computed<Record<string, unknown>[]>(
   () => subscriptions.value as unknown as Record<string, unknown>[],
 );
@@ -219,7 +221,7 @@ async function submitGrant(): Promise<void> {
       planKey: grantPlanKey.value,
       months: monthsNum.value,
     });
-    toast.success('订阅已开通');
+    toast.success(t('billing.grantSuccess'));
     showGrant.value = false;
     await Promise.all([loadCore(), loadSubscriptions()]);
   } catch {
@@ -245,7 +247,7 @@ async function doCancel(): Promise<void> {
   cancelling.value = true;
   try {
     await del(`/api/billing/subscriptions/${target.id}`);
-    toast.success('订阅已取消');
+    toast.success(t('billing.cancelSuccess'));
     cancelTarget.value = null;
     await Promise.all([loadCore(), loadSubscriptions()]);
   } catch {
@@ -261,7 +263,7 @@ async function doCancel(): Promise<void> {
     <!-- 我的套餐 -->
     <section class="rp-panel overflow-hidden">
       <header class="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 class="text-[13px] font-semibold">我的套餐</h2>
+        <h2 class="text-[13px] font-semibold">{{ t('billing.myPlan') }}</h2>
       </header>
 
       <div v-if="loading" class="p-4">
@@ -269,7 +271,7 @@ async function doCancel(): Promise<void> {
       </div>
 
       <div v-else-if="loadError" class="p-8">
-        <EmptyState title="加载失败" :description="loadError" />
+        <EmptyState :title="t('billing.loadFailed')" :description="loadError" />
       </div>
 
       <div v-else class="flex flex-col gap-5 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -279,21 +281,21 @@ async function doCancel(): Promise<void> {
               <CreditCard :size="16" />
             </span>
             <h3 class="truncate text-lg font-semibold">{{ planTitleDisplay }}</h3>
-            <Badge tone="accent" size="sm">当前</Badge>
+            <Badge tone="accent" size="sm">{{ t('billing.current') }}</Badge>
           </div>
-          <p class="mt-1.5 text-xs text-muted">{{ priceDisplay }} · 到期 {{ expiryDisplay }}</p>
+          <p class="mt-1.5 text-xs text-muted">{{ priceDisplay }} · {{ t('billing.expires') }} {{ expiryDisplay }}</p>
         </div>
 
         <div class="w-full sm:w-64">
           <div class="flex items-baseline justify-between">
-            <span class="rp-microlabel">站点配额</span>
+            <span class="rp-microlabel">{{ t('billing.siteQuota') }}</span>
             <span class="tnum text-[13px] font-medium">{{ usedSites }} / {{ quotaText(quota) }}</span>
           </div>
           <div class="mt-2 h-2 overflow-hidden rounded-full bg-panel-2">
             <div class="h-full rounded-full transition-all duration-300" :class="barColor" :style="{ width: barWidth }" />
           </div>
           <p class="mt-1.5 text-[11px] text-muted/80">
-            {{ quota === null ? '当前套餐不限制站点数量' : `已用 ${usedSites} 个，配额 ${quota} 个` }}
+            {{ quota === null ? t('billing.unlimitedSitesNote') : t('billing.usedOfQuota', { used: usedSites, quota }) }}
           </p>
         </div>
       </div>
@@ -301,7 +303,7 @@ async function doCancel(): Promise<void> {
 
     <!-- 套餐档位 -->
     <section>
-      <p class="rp-microlabel mb-3">套餐档位</p>
+      <p class="rp-microlabel mb-3">{{ t('billing.plansSection') }}</p>
 
       <div v-if="loading" class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <div v-for="i in 3" :key="i" class="rp-panel p-4">
@@ -310,11 +312,11 @@ async function doCancel(): Promise<void> {
       </div>
 
       <div v-else-if="loadError" class="rp-panel p-8">
-        <EmptyState title="加载失败" :description="loadError" />
+        <EmptyState :title="t('billing.loadFailed')" :description="loadError" />
       </div>
 
       <div v-else-if="plans.length === 0" class="rp-panel p-8">
-        <EmptyState title="暂无可选套餐" description="尚未配置任何套餐档位。" />
+        <EmptyState :title="t('billing.noPlans')" :description="t('billing.noPlansDesc')" />
       </div>
 
       <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -326,7 +328,7 @@ async function doCancel(): Promise<void> {
         >
           <div class="flex items-start justify-between gap-2">
             <h3 class="truncate text-sm font-semibold">{{ p.title }}</h3>
-            <Badge v-if="isCurrentPlan(p.key)" tone="accent" size="sm">当前</Badge>
+            <Badge v-if="isCurrentPlan(p.key)" tone="accent" size="sm">{{ t('billing.current') }}</Badge>
           </div>
 
           <p class="mt-2 flex items-baseline gap-1">
@@ -334,7 +336,7 @@ async function doCancel(): Promise<void> {
           </p>
 
           <p class="mt-1 text-xs text-muted">
-            站点配额 · <span class="text-text/80">{{ quotaText(p.siteQuota) }}</span>
+            {{ t('billing.siteQuota') }} · <span class="text-text/80">{{ quotaText(p.siteQuota) }}</span>
           </p>
 
           <ul v-if="p.features && p.features.length > 0" class="mt-3 space-y-1.5 border-t border-border/60 pt-3">
@@ -349,15 +351,15 @@ async function doCancel(): Promise<void> {
 
     <!-- root：订阅管理 -->
     <Card v-if="isRoot" :padded="false">
-      <template #title>订阅管理</template>
+      <template #title>{{ t('billing.subscriptions') }}</template>
       <template #actions>
         <Button v-if="canWrite" size="sm" variant="primary" @click="openGrant">
-          <Plus :size="14" /> 开通 / 续费
+          <Plus :size="14" /> {{ t('billing.grantRenew') }}
         </Button>
       </template>
 
       <div v-if="subsError" class="p-8">
-        <EmptyState title="加载失败" :description="subsError" />
+        <EmptyState :title="t('billing.loadFailed')" :description="subsError" />
       </div>
       <Table
         v-else
@@ -365,7 +367,7 @@ async function doCancel(): Promise<void> {
         :rows="subRows"
         row-key="id"
         :loading="subsLoading"
-        empty="暂无订阅记录"
+        :empty="t('billing.noSubscriptions')"
       >
         <template #cell-planKey="{ row }">
           {{ planTitle(String(row.planKey)) }}
@@ -386,32 +388,32 @@ async function doCancel(): Promise<void> {
             variant="ghost"
             @click="askCancel(asRow(row))"
           >
-            取消
+            {{ t('common.cancel') }}
           </Button>
         </template>
       </Table>
     </Card>
 
     <!-- 开通/续费 Modal -->
-    <Modal v-model:open="showGrant" title="开通 / 续费订阅" width="460px">
+    <Modal v-model:open="showGrant" :title="t('billing.grantModalTitle')" width="460px">
       <div class="space-y-4">
-        <Field label="操作员邮箱" required hint="须为已注册的操作员账号">
+        <Field :label="t('billing.colOperatorEmail')" required :hint="t('billing.operatorEmailHint')">
           <Input v-model="grantEmail" type="email" placeholder="operator@example.com" autofocus />
         </Field>
-        <Field label="套餐" required>
-          <Select v-model="grantPlanKey" :options="planOptions" placeholder="选择套餐档位" />
+        <Field :label="t('billing.plan')" required>
+          <Select v-model="grantPlanKey" :options="planOptions" :placeholder="t('billing.selectPlan')" />
         </Field>
-        <Field label="时长（月）" required hint="1 至 120 个月">
+        <Field :label="t('billing.durationMonths')" required :hint="t('billing.durationHint')">
           <Input v-model="grantMonths" type="number" placeholder="1" />
         </Field>
         <p class="rounded-lg border border-border bg-panel-2/50 px-3 py-2 text-xs leading-relaxed text-muted">
-          若该操作员已有有效订阅，将在现有到期时间基础上顺延对应月数。
+          {{ t('billing.grantNote') }}
         </p>
       </div>
       <template #footer>
-        <Button variant="ghost" :disabled="submitting" @click="showGrant = false">取消</Button>
+        <Button variant="ghost" :disabled="submitting" @click="showGrant = false">{{ t('common.cancel') }}</Button>
         <Button variant="primary" :disabled="!canSubmitGrant" :loading="submitting" @click="submitGrant">
-          确认开通
+          {{ t('billing.confirmGrant') }}
         </Button>
       </template>
     </Modal>
@@ -419,10 +421,10 @@ async function doCancel(): Promise<void> {
     <!-- 取消订阅确认 -->
     <ConfirmDanger
       :open="cancelTarget !== null"
-      title="取消订阅"
+      :title="t('billing.cancelTitle')"
       :confirm-text="cancelTarget?.operatorEmail ?? ''"
-      :message="`将取消 ${cancelTarget?.operatorEmail ?? ''} 的「${planTitle(cancelTarget?.planKey ?? '')}」订阅，该操作员立即失去套餐权益。`"
-      action-label="取消订阅"
+      :message="t('billing.cancelMessage', { email: cancelTarget?.operatorEmail ?? '', plan: planTitle(cancelTarget?.planKey ?? '') })"
+      :action-label="t('billing.cancelAction')"
       :loading="cancelling"
       @update:open="closeCancel"
       @confirm="doCancel"

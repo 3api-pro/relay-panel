@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { ApiError, patch, post } from '../../api/client';
 import { toast } from '../../components/ui/toast';
 import { Button, Field, Input, Modal, Select } from '../../components/ui';
 import type { ChannelProtocol, MarketplaceTemplate, TemplateSource, TemplateWriteBody } from '../../api/types';
+
+const { t } = useI18n();
 
 /**
  * 模板新建 / 编辑（root）。key 仅新建可填（授权记账依赖其稳定，编辑锁定）。
@@ -19,16 +22,16 @@ const emit = defineEmits<{ 'update:open': [boolean]; saved: [] }>();
 
 const isEdit = computed(() => props.template !== null);
 
-const PROTOCOLS: { value: ChannelProtocol; label: string }[] = [
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'openai-responses', label: 'OpenAI Responses' },
-  { value: 'gemini', label: 'Gemini' },
-];
-const SOURCES: { value: TemplateSource; label: string }[] = [
-  { value: 'byo', label: '自带上游（byo）' },
-  { value: 'managed', label: '计量托管（managed）' },
-];
+const PROTOCOLS = computed<{ value: ChannelProtocol; label: string }[]>(() => [
+  { value: 'anthropic', label: t('marketplace.form.protoAnthropic') },
+  { value: 'openai', label: t('marketplace.form.protoOpenai') },
+  { value: 'openai-responses', label: t('marketplace.form.protoOpenaiResponses') },
+  { value: 'gemini', label: t('marketplace.form.protoGemini') },
+]);
+const SOURCES = computed<{ value: TemplateSource; label: string }[]>(() => [
+  { value: 'byo', label: t('marketplace.form.sourceByo') },
+  { value: 'managed', label: t('marketplace.form.sourceManaged') },
+]);
 
 const key = ref('');
 const title = ref('');
@@ -47,16 +50,16 @@ watch(
     if (!open) return;
     errors.value = {};
     submitting.value = false;
-    const t = props.template;
-    if (t) {
-      key.value = t.key;
-      title.value = t.title;
-      description.value = t.description ?? '';
-      protocol.value = (PROTOCOLS.find((p) => p.value === t.protocol)?.value ?? 'anthropic') as ChannelProtocol;
-      source.value = (t.source === 'managed' ? 'managed' : 'byo') as TemplateSource;
-      modelsText.value = t.models.join('\n');
-      ratio.value = t.suggestedRatio != null ? t.suggestedRatio : '';
-      enabled.value = t.enabled;
+    const tpl = props.template;
+    if (tpl) {
+      key.value = tpl.key;
+      title.value = tpl.title;
+      description.value = tpl.description ?? '';
+      protocol.value = (PROTOCOLS.value.find((p) => p.value === tpl.protocol)?.value ?? 'anthropic') as ChannelProtocol;
+      source.value = (tpl.source === 'managed' ? 'managed' : 'byo') as TemplateSource;
+      modelsText.value = tpl.models.join('\n');
+      ratio.value = tpl.suggestedRatio != null ? tpl.suggestedRatio : '';
+      enabled.value = tpl.enabled;
     } else {
       key.value = '';
       title.value = '';
@@ -87,13 +90,13 @@ function validate(models: string[]): boolean {
   const e: typeof errors.value = {};
   if (!isEdit.value) {
     const k = key.value.trim();
-    if (!k) e.key = '请填写模板 key';
-    else if (!/^[a-z0-9][a-z0-9-]*$/.test(k)) e.key = '仅小写字母/数字/连字符，且以字母或数字开头';
-    else if (k.length > 64) e.key = 'key 最长 64 字符';
+    if (!k) e.key = t('marketplace.form.errKey');
+    else if (!/^[a-z0-9][a-z0-9-]*$/.test(k)) e.key = t('marketplace.form.errKeyFormat');
+    else if (k.length > 64) e.key = t('marketplace.form.errKeyLen');
   }
-  if (!title.value.trim()) e.title = '请填写展示标题';
-  if (models.length === 0) e.models = '至少填写一个模型';
-  if (ratio.value !== '' && !(Number(ratio.value) > 0)) e.ratio = '倍率需为正数';
+  if (!title.value.trim()) e.title = t('marketplace.form.errTitle');
+  if (models.length === 0) e.models = t('marketplace.form.errModels');
+  if (ratio.value !== '' && !(Number(ratio.value) > 0)) e.ratio = t('marketplace.form.errRatio');
   errors.value = e;
   return Object.keys(e).length === 0;
 }
@@ -118,18 +121,18 @@ async function submit(): Promise<void> {
   try {
     if (props.template) {
       await patch(`/api/marketplace/templates/${props.template.id}`, { ...base, enabled: enabled.value }, { silent: true });
-      toast.success('模板已更新');
+      toast.success(t('marketplace.toast.templateUpdated'));
     } else {
       await post('/api/marketplace/templates', { ...base, key: key.value.trim(), enabled: enabled.value }, { silent: true });
-      toast.success('模板已创建');
+      toast.success(t('marketplace.toast.templateCreated'));
     }
     emit('saved');
     emit('update:open', false);
   } catch (err) {
     if (err instanceof ApiError && err.status === 409) {
-      errors.value = { ...errors.value, key: '模板 key 已存在' };
+      errors.value = { ...errors.value, key: t('marketplace.form.keyExists') };
     } else {
-      toast.error(err instanceof Error ? err.message : '保存失败');
+      toast.error(err instanceof Error ? err.message : t('marketplace.toast.saveFailed'));
     }
   } finally {
     submitting.value = false;
@@ -140,27 +143,37 @@ async function submit(): Promise<void> {
 <template>
   <Modal
     :open="props.open"
-    :title="isEdit ? '编辑模板' : '新建模板'"
+    :title="isEdit ? t('marketplace.form.titleEdit') : t('marketplace.form.titleCreate')"
     width="560px"
     :closable="!submitting"
     @update:open="close"
   >
     <div class="space-y-4">
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="模板 key" required :error="errors.key" :hint="isEdit ? 'key 不可修改' : '稳定唯一，用于授权记账'">
+        <Field
+          :label="t('marketplace.form.key')"
+          required
+          :error="errors.key"
+          :hint="isEdit ? t('marketplace.form.keyHintEdit') : t('marketplace.form.keyHintCreate')"
+        >
           <Input v-model="key" mono placeholder="my-channel" :disabled="isEdit || submitting" />
         </Field>
-        <Field label="展示标题" required :error="errors.title" hint="对站长可见，勿含上游真名">
-          <Input v-model="title" placeholder="示例渠道" :disabled="submitting" />
+        <Field
+          :label="t('marketplace.form.titleField')"
+          required
+          :error="errors.title"
+          :hint="t('marketplace.form.titleHint')"
+        >
+          <Input v-model="title" :placeholder="t('marketplace.form.titlePlaceholder')" :disabled="submitting" />
         </Field>
       </div>
 
-      <Field label="描述（可选）">
-        <Input v-model="description" placeholder="一句话说明该渠道特性" :disabled="submitting" />
+      <Field :label="t('marketplace.form.description')">
+        <Input v-model="description" :placeholder="t('marketplace.form.descriptionPlaceholder')" :disabled="submitting" />
       </Field>
 
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="协议" required>
+        <Field :label="t('marketplace.form.protocol')" required>
           <Select
             :model-value="protocol"
             :options="PROTOCOLS"
@@ -168,7 +181,7 @@ async function submit(): Promise<void> {
             @update:model-value="(v) => (protocol = v as ChannelProtocol)"
           />
         </Field>
-        <Field label="接入来源" required hint="byo=站长自带；managed=计量网关签发">
+        <Field :label="t('marketplace.form.sourceLabel')" required :hint="t('marketplace.form.sourceHint')">
           <Select
             :model-value="source"
             :options="SOURCES"
@@ -178,7 +191,12 @@ async function submit(): Promise<void> {
         </Field>
       </div>
 
-      <Field label="支持模型" required :error="errors.models" hint="每行一个，或用逗号分隔（对外模型名）">
+      <Field
+        :label="t('marketplace.form.models')"
+        required
+        :error="errors.models"
+        :hint="t('marketplace.form.modelsHint')"
+      >
         <textarea
           v-model="modelsText"
           rows="4"
@@ -189,17 +207,19 @@ async function submit(): Promise<void> {
       </Field>
 
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="建议倍率（可选）" :error="errors.ratio" hint="仅提示，实际由站点分组决定">
+        <Field :label="t('marketplace.form.ratio')" :error="errors.ratio" :hint="t('marketplace.form.ratioHint')">
           <Input v-model="ratio" type="number" placeholder="1.5" :disabled="submitting" />
         </Field>
-        <Field v-if="isEdit" label="启用状态">
+        <Field v-if="isEdit" :label="t('marketplace.form.enabledStatus')">
           <button
             type="button"
             class="flex h-8.5 w-full items-center justify-between rounded-lg border border-border bg-bg/60 px-3 text-[13px] transition-colors hover:border-border-2 disabled:pointer-events-none disabled:opacity-45"
             :disabled="submitting"
             @click="enabled = !enabled"
           >
-            <span :class="enabled ? 'text-text' : 'text-muted'">{{ enabled ? '已启用' : '已停用' }}</span>
+            <span :class="enabled ? 'text-text' : 'text-muted'">
+              {{ enabled ? t('marketplace.form.enabledOn') : t('marketplace.form.enabledOff') }}
+            </span>
             <span
               class="relative h-4 w-7 rounded-full transition-colors"
               :class="enabled ? 'bg-accent' : 'bg-panel-2'"
@@ -215,9 +235,9 @@ async function submit(): Promise<void> {
     </div>
 
     <template #footer>
-      <Button variant="ghost" :disabled="submitting" @click="close">取消</Button>
+      <Button variant="ghost" :disabled="submitting" @click="close">{{ t('common.cancel') }}</Button>
       <Button variant="primary" :loading="submitting" @click="submit">
-        {{ isEdit ? '保存修改' : '创建模板' }}
+        {{ isEdit ? t('marketplace.form.saveEdit') : t('marketplace.form.saveCreate') }}
       </Button>
     </template>
   </Modal>

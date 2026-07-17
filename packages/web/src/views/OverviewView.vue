@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { Activity, ArrowRight, CircleDollarSign, HeartPulse, Server } from 'lucide-vue-next';
 import { get } from '../api/client';
 import type { AlertsResponse, AlertView, SitesResponse, SiteView } from '../api/types';
@@ -11,11 +12,11 @@ import StatCard from '../components/ui/StatCard.vue';
 import StatusDot from '../components/ui/StatusDot.vue';
 
 /**
- * 总览：4 统计卡 + open 告警条 + 站点卡网格。
- * 数据源 GET /api/sites 与 GET /api/alerts?status=open；
- * 告警接口未就绪（501）时静默隐藏该区块。30s 轻量自刷新。
+ * 总览：4 统计卡 + open 告警条 + 站点卡网格。玻璃化 + i18n 样板视图。
+ * 数据源 GET /api/sites 与 GET /api/alerts?status=open；告警 501 时静默隐藏。
  */
 const router = useRouter();
+const { t } = useI18n();
 
 const sites = ref<SiteView[]>([]);
 const alerts = ref<AlertView[]>([]);
@@ -31,13 +32,13 @@ async function refresh(initial = false): Promise<void> {
     sites.value = res.sites;
     loadError.value = '';
   } catch (err) {
-    if (initial) loadError.value = err instanceof Error ? err.message : '加载失败';
+    if (initial) loadError.value = err instanceof Error ? err.message : t('overview.loadFailed');
   }
   try {
     const res = await get<AlertsResponse>('/api/alerts', { silent: true, query: { status: 'open' } });
     alerts.value = Array.isArray(res?.alerts) ? res.alerts : [];
   } catch {
-    alerts.value = []; // 告警模块未就绪时隐藏区块
+    alerts.value = [];
   }
   loading.value = false;
 }
@@ -55,11 +56,11 @@ const visibleSites = computed(() => sites.value.filter((s) => s.status !== 'dest
 
 const healthStat = computed(() => {
   const probed = visibleSites.value.filter((s) => s.ok !== undefined);
-  if (probed.length === 0) return { value: '—', hint: '暂无探测数据', tone: 'default' as const };
+  if (probed.length === 0) return { value: '—', hint: t('overview.healthyNoData'), tone: 'default' as const };
   const up = probed.filter((s) => s.ok === true).length;
   return {
     value: `${up}/${probed.length}`,
-    hint: up === probed.length ? '全部在线' : `${probed.length - up} 个站点异常`,
+    hint: up === probed.length ? t('overview.healthyAll') : t('overview.healthyDown', { n: probed.length - up }),
     tone: up === probed.length ? ('green' as const) : ('red' as const),
   };
 });
@@ -95,20 +96,20 @@ function severityTone(sev: string): 'red' | 'amber' | 'accent' {
   return 'accent';
 }
 function severityText(sev: string): string {
-  if (sev === 'critical') return '严重';
-  if (sev === 'warning') return '警告';
-  return '提示';
+  if (sev === 'critical') return t('overview.severity.critical');
+  if (sev === 'warning') return t('overview.severity.warning');
+  return t('overview.severity.info');
 }
 function relTime(iso: string): string {
-  const t = new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`).getTime();
-  if (Number.isNaN(t)) return iso;
-  const diff = Date.now() - t;
+  const time = new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`).getTime();
+  if (Number.isNaN(time)) return iso;
+  const diff = Date.now() - time;
   const min = Math.floor(diff / 60_000);
-  if (min < 1) return '刚刚';
-  if (min < 60) return `${min} 分钟前`;
+  if (min < 1) return t('overview.relTime.justNow');
+  if (min < 60) return t('overview.relTime.minAgo', { n: min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h} 小时前`;
-  return `${Math.floor(h / 24)} 天前`;
+  if (h < 24) return t('overview.relTime.hourAgo', { n: h });
+  return t('overview.relTime.dayAgo', { n: Math.floor(h / 24) });
 }
 
 // ---- 站点卡 ----
@@ -120,14 +121,8 @@ function openSite(s: SiteView): void {
   void router.push(`/sites/${s.slug}`);
 }
 function jobKindText(kind: string): string {
-  const map: Record<string, string> = {
-    provision: '开站',
-    upgrade: '升级',
-    start: '启动',
-    stop: '停止',
-    destroy: '销毁',
-  };
-  return map[kind] ?? kind;
+  const known = ['provision', 'upgrade', 'start', 'stop', 'destroy'];
+  return known.includes(kind) ? t(`overview.jobKind.${kind}`) : kind;
 }
 </script>
 
@@ -135,9 +130,15 @@ function jobKindText(kind: string): string {
   <div class="space-y-5">
     <!-- 统计卡 -->
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <StatCard label="站点总数" :value="loading ? '' : visibleSites.length" :loading="loading" :icon="Server" hint="不含已销毁" />
       <StatCard
-        label="健康站点"
+        :label="t('overview.statSites')"
+        :value="loading ? '' : visibleSites.length"
+        :loading="loading"
+        :icon="Server"
+        :hint="t('overview.statSitesHint')"
+      />
+      <StatCard
+        :label="t('overview.statHealthy')"
         :value="loading ? '' : healthStat.value"
         :loading="loading"
         :tone="healthStat.tone"
@@ -145,34 +146,34 @@ function jobKindText(kind: string): string {
         :hint="healthStat.hint"
       />
       <StatCard
-        label="24h 请求"
+        :label="t('overview.stat24hReq')"
         :value="loading ? '' : usageStat.has ? fmtInt(usageStat.requests) : '—'"
         :loading="loading"
         :icon="Activity"
-        hint="全部站点合计"
+        :hint="t('overview.statAllSites')"
       />
       <StatCard
-        label="24h 成本"
+        :label="t('overview.stat24hCost')"
         :value="loading ? '' : usageStat.has ? fmtCost(usageStat.cost, usageStat.unit) : '—'"
         :loading="loading"
         :icon="CircleDollarSign"
-        hint="全部站点合计"
+        :hint="t('overview.statAllSites')"
       />
     </div>
 
     <!-- open 告警条 -->
     <section v-if="alerts.length > 0" class="rp-panel overflow-hidden">
-      <header class="flex items-center justify-between border-b border-border px-4 py-2.5">
-        <p class="rp-microlabel">未解决告警 · {{ alerts.length }}</p>
+      <header class="flex items-center justify-between border-b border-[var(--glass-border)] px-4 py-2.5">
+        <p class="rp-microlabel">{{ t('overview.openAlerts', { n: alerts.length }) }}</p>
         <RouterLink to="/alerts" class="flex items-center gap-1 text-xs text-accent transition-opacity hover:opacity-80">
-          全部告警 <ArrowRight :size="12" />
+          {{ t('overview.allAlerts') }} <ArrowRight :size="12" />
         </RouterLink>
       </header>
       <ul>
         <li
           v-for="a in alerts.slice(0, 5)"
           :key="a.id"
-          class="flex items-center gap-3 border-b border-border/60 px-4 py-2.5 last:border-0"
+          class="flex items-center gap-3 border-b border-[var(--glass-border)]/60 px-4 py-2.5 last:border-0"
         >
           <Badge :tone="severityTone(a.severity)" size="sm">{{ severityText(a.severity) }}</Badge>
           <p class="min-w-0 flex-1 truncate text-[13px]">
@@ -188,9 +189,9 @@ function jobKindText(kind: string): string {
     <!-- 站点卡网格 -->
     <section>
       <div class="mb-3 flex items-center justify-between">
-        <p class="rp-microlabel">站点</p>
+        <p class="rp-microlabel">{{ t('overview.sitesSection') }}</p>
         <RouterLink to="/sites" class="flex items-center gap-1 text-xs text-accent transition-opacity hover:opacity-80">
-          站点管理 <ArrowRight :size="12" />
+          {{ t('overview.siteManage') }} <ArrowRight :size="12" />
         </RouterLink>
       </div>
 
@@ -201,11 +202,11 @@ function jobKindText(kind: string): string {
       </div>
 
       <div v-else-if="loadError" class="rp-panel p-8">
-        <EmptyState title="加载失败" :description="loadError" />
+        <EmptyState :title="t('overview.loadFailed')" :description="loadError" />
       </div>
 
       <div v-else-if="visibleSites.length === 0" class="rp-panel p-8">
-        <EmptyState title="还没有站点" description="到「站点」页新建第一个站点，或用 CLI 接管存量站。" />
+        <EmptyState :title="t('overview.noSites')" :description="t('overview.noSitesDesc')" />
       </div>
 
       <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -225,25 +226,25 @@ function jobKindText(kind: string): string {
             </div>
             <div class="flex shrink-0 flex-col items-end gap-1">
               <Badge tone="muted" size="sm" mono>{{ s.engine }} · {{ s.version }}</Badge>
-              <Badge v-if="s.managed === 'external'" tone="amber" size="sm">外部接管</Badge>
+              <Badge v-if="s.managed === 'external'" tone="amber" size="sm">{{ t('overview.externalManaged') }}</Badge>
             </div>
           </div>
 
-          <div class="mt-3 grid grid-cols-3 gap-2 border-t border-border/60 pt-3">
+          <div class="mt-3 grid grid-cols-3 gap-2 border-t border-[var(--glass-border)]/70 pt-3">
             <div>
-              <p class="text-[10.5px] text-muted/80">延迟</p>
+              <p class="text-[10.5px] text-muted/80">{{ t('overview.latency') }}</p>
               <p class="tnum text-[13px] font-medium">
                 {{ s.latencyMs !== undefined ? `${s.latencyMs}ms` : '—' }}
               </p>
             </div>
             <div>
-              <p class="text-[10.5px] text-muted/80">24h 请求</p>
+              <p class="text-[10.5px] text-muted/80">{{ t('overview.req24h') }}</p>
               <p class="tnum text-[13px] font-medium">
                 {{ s.usage24h?.requests !== undefined ? fmtInt(s.usage24h.requests) : '—' }}
               </p>
             </div>
             <div>
-              <p class="text-[10.5px] text-muted/80">24h 成本</p>
+              <p class="text-[10.5px] text-muted/80">{{ t('overview.cost24h') }}</p>
               <p class="tnum text-[13px] font-medium">
                 {{ s.usage24h?.cost !== undefined ? fmtCost(s.usage24h.cost, s.usage24h.costUnit ?? '') : '—' }}
               </p>
@@ -252,10 +253,14 @@ function jobKindText(kind: string): string {
 
           <div
             v-if="s.activeJob || s.error"
-            class="mt-2.5 flex items-center gap-2 border-t border-border/60 pt-2.5"
+            class="mt-2.5 flex items-center gap-2 border-t border-[var(--glass-border)]/70 pt-2.5"
           >
             <Badge v-if="s.activeJob" tone="accent" size="sm">
-              {{ jobKindText(s.activeJob.kind) }}任务 · {{ s.activeJob.status === 'running' ? '执行中' : '排队中' }}
+              {{
+                s.activeJob.status === 'running'
+                  ? t('overview.jobRunning', { kind: jobKindText(s.activeJob.kind) })
+                  : t('overview.jobQueued', { kind: jobKindText(s.activeJob.kind) })
+              }}
             </Badge>
             <p v-if="s.error" class="min-w-0 flex-1 truncate text-xs text-red/90">{{ s.error }}</p>
           </div>

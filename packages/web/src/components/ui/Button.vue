@@ -47,7 +47,11 @@ const cls = computed(() => {
       base.push('text-muted hover:bg-panel-2 hover:text-text');
       break;
     default:
-      base.push('border border-border bg-panel-2/60 text-text', 'hover:border-border-2 hover:bg-panel-2');
+      base.push(
+        'border border-[var(--glass-border)] bg-panel-2/50 text-text',
+        'shadow-[inset_0_1px_0_var(--glass-highlight)] backdrop-blur-sm',
+        'hover:border-[var(--glass-border-hover)] hover:bg-panel-2/80',
+      );
   }
   return base.join(' ');
 });

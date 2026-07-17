@@ -1,0 +1,42 @@
+{
+  "statSites": "サイト総数",
+  "statSitesHint": "破棄済みを除く",
+  "statHealthy": "正常なサイト",
+  "healthyAll": "すべてオンライン",
+  "healthyDown": "{n} 件のサイトに異常",
+  "healthyNoData": "監視データがありません",
+  "stat24hReq": "24h リクエスト",
+  "stat24hCost": "24h コスト",
+  "statAllSites": "全サイト合計",
+  "openAlerts": "未解決のアラート · {n}",
+  "allAlerts": "すべてのアラート",
+  "sitesSection": "サイト",
+  "siteManage": "サイト管理",
+  "latency": "レイテンシ",
+  "req24h": "24h リクエスト",
+  "cost24h": "24h コスト",
+  "loadFailed": "読み込みに失敗しました",
+  "noSites": "サイトがまだありません",
+  "noSitesDesc": "「サイト」ページで最初のサイトを作成するか、CLI で既存サイトを取り込みます。",
+  "externalManaged": "外部管理",
+  "jobRunning": "{kind} · 実行中",
+  "jobQueued": "{kind} · 待機中",
+  "severity": {
+    "critical": "重大",
+    "warning": "警告",
+    "info": "情報"
+  },
+  "jobKind": {
+    "provision": "構築",
+    "upgrade": "アップグレード",
+    "start": "起動",
+    "stop": "停止",
+    "destroy": "破棄"
+  },
+  "relTime": {
+    "justNow": "たった今",
+    "minAgo": "{n} 分前",
+    "hourAgo": "{n} 時間前",
+    "dayAgo": "{n} 日前"
+  }
+}

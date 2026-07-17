@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, ref, type ComputedRef } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { Plus, Store } from 'lucide-vue-next';
 import { del, get, patch } from '../api/client';
 import { session } from '../api/session';
@@ -33,13 +34,14 @@ import TemplateFormModal from './marketplace/TemplateFormModal.vue';
  * - 模板 Tab：模板卡网格；canWrite 一键启用向导；root 可管理（增改停删）。
  * - 已授权 Tab：授权表 + 撤销（站不可达时可 force 仅改状态）。
  */
+const { t } = useI18n();
 const canWrite = inject<ComputedRef<boolean>>('canWrite', computed(() => false));
 const isRoot = session.isRoot;
 
 const tab = ref<'templates' | 'grants'>('templates');
 const tabItems = computed<TabItem[]>(() => [
-  { key: 'templates', label: '模板', count: templates.value.length },
-  { key: 'grants', label: '已授权', count: grants.value.length },
+  { key: 'templates', label: t('marketplace.tabTemplates'), count: templates.value.length },
+  { key: 'grants', label: t('marketplace.tabGrants'), count: grants.value.length },
 ]);
 
 // ---- 数据源 ----
@@ -74,7 +76,7 @@ async function loadTemplates(): Promise<void> {
     templates.value = res.templates;
     templatesError.value = '';
   } catch (err) {
-    templatesError.value = err instanceof Error ? err.message : '加载失败';
+    templatesError.value = err instanceof Error ? err.message : t('marketplace.loadFailed');
   } finally {
     templatesLoading.value = false;
   }
@@ -90,7 +92,7 @@ async function loadGrants(): Promise<void> {
     grants.value = res.grants;
     grantsError.value = '';
   } catch (err) {
-    grantsError.value = err instanceof Error ? err.message : '加载失败';
+    grantsError.value = err instanceof Error ? err.message : t('marketplace.loadFailed');
   } finally {
     grantsLoading.value = false;
   }
@@ -108,7 +110,7 @@ function toggleShowDisabled(): void {
 }
 
 const grantSiteOptions = computed(() => [
-  { value: '__all__', label: '全部站点' },
+  { value: '__all__', label: t('marketplace.allSites') },
   ...sites.value.filter((s) => s.status !== 'destroyed').map((s) => ({ value: s.slug, label: s.label })),
 ]);
 
@@ -147,13 +149,13 @@ function onTemplateSaved(): void {
   void loadTemplates();
 }
 
-async function toggleTemplate(t: MarketplaceTemplate): Promise<void> {
+async function toggleTemplate(tpl: MarketplaceTemplate): Promise<void> {
   try {
-    await patch(`/api/marketplace/templates/${t.id}`, { enabled: !t.enabled }, { silent: true });
-    toast.success(t.enabled ? '模板已停用' : '模板已启用');
+    await patch(`/api/marketplace/templates/${tpl.id}`, { enabled: !tpl.enabled }, { silent: true });
+    toast.success(tpl.enabled ? t('marketplace.toast.templateDisabled') : t('marketplace.toast.templateEnabled'));
     await loadTemplates();
   } catch (err) {
-    toast.error(err instanceof Error ? err.message : '操作失败');
+    toast.error(err instanceof Error ? err.message : t('marketplace.toast.toggleFailed'));
   }
 }
 
@@ -167,17 +169,17 @@ function askDelete(t: MarketplaceTemplate): void {
   delOpen.value = true;
 }
 async function confirmDelete(): Promise<void> {
-  const t = delTarget.value;
-  if (!t) return;
+  const tpl = delTarget.value;
+  if (!tpl) return;
   delLoading.value = true;
   try {
-    await del(`/api/marketplace/templates/${t.id}`, undefined, { silent: true });
-    toast.success('模板已删除');
+    await del(`/api/marketplace/templates/${tpl.id}`, undefined, { silent: true });
+    toast.success(t('marketplace.toast.templateDeleted'));
     delOpen.value = false;
     delTarget.value = null;
     await loadTemplates();
   } catch (err) {
-    toast.error(err instanceof Error ? err.message : '删除失败');
+    toast.error(err instanceof Error ? err.message : t('marketplace.toast.deleteFailed'));
     delOpen.value = false;
     delTarget.value = null;
   } finally {
@@ -186,16 +188,16 @@ async function confirmDelete(): Promise<void> {
 }
 
 // ---- 撤销授权 ----
-const grantColumns: TableColumn[] = [
-  { key: 'site', label: '站点' },
-  { key: 'template', label: '模板' },
-  { key: 'channelName', label: '渠道名' },
-  { key: 'source', label: '来源' },
-  { key: 'status', label: '状态' },
-  { key: 'createdAt', label: '创建时间' },
-  { key: 'createdBy', label: '创建者' },
-  { key: 'actions', label: '操作', align: 'right' },
-];
+const grantColumns = computed<TableColumn[]>(() => [
+  { key: 'site', label: t('marketplace.col.site') },
+  { key: 'template', label: t('marketplace.col.template') },
+  { key: 'channelName', label: t('marketplace.col.channelName') },
+  { key: 'source', label: t('marketplace.col.source') },
+  { key: 'status', label: t('marketplace.col.status') },
+  { key: 'createdAt', label: t('marketplace.col.createdAt') },
+  { key: 'createdBy', label: t('marketplace.col.createdBy') },
+  { key: 'actions', label: t('common.actions'), align: 'right' },
+]);
 const grantRows = computed(() => grants.value as unknown as Record<string, unknown>[]);
 
 const revokeOpen = ref(false);
@@ -204,11 +206,12 @@ const revokeLoading = ref(false);
 const revokeForce = ref(false);
 
 const revokeConfirmText = computed(() => revokeTarget.value?.channelName ?? revokeTarget.value?.templateKey ?? '');
-const revokeMessage = computed(() =>
-  revokeForce.value
-    ? '站点渠道删除失败或站点不可达。强制撤销将仅把授权标记为已撤销，站内残留渠道需自行清理。'
-    : `撤销后将从站点删除对应渠道${revokeTarget.value?.managed ? '并吊销计量凭据' : ''}。`,
-);
+const revokeMessage = computed(() => {
+  if (revokeForce.value) return t('marketplace.revokeDialog.messageForce');
+  return revokeTarget.value?.managed
+    ? t('marketplace.revokeDialog.messageManaged')
+    : t('marketplace.revokeDialog.message');
+});
 
 function askRevoke(row: Record<string, unknown>): void {
   revokeTarget.value = row as unknown as MarketplaceGrant;
@@ -225,7 +228,7 @@ async function confirmRevoke(): Promise<void> {
       silent: true,
       query: revokeForce.value ? { force: 1 } : {},
     });
-    toast.success('授权已撤销');
+    toast.success(t('marketplace.toast.grantRevoked'));
     revokeOpen.value = false;
     revokeTarget.value = null;
     await loadGrants();
@@ -235,7 +238,7 @@ async function confirmRevoke(): Promise<void> {
       revokeForce.value = true;
       toast.error(err.message);
     } else {
-      toast.error(err instanceof Error ? err.message : '撤销失败');
+      toast.error(err instanceof Error ? err.message : t('marketplace.toast.revokeFailed'));
       revokeOpen.value = false;
       revokeTarget.value = null;
     }
@@ -246,18 +249,20 @@ async function confirmRevoke(): Promise<void> {
 
 // ---- 展示辅助 ----
 function sourceMeta(source: string): { text: string; tone: 'accent' | 'default' } {
-  return source === 'managed' ? { text: '计量托管', tone: 'accent' } : { text: '自带上游', tone: 'default' };
+  return source === 'managed'
+    ? { text: t('marketplace.source.managed'), tone: 'accent' }
+    : { text: t('marketplace.source.byo'), tone: 'default' };
 }
 function relTime(iso: string): string {
-  const t = new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`).getTime();
-  if (Number.isNaN(t)) return iso;
-  const diff = Date.now() - t;
+  const time = new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`).getTime();
+  if (Number.isNaN(time)) return iso;
+  const diff = Date.now() - time;
   const min = Math.floor(diff / 60_000);
-  if (min < 1) return '刚刚';
-  if (min < 60) return `${min} 分钟前`;
+  if (min < 1) return t('marketplace.relTime.justNow');
+  if (min < 60) return t('marketplace.relTime.minAgo', { n: min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h} 小时前`;
-  return `${Math.floor(h / 24)} 天前`;
+  if (h < 24) return t('marketplace.relTime.hourAgo', { n: h });
+  return t('marketplace.relTime.dayAgo', { n: Math.floor(h / 24) });
 }
 </script>
 
@@ -268,7 +273,7 @@ function relTime(iso: string): string {
     <!-- ===================== 模板 Tab ===================== -->
     <section v-if="tab === 'templates'" class="space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <p class="rp-microlabel">渠道模板</p>
+        <p class="rp-microlabel">{{ t('marketplace.sectionTemplates') }}</p>
         <div class="flex items-center gap-2">
           <button
             v-if="isRoot"
@@ -285,10 +290,10 @@ function relTime(iso: string): string {
                 :class="showDisabled ? 'left-3.5' : 'left-0.5'"
               />
             </span>
-            显示停用
+            {{ t('marketplace.showDisabled') }}
           </button>
           <Button v-if="isRoot" variant="primary" size="sm" @click="openCreate">
-            <Plus :size="14" />新建模板
+            <Plus :size="14" />{{ t('marketplace.newTemplate') }}
           </Button>
         </div>
       </div>
@@ -300,18 +305,18 @@ function relTime(iso: string): string {
 
       <!-- error -->
       <div v-else-if="templatesError" class="rp-panel p-8">
-        <EmptyState title="加载失败" :description="templatesError" />
+        <EmptyState :title="t('marketplace.loadFailed')" :description="templatesError" />
       </div>
 
       <!-- empty -->
       <div v-else-if="templates.length === 0" class="rp-panel p-8">
         <EmptyState
           :icon="Store"
-          title="还没有渠道模板"
-          :description="isRoot ? '点击「新建模板」创建第一个渠道模板，或用 CLI 批量导入。' : '暂无可用模板，请联系管理员配置。'"
+          :title="t('marketplace.emptyTemplatesTitle')"
+          :description="isRoot ? t('marketplace.emptyTemplatesRoot') : t('marketplace.emptyTemplatesUser')"
         >
           <Button v-if="isRoot" variant="primary" size="sm" @click="openCreate">
-            <Plus :size="14" />新建模板
+            <Plus :size="14" />{{ t('marketplace.newTemplate') }}
           </Button>
         </EmptyState>
       </div>
@@ -335,7 +340,7 @@ function relTime(iso: string): string {
     <!-- ===================== 已授权 Tab ===================== -->
     <section v-else class="space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <p class="rp-microlabel">已授权渠道</p>
+        <p class="rp-microlabel">{{ t('marketplace.sectionGrants') }}</p>
         <div class="w-56">
           <Select
             :model-value="grantFilterSlug"
@@ -346,7 +351,7 @@ function relTime(iso: string): string {
       </div>
 
       <div v-if="grantsError" class="rp-panel p-8">
-        <EmptyState title="加载失败" :description="grantsError" />
+        <EmptyState :title="t('marketplace.loadFailed')" :description="grantsError" />
       </div>
 
       <div v-else class="rp-panel overflow-hidden">
@@ -355,7 +360,7 @@ function relTime(iso: string): string {
           :rows="grantRows"
           row-key="id"
           :loading="grantsLoading"
-          empty="暂无授权记录"
+          :empty="t('marketplace.emptyGrants')"
         >
           <template #cell-site="{ row }">
             <div class="min-w-0">
@@ -377,7 +382,7 @@ function relTime(iso: string): string {
           </template>
           <template #cell-status="{ value }">
             <Badge :tone="value === 'active' ? 'green' : 'muted'" size="sm">
-              {{ value === 'active' ? '生效中' : '已撤销' }}
+              {{ value === 'active' ? t('marketplace.grantStatus.active') : t('marketplace.grantStatus.revoked') }}
             </Badge>
           </template>
           <template #cell-createdAt="{ value }">
@@ -393,7 +398,7 @@ function relTime(iso: string): string {
               size="sm"
               @click="askRevoke(row)"
             >
-              撤销
+              {{ t('marketplace.revoke') }}
             </Button>
             <span v-else class="text-muted/50">—</span>
           </template>
@@ -408,20 +413,20 @@ function relTime(iso: string): string {
 
     <ConfirmDanger
       v-model:open="delOpen"
-      title="删除模板"
+      :title="t('marketplace.delDialog.title')"
       :confirm-text="delTarget?.key ?? ''"
-      message="删除后模板不可恢复。若模板已有授权记录将无法删除（可改为停用）。"
-      action-label="确认删除"
+      :message="t('marketplace.delDialog.message')"
+      :action-label="t('marketplace.delDialog.action')"
       :loading="delLoading"
       @confirm="confirmDelete"
     />
 
     <ConfirmDanger
       v-model:open="revokeOpen"
-      :title="revokeForce ? '强制撤销授权' : '撤销授权'"
+      :title="revokeForce ? t('marketplace.revokeDialog.titleForce') : t('marketplace.revokeDialog.title')"
       :confirm-text="revokeConfirmText"
       :message="revokeMessage"
-      :action-label="revokeForce ? '强制撤销记录' : '撤销授权'"
+      :action-label="revokeForce ? t('marketplace.revokeDialog.actionForce') : t('marketplace.revokeDialog.action')"
       :loading="revokeLoading"
       @confirm="confirmRevoke"
     />

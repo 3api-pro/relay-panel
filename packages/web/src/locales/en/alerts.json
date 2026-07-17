@@ -1,0 +1,43 @@
+{
+  "refreshing": "Refreshing",
+  "notifySettings": "Notifications",
+  "colSeverity": "Severity",
+  "colKind": "Kind",
+  "colAlert": "Alert",
+  "colSite": "Site",
+  "colRecent": "Recent",
+  "resolve": "Resolve",
+  "firstSeen": "First seen {time}",
+  "resolvedToast": "Alert marked as resolved",
+  "loadFailed": "Failed to load",
+  "emptyResolvedTitle": "No resolved alerts",
+  "emptyOkTitle": "No alerts, all clear",
+  "emptyOpenDesc": "All sites are running normally; issues will be summarized here when they arise.",
+  "emptyResolvedDesc": "No alerts have been marked as resolved yet.",
+  "emptyAllDesc": "There are no alert records at the moment.",
+  "settingsTitle": "Alert notification settings",
+  "settingsDesc": "Once configured, new critical / warning alerts are pushed to this webhook. Leave empty and save to disable push.",
+  "webhookLabel": "Webhook URL",
+  "webhookHint": "Supports http(s):// URLs such as WeCom / Feishu / Slack bots. Empty = disabled.",
+  "webhookInvalid": "Only addresses starting with http:// or https:// are supported",
+  "webhookSaved": "Notification webhook saved",
+  "pushDisabled": "Alert push disabled",
+  "settingsLoadFailed": "Failed to load notification settings",
+  "severity": {
+    "critical": "Critical",
+    "warning": "Warning",
+    "info": "Info"
+  },
+  "kind": {
+    "site_down": "Site unreachable",
+    "channel_disabled": "Channel disabled",
+    "low_balance": "Low upstream balance",
+    "job_failed": "Job failed"
+  },
+  "relTime": {
+    "justNow": "just now",
+    "minAgo": "{n}m ago",
+    "hourAgo": "{n}h ago",
+    "dayAgo": "{n}d ago"
+  }
+}

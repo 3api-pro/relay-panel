@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, onMounted, ref, type ComputedRef } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { ArrowLeft, ArrowUpCircle, Play, Square, Trash2 } from 'lucide-vue-next';
 import { del, get, post } from '../api/client';
 import type { SiteView } from '../api/types';
@@ -33,6 +34,7 @@ import AuditTab from './site-detail/AuditTab.vue';
  */
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const slug = computed(() => String(route.params.slug ?? ''));
 const canWrite = inject<ComputedRef<boolean>>('canWrite', computed(() => false));
 
@@ -47,7 +49,7 @@ async function loadSite(initial = false): Promise<void> {
     site.value = s;
     loadError.value = '';
   } catch (err) {
-    if (initial || !site.value) loadError.value = err instanceof Error ? err.message : '加载失败';
+    if (initial || !site.value) loadError.value = err instanceof Error ? err.message : t('siteDetail.loadFailed');
   } finally {
     if (initial) loading.value = false;
   }
@@ -81,13 +83,13 @@ const canDestroy = computed(() => site.value !== null && site.value.status !== '
 // ---- Tabs ----
 const tabKey = ref('overview');
 const tabs = computed<TabItem[]>(() => [
-  { key: 'overview', label: '概览' },
-  { key: 'channels', label: '渠道' },
-  { key: 'users', label: '用户' },
-  { key: 'domains', label: '域名', count: site.value?.domains?.length },
-  { key: 'settings', label: '设置' },
-  { key: 'jobs', label: '任务' },
-  { key: 'audit', label: '审计' },
+  { key: 'overview', label: t('siteDetail.tabs.overview') },
+  { key: 'channels', label: t('siteDetail.tabs.channels') },
+  { key: 'users', label: t('siteDetail.tabs.users') },
+  { key: 'domains', label: t('siteDetail.tabs.domains'), count: site.value?.domains?.length },
+  { key: 'settings', label: t('siteDetail.tabs.settings') },
+  { key: 'jobs', label: t('siteDetail.tabs.jobs') },
+  { key: 'audit', label: t('siteDetail.tabs.audit') },
 ]);
 
 // ---- 升级 ----
@@ -101,13 +103,13 @@ function openUpgrade(): void {
 async function doUpgrade(): Promise<void> {
   const v = upgradeVersion.value.trim();
   if (!v) {
-    toast.error('请填写目标版本');
+    toast.error(t('siteDetail.upgrade.toastNeedVersion'));
     return;
   }
   upgradeLoading.value = true;
   try {
     await post(`/api/sites/${slug.value}/upgrade`, { toVersion: v });
-    toast.success('升级任务已提交');
+    toast.success(t('siteDetail.upgrade.toastSubmitted'));
     upgradeOpen.value = false;
     await loadSite();
   } catch {
@@ -123,7 +125,7 @@ async function doPower(action: 'start' | 'stop'): Promise<void> {
   powerLoading.value = true;
   try {
     await post(`/api/sites/${slug.value}/${action}`);
-    toast.success(action === 'start' ? '启动任务已提交' : '停止任务已提交');
+    toast.success(action === 'start' ? t('siteDetail.power.startSubmitted') : t('siteDetail.power.stopSubmitted'));
     await loadSite();
   } catch {
     /* toast 已弹 */
@@ -139,7 +141,7 @@ async function doDestroy(): Promise<void> {
   destroyLoading.value = true;
   try {
     await del(`/api/sites/${slug.value}`, { confirm: slug.value });
-    toast.success('销毁任务已提交');
+    toast.success(t('siteDetail.destroy.toastSubmitted'));
     destroyOpen.value = false;
     await router.push('/sites');
   } catch {
@@ -153,7 +155,7 @@ async function doDestroy(): Promise<void> {
 <template>
   <div class="rp-page space-y-5">
     <RouterLink to="/sites" class="inline-flex items-center gap-1 text-xs text-muted transition-colors hover:text-text">
-      <ArrowLeft :size="13" /> 返回站点列表
+      <ArrowLeft :size="13" /> {{ t('siteDetail.header.back') }}
     </RouterLink>
 
     <!-- 头部骨架 -->
@@ -163,8 +165,8 @@ async function doDestroy(): Promise<void> {
 
     <!-- 加载失败（无缓存） -->
     <div v-else-if="loadError && !site" class="rp-panel p-10">
-      <EmptyState title="站点加载失败" :description="loadError">
-        <Button size="sm" @click="loadSite(true)">重试</Button>
+      <EmptyState :title="t('siteDetail.header.loadFailedTitle')" :description="loadError">
+        <Button size="sm" @click="loadSite(true)">{{ t('common.retry') }}</Button>
       </EmptyState>
     </div>
 
@@ -177,12 +179,12 @@ async function doDestroy(): Promise<void> {
               <StatusDot :status="siteStatus" />
               <h1 class="truncate text-lg font-semibold tracking-tight">{{ site.label }}</h1>
               <Badge tone="muted" size="sm" mono>{{ site.engine }} · {{ site.version }}</Badge>
-              <Badge v-if="isExternal" tone="amber" size="sm">外部接管</Badge>
+              <Badge v-if="isExternal" tone="amber" size="sm">{{ t('siteDetail.header.external') }}</Badge>
             </div>
             <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
               <span class="font-mono">{{ site.slug }}</span>
-              <span class="tnum">端口 {{ site.hostPort }}</span>
-              <span v-if="site.latencyMs !== undefined" class="tnum">延迟 {{ site.latencyMs }}ms</span>
+              <span class="tnum">{{ t('siteDetail.header.port', { n: site.hostPort }) }}</span>
+              <span v-if="site.latencyMs !== undefined" class="tnum">{{ t('siteDetail.header.latency', { n: site.latencyMs }) }}</span>
               <span v-if="site.domains && site.domains.length > 0" class="truncate font-mono">
                 {{ site.domains.join('、') }}
               </span>
@@ -193,19 +195,23 @@ async function doDestroy(): Promise<void> {
           <!-- 生命周期操作 -->
           <div v-if="canLifecycle" class="flex shrink-0 items-center gap-2">
             <Badge v-if="busy && site.activeJob" tone="accent" size="sm">
-              {{ jobKindText(site.activeJob.kind) }}任务{{ site.activeJob.status === 'running' ? '执行中' : '排队中' }}
+              {{
+                site.activeJob.status === 'running'
+                  ? t('siteDetail.header.jobRunning', { kind: jobKindText(site.activeJob.kind) })
+                  : t('siteDetail.header.jobQueued', { kind: jobKindText(site.activeJob.kind) })
+              }}
             </Badge>
             <Button v-if="canStart" size="sm" :disabled="busy" :loading="powerLoading" @click="doPower('start')">
-              <Play :size="14" /> 启动
+              <Play :size="14" /> {{ t('siteDetail.header.start') }}
             </Button>
             <Button v-if="canStop" size="sm" :disabled="busy" :loading="powerLoading" @click="doPower('stop')">
-              <Square :size="14" /> 停止
+              <Square :size="14" /> {{ t('siteDetail.header.stop') }}
             </Button>
             <Button size="sm" :disabled="busy" @click="openUpgrade">
-              <ArrowUpCircle :size="14" /> 升级
+              <ArrowUpCircle :size="14" /> {{ t('siteDetail.header.upgrade') }}
             </Button>
             <Button v-if="canDestroy" size="sm" variant="danger" :disabled="busy" @click="destroyOpen = true">
-              <Trash2 :size="14" /> 销毁
+              <Trash2 :size="14" /> {{ t('siteDetail.header.destroy') }}
             </Button>
           </div>
         </div>
@@ -227,28 +233,28 @@ async function doDestroy(): Promise<void> {
     </template>
 
     <!-- 升级 -->
-    <Modal v-model:open="upgradeOpen" title="升级站点" width="440px">
+    <Modal v-model:open="upgradeOpen" :title="t('siteDetail.upgrade.title')" width="440px">
       <div class="space-y-3">
         <p class="text-[13px] leading-relaxed text-muted">
-          将站点升级到指定引擎版本，会创建一个升级任务并短暂重启容器。
+          {{ t('siteDetail.upgrade.desc') }}
         </p>
-        <Field label="目标版本" hint="当前版本填入以便修改">
-          <Input v-model="upgradeVersion" mono placeholder="如 v0.1.160" />
+        <Field :label="t('siteDetail.upgrade.versionLabel')" :hint="t('siteDetail.upgrade.versionHint')">
+          <Input v-model="upgradeVersion" mono placeholder="v0.1.160" />
         </Field>
       </div>
       <template #footer>
-        <Button variant="ghost" @click="upgradeOpen = false">取消</Button>
-        <Button variant="primary" :loading="upgradeLoading" @click="doUpgrade">提交升级</Button>
+        <Button variant="ghost" @click="upgradeOpen = false">{{ t('common.cancel') }}</Button>
+        <Button variant="primary" :loading="upgradeLoading" @click="doUpgrade">{{ t('siteDetail.upgrade.submit') }}</Button>
       </template>
     </Modal>
 
     <!-- 销毁 -->
     <ConfirmDanger
       v-model:open="destroyOpen"
-      title="销毁站点"
+      :title="t('siteDetail.destroy.title')"
       :confirm-text="slug"
-      message="销毁将移除站点容器与编排路由，操作不可撤销。请输入站点 slug 以确认。"
-      action-label="确认销毁"
+      :message="t('siteDetail.destroy.message')"
+      :action-label="t('siteDetail.destroy.action')"
       :loading="destroyLoading"
       @confirm="doDestroy"
     />

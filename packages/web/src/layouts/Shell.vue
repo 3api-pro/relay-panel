@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, provide, type Component } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import {
   Bell,
   BookOpen,
@@ -15,34 +16,37 @@ import {
 } from 'lucide-vue-next';
 import { session } from '../api/session';
 import Badge from '../components/ui/Badge.vue';
+import ThemeToggle from '../components/ThemeToggle.vue';
+import LanguageSwitcher from '../components/LanguageSwitcher.vue';
 
 /**
- * 应用壳：左侧导航 + 顶栏。
- * provide('canWrite')：viewer 角色为 false，H2 视图 inject 它隐藏写按钮。
+ * 应用壳：玻璃侧导航轨 + 玻璃顶栏。
+ * provide('canWrite')：viewer 角色为 false，L2 视图 inject 它隐藏写按钮。
+ * 导航文案走 i18n t('nav.*')。
  */
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 
-// H2 视图统一 inject<ComputedRef<boolean>>('canWrite')
 provide('canWrite', session.canWrite);
 
 interface NavItem {
   to: string;
-  label: string;
+  key: string; // i18n key: nav.<key>
   icon: Component;
   rootOnly?: boolean;
 }
 
 const NAV: NavItem[] = [
-  { to: '/', label: '总览', icon: LayoutDashboard },
-  { to: '/sites', label: '站点', icon: Server },
-  { to: '/marketplace', label: '渠道市场', icon: Store },
-  { to: '/ledger', label: '账本', icon: BookOpen },
-  { to: '/alerts', label: '告警', icon: Bell },
-  { to: '/jobs', label: '任务', icon: ListChecks },
-  { to: '/operators', label: '操作员', icon: Users, rootOnly: true },
-  { to: '/billing', label: '计费', icon: CreditCard },
-  { to: '/settings', label: '设置', icon: Settings },
+  { to: '/', key: 'overview', icon: LayoutDashboard },
+  { to: '/sites', key: 'sites', icon: Server },
+  { to: '/marketplace', key: 'marketplace', icon: Store },
+  { to: '/ledger', key: 'ledger', icon: BookOpen },
+  { to: '/alerts', key: 'alerts', icon: Bell },
+  { to: '/jobs', key: 'jobs', icon: ListChecks },
+  { to: '/operators', key: 'operators', icon: Users, rootOnly: true },
+  { to: '/billing', key: 'billing', icon: CreditCard },
+  { to: '/settings', key: 'settings', icon: Settings },
 ];
 
 const navItems = computed(() => NAV.filter((n) => !n.rootOnly || session.isRoot.value));
@@ -57,15 +61,20 @@ const user = computed(() => session.state.user);
 const roleBadge = computed(() => {
   switch (user.value?.role) {
     case 'root':
-      return { tone: 'accent' as const, text: '管理员' };
+      return { tone: 'accent' as const, text: t('nav.roleRoot') };
     case 'viewer':
-      return { tone: 'muted' as const, text: '只读' };
+      return { tone: 'muted' as const, text: t('nav.roleViewer') };
     default:
-      return { tone: 'default' as const, text: '操作员' };
+      return { tone: 'default' as const, text: t('nav.roleOperator') };
   }
 });
 
-const pageTitle = computed(() => (typeof route.meta.title === 'string' ? route.meta.title : ''));
+// 顶栏标题：优先当前激活顶级导航的译名，回落 route.meta.title
+const pageTitle = computed(() => {
+  const active = navItems.value.find((n) => isActive(n));
+  if (active) return t(`nav.${active.key}`);
+  return typeof route.meta.title === 'string' ? route.meta.title : '';
+});
 
 async function onLogout(): Promise<void> {
   await session.logout();
@@ -75,10 +84,10 @@ async function onLogout(): Promise<void> {
 
 <template>
   <div class="flex min-h-screen">
-    <!-- 侧边栏 -->
-    <aside class="fixed inset-y-0 left-0 z-40 flex w-[216px] flex-col border-r border-border bg-[#0b0d12]/90">
+    <!-- 侧边导航轨（玻璃） -->
+    <aside class="rp-rail fixed inset-y-0 left-0 z-40 flex w-[224px] flex-col">
       <!-- 品牌字标 -->
-      <RouterLink to="/" class="flex h-14 items-center gap-2 border-b border-border px-5">
+      <RouterLink to="/" class="flex h-14 items-center gap-2 border-b border-[var(--glass-border)] px-5">
         <span class="text-[15px] font-semibold tracking-tight">
           relay<span class="text-accent">/</span>panel
         </span>
@@ -89,32 +98,32 @@ async function onLogout(): Promise<void> {
           v-for="item in navItems"
           :key="item.to"
           :to="item.to"
-          class="group relative flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] transition-colors"
+          class="group relative flex items-center gap-2.5 rounded-[11px] px-2.5 py-[7px] text-[13px] transition-all duration-200"
           :class="
             isActive(item)
-              ? 'bg-panel-2 font-medium text-text'
-              : 'text-muted hover:bg-panel-2/60 hover:text-text'
+              ? 'rp-nav-active font-medium text-text'
+              : 'text-muted hover:bg-panel-2/50 hover:text-text'
           "
         >
           <!-- 活跃指示条 -->
           <span
             v-if="isActive(item)"
-            class="absolute -left-2.5 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-accent"
+            class="absolute -left-2.5 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-accent shadow-[0_0_8px_var(--color-accent)]"
           />
           <component
             :is="item.icon"
             :size="15"
             :class="isActive(item) ? 'text-accent' : 'text-muted/80 group-hover:text-muted'"
           />
-          {{ item.label }}
+          {{ t(`nav.${item.key}`) }}
         </RouterLink>
       </nav>
 
       <!-- 底部用户区 -->
-      <div class="border-t border-border p-3">
-        <div class="flex items-center gap-2.5 rounded-lg px-1.5 py-1">
+      <div class="border-t border-[var(--glass-border)] p-3">
+        <div class="flex items-center gap-2.5 rounded-[11px] px-1.5 py-1">
           <div
-            class="flex size-7 shrink-0 items-center justify-center rounded-full border border-border-2 bg-panel-2 text-[11px] font-semibold text-accent"
+            class="flex size-7 shrink-0 items-center justify-center rounded-full border border-[var(--glass-border)] bg-panel-2/70 text-[11px] font-semibold text-accent"
           >
             {{ (user?.displayName || user?.email || '?').slice(0, 1).toUpperCase() }}
           </div>
@@ -125,8 +134,8 @@ async function onLogout(): Promise<void> {
           <button
             type="button"
             class="shrink-0 rounded-md p-1.5 text-muted transition-colors hover:bg-panel-2 hover:text-red"
-            title="登出"
-            aria-label="登出"
+            :title="t('nav.logout')"
+            :aria-label="t('nav.logout')"
             @click="onLogout"
           >
             <LogOut :size="14" />
@@ -136,14 +145,15 @@ async function onLogout(): Promise<void> {
     </aside>
 
     <!-- 主区 -->
-    <div class="flex min-w-0 flex-1 flex-col pl-[216px]">
-      <!-- 顶栏 -->
-      <header
-        class="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-bg/80 px-6 backdrop-blur-md"
-      >
-        <h1 class="text-sm font-semibold">{{ pageTitle }}</h1>
-        <div class="flex items-center gap-2 text-xs text-muted">
-          <span class="hidden truncate sm:inline">{{ user?.email }}</span>
+    <div class="flex min-w-0 flex-1 flex-col pl-[224px]">
+      <!-- 顶栏（玻璃条，sticky，背景透过） -->
+      <header class="rp-topbar sticky top-0 z-30 flex h-14 items-center justify-between gap-3 px-6">
+        <h1 class="truncate text-sm font-semibold">{{ pageTitle }}</h1>
+        <div class="flex items-center gap-2">
+          <span class="hidden max-w-[220px] truncate text-xs text-muted sm:inline">{{ user?.email }}</span>
+          <div class="mx-1 hidden h-4 w-px bg-[var(--glass-border)] sm:block" />
+          <LanguageSwitcher />
+          <ThemeToggle />
         </div>
       </header>
 
@@ -155,3 +165,29 @@ async function onLogout(): Promise<void> {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 玻璃导航轨：半透明 + 模糊 + 右描边 + 顶部内高光 */
+.rp-rail {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-right: 1px solid var(--glass-border);
+  box-shadow: inset -1px 0 0 0 var(--glass-highlight);
+}
+
+/* 玻璃顶栏：背景透过下方内容 */
+.rp-topbar {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-bottom: 1px solid var(--glass-border);
+}
+
+/* 活跃导航项：玻璃描边填充 */
+.rp-nav-active {
+  background: color-mix(in oklab, var(--color-panel-2) 75%, transparent);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight);
+}
+</style>

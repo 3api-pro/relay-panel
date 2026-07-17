@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
 import EmptyState from './EmptyState.vue';
 import Skeleton from './Skeleton.vue';
+
+const { t } = useI18n();
 
 /**
  * 通用表格。列定义 + 行数据，单元格可用 #cell-<key>="{ row, value }" 插槽自定义。
@@ -28,7 +31,7 @@ const props = withDefaults(
     /** 行可点（hover 高亮 + 触发 row-click） */
     clickable?: boolean;
   }>(),
-  { rowKey: '', loading: false, empty: '暂无数据', clickable: false },
+  { rowKey: '', loading: false, empty: '', clickable: false },
 );
 
 const emit = defineEmits<{ 'row-click': [row: Record<string, unknown>] }>();
@@ -90,7 +93,7 @@ function alignClass(col: TableColumn): string {
       </tbody>
     </table>
     <div v-if="!props.loading && props.rows.length === 0" class="py-10">
-      <EmptyState :title="props.empty" />
+      <EmptyState :title="props.empty || t('common.empty')" />
     </div>
   </div>
 </template>

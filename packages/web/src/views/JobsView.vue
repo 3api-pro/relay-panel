@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { ListChecks, RefreshCw } from 'lucide-vue-next';
 import { get } from '../api/client';
 import type { JobResponse, JobsResponse, JobView } from '../api/types';
@@ -13,6 +14,7 @@ import type { TableColumn } from '../components/ui';
  *   job 处于 queued/running 时打开期间 2s 轮询该 job，终态停止。
  * 只读视图（无写操作）。
  */
+const { t } = useI18n();
 
 // ---- 生命周期卫兵 ----
 // setTimeout 轮询在 await 之后自我重排；卸载时若有在途请求，
@@ -33,25 +35,19 @@ const detailError = ref('');
 const activeJobId = ref<number | null>(null);
 let detailTimer: number | null = null;
 
-const columns: TableColumn[] = [
-  { key: 'kind', label: '类型', width: '92px' },
-  { key: 'slug', label: '站点', mono: true },
-  { key: 'status', label: '状态', width: '128px' },
-  { key: 'createdBy', label: '创建者' },
-  { key: 'createdAt', label: '创建时间', width: '112px' },
-  { key: 'duration', label: '耗时', align: 'right', width: '96px' },
-];
+const columns = computed<TableColumn[]>(() => [
+  { key: 'kind', label: t('jobs.col.kind'), width: '92px' },
+  { key: 'slug', label: t('jobs.col.slug'), mono: true },
+  { key: 'status', label: t('jobs.col.status'), width: '128px' },
+  { key: 'createdBy', label: t('jobs.col.createdBy') },
+  { key: 'createdAt', label: t('jobs.col.createdAt'), width: '112px' },
+  { key: 'duration', label: t('jobs.col.duration'), align: 'right', width: '96px' },
+]);
 
-// ---- 中文映射 / 格式化 ----
+// ---- 类型映射 / 格式化 ----
+const KNOWN_KINDS = ['provision', 'upgrade', 'start', 'stop', 'destroy'];
 function jobKindText(kind: string): string {
-  const map: Record<string, string> = {
-    provision: '开站',
-    upgrade: '升级',
-    start: '启动',
-    stop: '停止',
-    destroy: '销毁',
-  };
-  return map[kind] ?? kind;
+  return KNOWN_KINDS.includes(kind) ? t(`jobs.kind.${kind}`) : kind;
 }
 
 function parseTime(iso: string): number {
@@ -59,15 +55,15 @@ function parseTime(iso: string): number {
 }
 
 function relTime(iso: string): string {
-  const t = parseTime(iso);
-  if (Number.isNaN(t)) return iso;
-  const diff = Date.now() - t;
+  const ts = parseTime(iso);
+  if (Number.isNaN(ts)) return iso;
+  const diff = Date.now() - ts;
   const min = Math.floor(diff / 60_000);
-  if (min < 1) return '刚刚';
-  if (min < 60) return `${min} 分钟前`;
+  if (min < 1) return t('jobs.relTime.justNow');
+  if (min < 60) return t('jobs.relTime.minAgo', { n: min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h} 小时前`;
-  return `${Math.floor(h / 24)} 天前`;
+  if (h < 24) return t('jobs.relTime.hourAgo', { n: h });
+  return t('jobs.relTime.dayAgo', { n: Math.floor(h / 24) });
 }
 
 function fmtDateTime(iso: string): string {
@@ -114,12 +110,12 @@ function stepTone(status: string): 'green' | 'red' | 'amber' | 'accent' | 'muted
   return 'muted';
 }
 function stepStatusText(status: string): string {
-  if (status.startsWith('failed') || status === 'error') return '失败';
-  if (status === 'succeeded' || status === 'ok' || status === 'done' || status === 'completed') return '完成';
-  if (status === 'running') return '执行中';
-  if (status === 'queued' || status === 'pending') return '排队中';
-  if (status === 'provisioning') return '准备中';
-  if (status === 'skipped') return '已跳过';
+  if (status.startsWith('failed') || status === 'error') return t('jobs.step.failed');
+  if (status === 'succeeded' || status === 'ok' || status === 'done' || status === 'completed') return t('jobs.step.done');
+  if (status === 'running') return t('jobs.step.running');
+  if (status === 'queued' || status === 'pending') return t('jobs.step.queued');
+  if (status === 'provisioning') return t('jobs.step.provisioning');
+  if (status === 'skipped') return t('jobs.step.skipped');
   return status;
 }
 function stepTextClass(status: string): string {
@@ -151,7 +147,7 @@ async function refreshList(initial = false): Promise<void> {
     jobs.value = Array.isArray(res?.jobs) ? res.jobs : [];
     loadError.value = '';
   } catch (err) {
-    if (initial) loadError.value = err instanceof Error ? err.message : '加载失败';
+    if (initial) loadError.value = err instanceof Error ? err.message : t('jobs.loadFailed');
   } finally {
     if (initial) loading.value = false;
   }
@@ -187,7 +183,7 @@ async function loadDetail(id: number, initial = false): Promise<void> {
     }
   } catch (err) {
     if (activeJobId.value === id && !detail.value) {
-      detailError.value = err instanceof Error ? err.message : '加载失败';
+      detailError.value = err instanceof Error ? err.message : t('jobs.loadFailed');
     }
   }
   if (alive) scheduleDetailPoll(id);
@@ -219,7 +215,9 @@ function openDrawer(row: Record<string, unknown>): void {
 const detailPolling = computed(
   () => detail.value?.status === 'queued' || detail.value?.status === 'running',
 );
-const drawerTitle = computed(() => (detail.value ? `任务 #${detail.value.id}` : '任务详情'));
+const drawerTitle = computed(() =>
+  detail.value ? t('jobs.detail.titleWithId', { id: detail.value.id }) : t('jobs.detail.title'),
+);
 
 // Drawer 关闭时停止轮询并清理状态
 watch(drawerOpen, (open) => {
@@ -254,25 +252,25 @@ onBeforeUnmount(() => {
       <div class="flex items-center gap-2.5">
         <ListChecks :size="18" class="text-muted" />
         <div>
-          <h1 class="text-[15px] font-semibold leading-tight">任务中心</h1>
+          <h1 class="text-[15px] font-semibold leading-tight">{{ t('jobs.title') }}</h1>
           <p class="mt-0.5 text-xs text-muted">
-            开站 / 升级 / 启停 / 销毁 的编排执行记录
+            {{ t('jobs.subtitle') }}
             <span v-if="hasActiveJobs" class="ml-1 inline-flex items-center">
-              <StatusDot tone="accent" pulse label="有任务进行中，5s 刷新" />
+              <StatusDot tone="accent" pulse :label="t('jobs.activePolling')" />
             </span>
           </p>
         </div>
       </div>
       <Button variant="outline" size="sm" @click="manualRefresh">
         <RefreshCw :size="14" />
-        刷新
+        {{ t('common.refresh') }}
       </Button>
     </header>
 
     <!-- 列表 -->
     <div v-if="loadError && jobs.length === 0" class="rp-panel p-8">
-      <EmptyState title="加载失败" :description="loadError">
-        <Button variant="outline" size="sm" @click="manualRefresh">重试</Button>
+      <EmptyState :title="t('jobs.loadFailed')" :description="loadError">
+        <Button variant="outline" size="sm" @click="manualRefresh">{{ t('common.retry') }}</Button>
       </EmptyState>
     </div>
 
@@ -282,7 +280,7 @@ onBeforeUnmount(() => {
         :rows="tableRows"
         row-key="id"
         :loading="loading"
-        empty="暂无任务记录"
+        :empty="t('jobs.emptyList')"
         clickable
         @row-click="openDrawer"
       >
@@ -320,38 +318,40 @@ onBeforeUnmount(() => {
           </div>
           <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-border/60 pt-3 text-xs">
             <div class="min-w-0">
-              <dt class="text-muted/70">创建者</dt>
+              <dt class="text-muted/70">{{ t('jobs.detail.createdBy') }}</dt>
               <dd class="mt-0.5 truncate">{{ detail.createdBy || '—' }}</dd>
             </div>
             <div class="min-w-0">
-              <dt class="text-muted/70">耗时</dt>
+              <dt class="text-muted/70">{{ t('jobs.detail.duration') }}</dt>
               <dd class="tnum mt-0.5">{{ fmtDuration(detail) }}</dd>
             </div>
             <div class="min-w-0">
-              <dt class="text-muted/70">创建时间</dt>
+              <dt class="text-muted/70">{{ t('jobs.detail.createdAt') }}</dt>
               <dd class="tnum mt-0.5">{{ fmtDateTime(detail.createdAt) }}</dd>
             </div>
             <div class="min-w-0">
-              <dt class="text-muted/70">完成时间</dt>
+              <dt class="text-muted/70">{{ t('jobs.detail.finishedAt') }}</dt>
               <dd class="tnum mt-0.5">{{ detail.finishedAt ? fmtDateTime(detail.finishedAt) : '—' }}</dd>
             </div>
           </dl>
         </section>
 
         <!-- 拉取失败提示（保留已有内容） -->
-        <p v-if="detailError" class="text-xs text-amber">详情刷新失败：{{ detailError }}</p>
+        <p v-if="detailError" class="text-xs text-amber">
+          {{ t('jobs.detail.refreshFailed', { msg: detailError }) }}
+        </p>
 
         <!-- 失败错误 -->
         <section v-if="detail.error" class="rounded-panel border border-red/40 bg-red/10 p-3">
-          <p class="rp-microlabel text-red">错误</p>
+          <p class="rp-microlabel text-red">{{ t('jobs.detail.errorLabel') }}</p>
           <p class="mt-1 whitespace-pre-wrap break-words text-xs text-red/90">{{ detail.error }}</p>
         </section>
 
         <!-- 步骤时间线 -->
         <section>
           <div class="mb-3 flex items-center gap-2">
-            <p class="rp-microlabel">执行步骤</p>
-            <StatusDot v-if="detailPolling" tone="accent" pulse label="实时刷新中" />
+            <p class="rp-microlabel">{{ t('jobs.detail.stepsLabel') }}</p>
+            <StatusDot v-if="detailPolling" tone="accent" pulse :label="t('jobs.detail.liveRefresh')" />
           </div>
 
           <ol v-if="detail.steps.length > 0">
@@ -385,17 +385,17 @@ onBeforeUnmount(() => {
               </div>
             </li>
           </ol>
-          <p v-else class="text-xs text-muted">暂无步骤记录</p>
+          <p v-else class="text-xs text-muted">{{ t('jobs.detail.noSteps') }}</p>
         </section>
       </div>
 
       <!-- 无详情且拉取失败 -->
       <div v-else-if="detailError" class="pt-6">
-        <EmptyState title="加载失败" :description="detailError" />
+        <EmptyState :title="t('jobs.loadFailed')" :description="detailError" />
       </div>
 
       <template #footer>
-        <Button variant="ghost" size="sm" @click="drawerOpen = false">关闭</Button>
+        <Button variant="ghost" size="sm" @click="drawerOpen = false">{{ t('common.close') }}</Button>
       </template>
     </Drawer>
   </div>

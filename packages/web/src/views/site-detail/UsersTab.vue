@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch, type ComputedRef } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { Search } from 'lucide-vue-next';
 import { get, patch } from '../../api/client';
 import { toast } from '../../components/ui/toast';
@@ -8,6 +9,7 @@ import type { SiteUser, SiteUsersResponse } from './types';
 
 /** 用户页：搜索（debounce）+ 列表 + 启用/禁用（写操作 canWrite 门控）。 */
 const props = defineProps<{ slug: string }>();
+const { t } = useI18n();
 const canWrite = inject<ComputedRef<boolean>>('canWrite', computed(() => false));
 
 const users = ref<SiteUser[]>([]);
@@ -26,7 +28,7 @@ async function load(): Promise<void> {
     users.value = Array.isArray(res.users) ? res.users : [];
     loadError.value = '';
   } catch (err) {
-    loadError.value = err instanceof Error ? err.message : '加载失败';
+    loadError.value = err instanceof Error ? err.message : t('siteDetail.loadFailed');
   } finally {
     loading.value = false;
   }
@@ -45,18 +47,18 @@ function asUser(row: Record<string, unknown>): SiteUser {
   return row as unknown as SiteUser;
 }
 
-const columns: TableColumn[] = [
-  { key: 'email', label: '邮箱' },
-  { key: 'username', label: '用户名' },
-  { key: 'role', label: '角色' },
-  { key: 'balance', label: '余额', align: 'right' },
-  { key: 'status', label: '状态' },
-  { key: 'actions', label: '操作', align: 'right' },
-];
+const columns = computed<TableColumn[]>(() => [
+  { key: 'email', label: t('siteDetail.users.colEmail') },
+  { key: 'username', label: t('siteDetail.users.colUsername') },
+  { key: 'role', label: t('siteDetail.users.colRole') },
+  { key: 'balance', label: t('siteDetail.users.colBalance'), align: 'right' },
+  { key: 'status', label: t('siteDetail.users.colStatus') },
+  { key: 'actions', label: t('siteDetail.users.colActions'), align: 'right' },
+]);
 
 function statusText(s: string): string {
-  if (s === 'active') return '正常';
-  if (s === 'disabled') return '已禁用';
+  if (s === 'active') return t('siteDetail.users.statusActive');
+  if (s === 'disabled') return t('siteDetail.users.statusDisabled');
   return s;
 }
 function statusTone(s: string): 'green' | 'muted' {
@@ -72,7 +74,7 @@ async function toggleStatus(u: SiteUser): Promise<void> {
   togglingId.value = u.id;
   try {
     await patch(`/api/sites/${props.slug}/users/${u.id}`, { status: next });
-    toast.success(next === 'active' ? '用户已启用' : '用户已禁用');
+    toast.success(next === 'active' ? t('siteDetail.users.toastEnabled') : t('siteDetail.users.toastDisabled'));
     await load();
   } catch {
     /* toast 已弹 */
@@ -90,23 +92,23 @@ async function toggleStatus(u: SiteUser): Promise<void> {
         <input
           v-model="search"
           type="text"
-          placeholder="搜索邮箱 / 用户名"
+          :placeholder="t('siteDetail.users.searchPlaceholder')"
           class="h-8.5 w-full rounded-lg border border-border bg-bg/60 pl-8 pr-3 text-[13px] text-text placeholder:text-muted/50 transition-colors hover:border-border-2 focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/20"
         />
       </div>
       <p class="shrink-0 text-xs text-muted">
-        共 <span class="tnum text-text">{{ users.length }}</span> 位用户
+        {{ t('siteDetail.users.count', { n: users.length }) }}
       </p>
     </div>
 
     <div v-if="loadError" class="rp-panel p-8">
-      <EmptyState title="加载失败" :description="loadError">
-        <Button size="sm" @click="load">重试</Button>
+      <EmptyState :title="t('siteDetail.loadFailed')" :description="loadError">
+        <Button size="sm" @click="load">{{ t('common.retry') }}</Button>
       </EmptyState>
     </div>
 
     <div v-else class="rp-panel overflow-hidden">
-      <Table :columns="columns" :rows="rows" row-key="id" :loading="loading" empty="未找到用户">
+      <Table :columns="columns" :rows="rows" row-key="id" :loading="loading" :empty="t('siteDetail.users.empty')">
         <template #cell-email="{ row }">
           <span class="font-mono text-xs">{{ asUser(row).email ?? '—' }}</span>
         </template>
@@ -128,10 +130,10 @@ async function toggleStatus(u: SiteUser): Promise<void> {
               :loading="togglingId === asUser(row).id"
               @click="toggleStatus(asUser(row))"
             >
-              {{ asUser(row).status === 'active' ? '禁用' : '启用' }}
+              {{ asUser(row).status === 'active' ? t('siteDetail.users.disable') : t('siteDetail.users.enable') }}
             </Button>
           </div>
-          <span v-else class="text-xs text-muted/60">只读</span>
+          <span v-else class="text-xs text-muted/60">{{ t('siteDetail.readonly') }}</span>
         </template>
       </Table>
     </div>

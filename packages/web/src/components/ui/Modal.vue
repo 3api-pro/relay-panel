@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { watch, onBeforeUnmount } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { X } from 'lucide-vue-next';
+
+const { t } = useI18n();
 
 /**
  * 居中弹窗：v-model:open 控制；ESC / 遮罩点击关闭（closable=false 时禁用）。
@@ -46,12 +49,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
     <Transition name="rp-fade">
       <div
         v-if="props.open"
-        class="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]"
+        class="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4 backdrop-blur-[3px]"
         @mousedown.self="close"
       >
         <Transition name="rp-pop" appear>
           <div
-            class="rp-panel flex max-h-[85vh] w-full flex-col shadow-[0_24px_64px_rgb(0_0_0/0.55)]"
+            class="rp-glass rp-glass-strong flex max-h-[85vh] w-full flex-col shadow-[var(--glass-shadow-lg)]"
             :style="{ maxWidth: props.width }"
             role="dialog"
             aria-modal="true"
@@ -64,7 +67,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
                 v-if="props.closable"
                 type="button"
                 class="rounded-md p-1 text-muted transition-colors hover:bg-panel-2 hover:text-text"
-                aria-label="关闭"
+                :aria-label="t('common.close')"
                 @click="close"
               >
                 <X :size="16" />

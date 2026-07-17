@@ -1,0 +1,9 @@
+{
+  "tagline": "Multi-site relay orchestration console",
+  "email": "Email",
+  "password": "Password",
+  "submit": "Sign in",
+  "errorEmpty": "Please enter your email and password",
+  "errorFail": "Sign-in failed. Please try again later.",
+  "noRegister": "Registration is closed. Contact your instance admin for an invite."
+}

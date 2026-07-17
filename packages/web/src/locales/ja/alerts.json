@@ -1,0 +1,43 @@
+{
+  "refreshing": "更新中",
+  "notifySettings": "通知設定",
+  "colSeverity": "レベル",
+  "colKind": "種別",
+  "colAlert": "アラート",
+  "colSite": "サイト",
+  "colRecent": "最近",
+  "resolve": "解決",
+  "firstSeen": "初回 {time}",
+  "resolvedToast": "アラートを解決済みにしました",
+  "loadFailed": "読み込みに失敗しました",
+  "emptyResolvedTitle": "解決済みのアラートはありません",
+  "emptyOkTitle": "アラートはありません。すべて正常です",
+  "emptyOpenDesc": "すべてのサイトは正常に稼働しています。異常が発生するとここに集約されます。",
+  "emptyResolvedDesc": "解決済みにされたアラートはまだありません。",
+  "emptyAllDesc": "現在、アラートの記録はありません。",
+  "settingsTitle": "アラート通知設定",
+  "settingsDesc": "設定すると、新しい重大 / 警告アラートがこの webhook に送信されます。空欄のまま保存すると送信を停止します。",
+  "webhookLabel": "Webhook URL",
+  "webhookHint": "http(s):// の URL に対応（企業微信 / Feishu / Slack ボットなど）。空欄 = 無効。",
+  "webhookInvalid": "http:// または https:// で始まるアドレスのみ対応しています",
+  "webhookSaved": "通知 webhook を保存しました",
+  "pushDisabled": "アラート送信を停止しました",
+  "settingsLoadFailed": "通知設定の読み込みに失敗しました",
+  "severity": {
+    "critical": "重大",
+    "warning": "警告",
+    "info": "情報"
+  },
+  "kind": {
+    "site_down": "サイト到達不可",
+    "channel_disabled": "チャネル無効化",
+    "low_balance": "上流残高の不足",
+    "job_failed": "ジョブ失敗"
+  },
+  "relTime": {
+    "justNow": "たった今",
+    "minAgo": "{n} 分前",
+    "hourAgo": "{n} 時間前",
+    "dayAgo": "{n} 日前"
+  }
+}

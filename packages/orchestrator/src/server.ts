@@ -18,6 +18,7 @@ import { registerAlertsRoutes } from './alerts/routes.js';
 import { registerBillingRoutes } from './billing/routes.js';
 import { registerDomainsRoutes } from './domains/routes.js';
 import { registerMetricsRoutes } from './metrics.js';
+import { registerDemoRoutes } from './demo/routes.js';
 
 /**
  * server 装配（规格 §12）：Fastify 实例、cookie、认证钩子、CSRF、静态托管、
@@ -133,6 +134,8 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
     // 非 /api 的静态路径放行；/metrics 也在此解析 session（Bearer 判定在 handler 内）
     if (!isApi && path !== '/metrics') return;
     if (isApi && PUBLIC_API_PATHS.has(path)) return;
+    // 演示模式：/api/demo* 公开免认证（仅当 config.demo，非 demo 行为完全不变）
+    if (isApi && config.demo && (path === '/api/demo' || path.startsWith('/api/demo/'))) return;
     const auth = await authenticateDetailed(db, req, config.sessionTtlHours);
     if (auth) {
       req.ctx = auth.ctx;
@@ -156,6 +159,8 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
   registerBillingRoutes(app, deps);
   registerDomainsRoutes(app, deps);
   registerMetricsRoutes(app, deps);
+  // 演示路由仅在 demo 模式挂载（GET /api/demo 一键账号 + POST /api/demo/login）
+  if (config.demo) registerDemoRoutes(app, deps);
 
   // ---- SPA 静态托管：RP_WEB_DIST 相对 orchestrator 包根解析（src/ 与 dist/ 下均是上一级） ----
   const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), '..');

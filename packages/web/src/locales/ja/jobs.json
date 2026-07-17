@@ -1,0 +1,49 @@
+{
+  "title": "ジョブ",
+  "subtitle": "構築 / アップグレード / 起動・停止 / 破棄 のオーケストレーション実行履歴",
+  "activePolling": "実行中のジョブあり、5秒ごとに更新",
+  "loadFailed": "読み込みに失敗しました",
+  "emptyList": "ジョブ履歴がありません",
+  "col": {
+    "kind": "種別",
+    "slug": "サイト",
+    "status": "ステータス",
+    "createdBy": "作成者",
+    "createdAt": "作成日時",
+    "duration": "所要時間"
+  },
+  "kind": {
+    "provision": "構築",
+    "upgrade": "アップグレード",
+    "start": "起動",
+    "stop": "停止",
+    "destroy": "破棄"
+  },
+  "relTime": {
+    "justNow": "たった今",
+    "minAgo": "{n} 分前",
+    "hourAgo": "{n} 時間前",
+    "dayAgo": "{n} 日前"
+  },
+  "detail": {
+    "titleWithId": "ジョブ #{id}",
+    "title": "ジョブ詳細",
+    "createdBy": "作成者",
+    "duration": "所要時間",
+    "createdAt": "作成日時",
+    "finishedAt": "完了日時",
+    "refreshFailed": "詳細の更新に失敗しました：{msg}",
+    "errorLabel": "エラー",
+    "stepsLabel": "実行ステップ",
+    "liveRefresh": "リアルタイム更新中",
+    "noSteps": "ステップ記録がありません"
+  },
+  "step": {
+    "failed": "失敗",
+    "done": "完了",
+    "running": "実行中",
+    "queued": "待機中",
+    "provisioning": "準備中",
+    "skipped": "スキップ"
+  }
+}

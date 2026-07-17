@@ -1,0 +1,43 @@
+{
+  "refreshing": "刷新中",
+  "notifySettings": "通知设置",
+  "colSeverity": "级别",
+  "colKind": "类型",
+  "colAlert": "告警",
+  "colSite": "站点",
+  "colRecent": "最近",
+  "resolve": "解决",
+  "firstSeen": "首次 {time}",
+  "resolvedToast": "告警已标记为解决",
+  "loadFailed": "加载失败",
+  "emptyResolvedTitle": "暂无已解决告警",
+  "emptyOkTitle": "暂无告警，一切正常",
+  "emptyOpenDesc": "所有站点运行正常，出现异常时会在此汇总。",
+  "emptyResolvedDesc": "尚未有告警被标记为已解决。",
+  "emptyAllDesc": "当前没有任何告警记录。",
+  "settingsTitle": "告警通知设置",
+  "settingsDesc": "配置后，新的严重 / 警告告警将推送到该 webhook。留空并保存即停用推送。",
+  "webhookLabel": "Webhook 地址",
+  "webhookHint": "支持 http(s):// 地址，如企业微信 / 飞书 / Slack 机器人。留空 = 停用。",
+  "webhookInvalid": "仅支持 http:// 或 https:// 开头的地址",
+  "webhookSaved": "通知 webhook 已保存",
+  "pushDisabled": "已停用告警推送",
+  "settingsLoadFailed": "读取通知设置失败",
+  "severity": {
+    "critical": "严重",
+    "warning": "警告",
+    "info": "提示"
+  },
+  "kind": {
+    "site_down": "站点不可达",
+    "channel_disabled": "渠道被停用",
+    "low_balance": "上游余额偏低",
+    "job_failed": "任务失败"
+  },
+  "relTime": {
+    "justNow": "刚刚",
+    "minAgo": "{n} 分钟前",
+    "hourAgo": "{n} 小时前",
+    "dayAgo": "{n} 天前"
+  }
+}

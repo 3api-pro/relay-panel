@@ -1,0 +1,15 @@
+{
+  "overview": "总览",
+  "sites": "站点",
+  "marketplace": "渠道市场",
+  "ledger": "账本",
+  "alerts": "告警",
+  "jobs": "任务",
+  "operators": "操作员",
+  "billing": "计费",
+  "settings": "设置",
+  "logout": "登出",
+  "roleRoot": "管理员",
+  "roleOperator": "操作员",
+  "roleViewer": "只读"
+}

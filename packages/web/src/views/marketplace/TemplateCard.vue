@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { Boxes, Pencil, PowerOff, Power, Trash2 } from 'lucide-vue-next';
 import { Badge, Button } from '../../components/ui';
 import type { MarketplaceTemplate } from '../../api/types';
+
+const { t } = useI18n();
 
 /**
  * 渠道模板卡：展示模板元信息 + 写操作入口（启用到站点 / root 管理）。
@@ -23,8 +26,8 @@ const emit = defineEmits<{
 
 const sourceMeta = computed<{ text: string; tone: 'accent' | 'default' }>(() =>
   props.template.source === 'managed'
-    ? { text: '计量托管', tone: 'accent' }
-    : { text: '自带上游', tone: 'default' },
+    ? { text: t('marketplace.source.managed'), tone: 'accent' }
+    : { text: t('marketplace.source.byo'), tone: 'default' },
 );
 
 const ratioText = computed(() =>
@@ -45,7 +48,7 @@ const modelRest = computed(() => Math.max(0, props.template.models.length - 4));
       <div class="min-w-0">
         <div class="flex items-center gap-2">
           <h3 class="truncate text-[14px] font-semibold">{{ template.title }}</h3>
-          <Badge v-if="!template.enabled" tone="muted" size="sm">已停用</Badge>
+          <Badge v-if="!template.enabled" tone="muted" size="sm">{{ t('marketplace.card.disabled') }}</Badge>
         </div>
         <p class="mt-0.5 truncate font-mono text-xs text-muted">{{ template.key }}</p>
       </div>
@@ -63,13 +66,13 @@ const modelRest = computed(() => Math.max(0, props.template.models.length - 4));
     <!-- 指标行 -->
     <div class="mt-3 grid grid-cols-2 gap-2 border-t border-border/60 pt-3">
       <div>
-        <p class="text-[10.5px] text-muted/80">模型数</p>
+        <p class="text-[10.5px] text-muted/80">{{ t('marketplace.card.modelCount') }}</p>
         <p class="tnum flex items-center gap-1 text-[13px] font-medium">
           <Boxes :size="13" class="text-muted/70" />{{ template.models.length }}
         </p>
       </div>
       <div>
-        <p class="text-[10.5px] text-muted/80">建议倍率</p>
+        <p class="text-[10.5px] text-muted/80">{{ t('marketplace.card.suggestedRatio') }}</p>
         <p class="tnum text-[13px] font-medium">{{ ratioText }}</p>
       </div>
     </div>
@@ -96,21 +99,21 @@ const modelRest = computed(() => Math.max(0, props.template.models.length - 4));
         size="sm"
         @click="emit('enable', template)"
       >
-        启用到站点
+        {{ t('marketplace.card.enableToSite') }}
       </Button>
-      <span v-else-if="canWrite" class="text-xs text-muted/70">已停用，无法启用</span>
+      <span v-else-if="canWrite" class="text-xs text-muted/70">{{ t('marketplace.card.disabledCannotEnable') }}</span>
 
       <template v-if="isRoot">
         <div class="ml-auto flex items-center gap-1">
           <Button variant="ghost" size="sm" @click="emit('edit', template)">
-            <Pencil :size="13" />编辑
+            <Pencil :size="13" />{{ t('common.edit') }}
           </Button>
           <Button variant="ghost" size="sm" @click="emit('toggle', template)">
             <component :is="template.enabled ? PowerOff : Power" :size="13" />
-            {{ template.enabled ? '停用' : '启用' }}
+            {{ template.enabled ? t('marketplace.card.disable') : t('marketplace.card.enable') }}
           </Button>
           <Button variant="ghost" size="sm" @click="emit('remove', template)">
-            <Trash2 :size="13" />删除
+            <Trash2 :size="13" />{{ t('common.delete') }}
           </Button>
         </div>
       </template>

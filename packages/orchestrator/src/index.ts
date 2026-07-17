@@ -1,6 +1,6 @@
 import { Sub2apiAdapter } from '@relay-panel/adapter-sub2api';
 import { NewapiAdapter } from '@relay-panel/adapter-newapi';
-import type { EngineAdapter, EngineKind } from '@relay-panel/adapter-core';
+import type { EngineAdapter, EngineKind, EngineLifecycle } from '@relay-panel/adapter-core';
 import { loadConfig } from './config.js';
 import { makeDb, runMigrations } from './db/client.js';
 import { operators } from './db/schema.js';
@@ -12,7 +12,8 @@ import { startMonitor } from './alerts/engine.js';
 import { WebhookNotifier } from './alerts/notify.js';
 import { HttpMeteringGateway } from './marketplace/gateway.js';
 import { startPullLoop } from './marketplace/ledger.js';
-import { buildServer } from './server.js';
+import { buildServer, type Notifier } from './server.js';
+import { makeDemoAdapters, makeDemoLifecycles, demoNotifier, seedDemo } from './demo/index.js';
 
 /**
  * 服务入口（规格 §1）：loadConfig → makeDb+migrate → bootstrap root → 装配依赖
@@ -38,30 +39,48 @@ if (anyOperator.length === 0 && config.adminEmail !== undefined && config.adminP
   console.log(`[bootstrap] 已创建初始 root 账号: ${config.adminEmail}`);
 }
 
-const adapters: Record<EngineKind, EngineAdapter> = {
-  sub2api: new Sub2apiAdapter(),
-  newapi: new NewapiAdapter(),
-};
-
-// G1：凭据字段名原样 JSON 加密入库（credentials 表，ref='enc:<slug>'，upsert）；
-// lifecycle 步骤经 lifecycleStepSink 汇入当前 job 的 steps。
-// 生命周期 job handler 在 buildServer → registerSitesRoutes → new SitesService 时注册进 jobs，boot 即生效。
-const storeCredential = makeStoreCredential(db, config);
-
-const lifecycles = makeLifecycles({
-  sub2api: { sitesRoot: config.sitesRoot, storeCredential, onStep: lifecycleStepSink },
-  newapi: { sitesRoot: config.sitesRoot, storeCredential, onStep: lifecycleStepSink },
-});
-
 const jobs = new JobEngine(db);
-// G3: webhook 通知器（地址存 app_settings['alert_webhook_url']，未配置时静默跳过）
-const notifier = new WebhookNotifier(db);
 
-// G2: 计量网关装配——RP_METERING_GATEWAY_URL 未配置时保持 null（managed 模板不可启用）
-const gateway =
-  config.meteringGatewayUrl !== undefined
-    ? new HttpMeteringGateway(config.meteringGatewayUrl, config.meteringGatewayToken)
-    : null;
+// ---- 演示模式装配（RP_DEMO=1）：纯罐装数据、不连生产、不起容器 ----
+// 两引擎都用 DemoAdapter + NoopLifecycle，gateway=null、notifier=noop；boot 时富种子。
+// 非 demo 模式（默认）走下方真实 adapter/lifecycle/网关/通知器，行为完全不变。
+let adapters: Record<EngineKind, EngineAdapter>;
+let lifecycles: Record<EngineKind, EngineLifecycle>;
+let gateway: HttpMeteringGateway | null;
+let notifier: Notifier;
+
+if (config.demo) {
+  adapters = makeDemoAdapters();
+  lifecycles = makeDemoLifecycles(lifecycleStepSink);
+  gateway = null;
+  notifier = demoNotifier;
+  await seedDemo(db);
+  console.log('[DEMO MODE] 演示模式已启用：纯罐装数据、不连生产、不起容器；一键账号见 GET /api/demo');
+} else {
+  adapters = {
+    sub2api: new Sub2apiAdapter(),
+    newapi: new NewapiAdapter(),
+  };
+
+  // G1：凭据字段名原样 JSON 加密入库（credentials 表，ref='enc:<slug>'，upsert）；
+  // lifecycle 步骤经 lifecycleStepSink 汇入当前 job 的 steps。
+  // 生命周期 job handler 在 buildServer → registerSitesRoutes → new SitesService 时注册进 jobs，boot 即生效。
+  const storeCredential = makeStoreCredential(db, config);
+
+  lifecycles = makeLifecycles({
+    sub2api: { sitesRoot: config.sitesRoot, storeCredential, onStep: lifecycleStepSink },
+    newapi: { sitesRoot: config.sitesRoot, storeCredential, onStep: lifecycleStepSink },
+  });
+
+  // G3: webhook 通知器（地址存 app_settings['alert_webhook_url']，未配置时静默跳过）
+  notifier = new WebhookNotifier(db);
+
+  // G2: 计量网关装配——RP_METERING_GATEWAY_URL 未配置时保持 null（managed 模板不可启用）
+  gateway =
+    config.meteringGatewayUrl !== undefined
+      ? new HttpMeteringGateway(config.meteringGatewayUrl, config.meteringGatewayToken)
+      : null;
+}
 
 const app = await buildServer(
   { config, db, adapters, lifecycles, gateway, jobs, notifier },
