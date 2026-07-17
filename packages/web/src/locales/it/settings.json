@@ -1,0 +1,35 @@
+{
+  "loadFailed": "Caricamento non riuscito",
+  "loadErrorNoAccount": "Impossibile caricare il tuo account. Accedi di nuovo.",
+  "changePassword": "Cambia password",
+  "currentPassword": "Password attuale",
+  "currentPasswordPlaceholder": "Inserisci la password attuale",
+  "newPassword": "Nuova password",
+  "newPasswordPlaceholder": "Imposta una nuova password",
+  "confirmPassword": "Conferma nuova password",
+  "confirmPasswordPlaceholder": "Reinserisci la nuova password",
+  "pwHint": "Almeno 8 caratteri",
+  "pwMinLength": "La password deve contenere almeno 8 caratteri",
+  "pwMismatch": "Le password non coincidono",
+  "pwNote": "Gli altri dispositivi connessi verranno disconnessi dopo la modifica.",
+  "updatePassword": "Aggiorna password",
+  "pwUpdated": "Password aggiornata. Gli altri dispositivi dovranno accedere di nuovo.",
+  "accountInfo": "Account",
+  "email": "Email",
+  "displayName": "Nome visualizzato",
+  "notSet": "Non impostato",
+  "roleLabel": "Ruolo",
+  "role": {
+    "root": "Super amministratore",
+    "operator": "Operatore",
+    "viewer": "Visualizzatore"
+  },
+  "instanceConfig": "Configurazione istanza",
+  "signupModeLabel": "Modalità registrazione",
+  "signupMode": {
+    "closed": "Chiusa",
+    "invite": "Solo su invito",
+    "open": "Aperta"
+  },
+  "alertsHint": "Configura il webhook degli avvisi nella pagina Avvisi per ricevere una notifica quando un sito va offline."
+}

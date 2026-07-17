@@ -1,0 +1,35 @@
+{
+  "loadFailed": "Error al cargar",
+  "loadErrorNoAccount": "No se pudo cargar tu cuenta. Inicia sesión de nuevo.",
+  "changePassword": "Cambiar contraseña",
+  "currentPassword": "Contraseña actual",
+  "currentPasswordPlaceholder": "Introduce la contraseña actual",
+  "newPassword": "Nueva contraseña",
+  "newPasswordPlaceholder": "Define una nueva contraseña",
+  "confirmPassword": "Confirmar nueva contraseña",
+  "confirmPasswordPlaceholder": "Vuelve a introducir la nueva contraseña",
+  "pwHint": "Al menos 8 caracteres",
+  "pwMinLength": "La contraseña debe tener al menos 8 caracteres",
+  "pwMismatch": "Las contraseñas no coinciden",
+  "pwNote": "El resto de dispositivos con sesión iniciada se cerrarán tras el cambio.",
+  "updatePassword": "Actualizar contraseña",
+  "pwUpdated": "Contraseña actualizada. Los demás dispositivos deberán iniciar sesión de nuevo.",
+  "accountInfo": "Cuenta",
+  "email": "Correo electrónico",
+  "displayName": "Nombre visible",
+  "notSet": "Sin definir",
+  "roleLabel": "Rol",
+  "role": {
+    "root": "Superadministrador",
+    "operator": "Operador",
+    "viewer": "Observador"
+  },
+  "instanceConfig": "Configuración de la instancia",
+  "signupModeLabel": "Modo de registro",
+  "signupMode": {
+    "closed": "Cerrado",
+    "invite": "Solo por invitación",
+    "open": "Abierto"
+  },
+  "alertsHint": "Configura el webhook de alertas en la página Alertas para recibir avisos cuando un sitio deje de responder."
+}

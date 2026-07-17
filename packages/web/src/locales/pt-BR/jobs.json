@@ -1,0 +1,49 @@
+{
+  "title": "Tarefas",
+  "subtitle": "Registros de orquestração de provisionamento / atualização / iniciar-parar / destruição",
+  "activePolling": "Tarefas em andamento, atualizando a cada 5s",
+  "loadFailed": "Falha ao carregar",
+  "emptyList": "Nenhum registro de tarefa ainda",
+  "col": {
+    "kind": "Tipo",
+    "slug": "Site",
+    "status": "Status",
+    "createdBy": "Criado por",
+    "createdAt": "Criado em",
+    "duration": "Duração"
+  },
+  "kind": {
+    "provision": "Provisionar",
+    "upgrade": "Atualizar",
+    "start": "Iniciar",
+    "stop": "Parar",
+    "destroy": "Destruir"
+  },
+  "relTime": {
+    "justNow": "agora mesmo",
+    "minAgo": "há {n} min",
+    "hourAgo": "há {n} h",
+    "dayAgo": "há {n} d"
+  },
+  "detail": {
+    "titleWithId": "Tarefa #{id}",
+    "title": "Detalhes da tarefa",
+    "createdBy": "Criado por",
+    "duration": "Duração",
+    "createdAt": "Criado em",
+    "finishedAt": "Concluído em",
+    "refreshFailed": "Falha ao atualizar os detalhes: {msg}",
+    "errorLabel": "Erro",
+    "stepsLabel": "Etapas",
+    "liveRefresh": "Ao vivo",
+    "noSteps": "Nenhum registro de etapa"
+  },
+  "step": {
+    "failed": "Falhou",
+    "done": "Concluído",
+    "running": "Em execução",
+    "queued": "Na fila",
+    "provisioning": "Preparando",
+    "skipped": "Ignorado"
+  }
+}

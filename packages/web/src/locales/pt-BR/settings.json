@@ -1,0 +1,35 @@
+{
+  "loadFailed": "Falha ao carregar",
+  "loadErrorNoAccount": "Não foi possível carregar sua conta. Faça login novamente.",
+  "changePassword": "Alterar senha",
+  "currentPassword": "Senha atual",
+  "currentPasswordPlaceholder": "Digite a senha atual",
+  "newPassword": "Nova senha",
+  "newPasswordPlaceholder": "Defina uma nova senha",
+  "confirmPassword": "Confirmar nova senha",
+  "confirmPasswordPlaceholder": "Digite a nova senha novamente",
+  "pwHint": "Ao menos 8 caracteres",
+  "pwMinLength": "A senha deve ter ao menos 8 caracteres",
+  "pwMismatch": "As senhas não coincidem",
+  "pwNote": "Outros dispositivos conectados serão desconectados após a alteração.",
+  "updatePassword": "Atualizar senha",
+  "pwUpdated": "Senha atualizada. Outros dispositivos precisarão fazer login novamente.",
+  "accountInfo": "Conta",
+  "email": "E-mail",
+  "displayName": "Nome de exibição",
+  "notSet": "Não definido",
+  "roleLabel": "Papel",
+  "role": {
+    "root": "Super administrador",
+    "operator": "Operador",
+    "viewer": "Visualizador"
+  },
+  "instanceConfig": "Configuração da instância",
+  "signupModeLabel": "Modo de cadastro",
+  "signupMode": {
+    "closed": "Fechado",
+    "invite": "Somente convite",
+    "open": "Aberto"
+  },
+  "alertsHint": "Configure o webhook de alertas na página Alertas para ser notificado quando um site ficar fora do ar."
+}

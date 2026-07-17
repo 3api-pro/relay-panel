@@ -1,0 +1,15 @@
+{
+  "overview": "개요",
+  "sites": "사이트",
+  "marketplace": "마켓플레이스",
+  "ledger": "원장",
+  "alerts": "알림",
+  "jobs": "작업",
+  "operators": "운영자",
+  "billing": "결제",
+  "settings": "설정",
+  "logout": "로그아웃",
+  "roleRoot": "관리자",
+  "roleOperator": "운영자",
+  "roleViewer": "읽기 전용"
+}

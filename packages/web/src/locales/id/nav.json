@@ -1,0 +1,15 @@
+{
+  "overview": "Ikhtisar",
+  "sites": "Situs",
+  "marketplace": "Marketplace",
+  "ledger": "Buku besar",
+  "alerts": "Peringatan",
+  "jobs": "Tugas",
+  "operators": "Operator",
+  "billing": "Penagihan",
+  "settings": "Pengaturan",
+  "logout": "Keluar",
+  "roleRoot": "Admin",
+  "roleOperator": "Operator",
+  "roleViewer": "Baca-saja"
+}

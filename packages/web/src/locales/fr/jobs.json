@@ -1,0 +1,49 @@
+{
+  "title": "Tâches",
+  "subtitle": "Historique d'orchestration : provisionnement / mise à niveau / démarrage-arrêt / destruction",
+  "activePolling": "Tâches en cours, actualisation toutes les 5 s",
+  "loadFailed": "Échec du chargement",
+  "emptyList": "Aucun enregistrement de tâche pour le moment",
+  "col": {
+    "kind": "Type",
+    "slug": "Site",
+    "status": "Statut",
+    "createdBy": "Créé par",
+    "createdAt": "Créé le",
+    "duration": "Durée"
+  },
+  "kind": {
+    "provision": "Provisionner",
+    "upgrade": "Mettre à niveau",
+    "start": "Démarrer",
+    "stop": "Arrêter",
+    "destroy": "Détruire"
+  },
+  "relTime": {
+    "justNow": "à l'instant",
+    "minAgo": "il y a {n} min",
+    "hourAgo": "il y a {n} h",
+    "dayAgo": "il y a {n} j"
+  },
+  "detail": {
+    "titleWithId": "Tâche n° {id}",
+    "title": "Détail de la tâche",
+    "createdBy": "Créé par",
+    "duration": "Durée",
+    "createdAt": "Créé le",
+    "finishedAt": "Terminé le",
+    "refreshFailed": "Échec de l'actualisation du détail : {msg}",
+    "errorLabel": "Erreur",
+    "stepsLabel": "Étapes",
+    "liveRefresh": "En direct",
+    "noSteps": "Aucun enregistrement d'étape"
+  },
+  "step": {
+    "failed": "Échoué",
+    "done": "Terminé",
+    "running": "En cours",
+    "queued": "En file d'attente",
+    "provisioning": "Préparation",
+    "skipped": "Ignoré"
+  }
+}

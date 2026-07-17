@@ -1,0 +1,43 @@
+{
+  "refreshing": "Menyegarkan",
+  "notifySettings": "Notifikasi",
+  "colSeverity": "Tingkat keparahan",
+  "colKind": "Jenis",
+  "colAlert": "Peringatan",
+  "colSite": "Situs",
+  "colRecent": "Terbaru",
+  "resolve": "Selesaikan",
+  "firstSeen": "Pertama terlihat {time}",
+  "resolvedToast": "Peringatan ditandai selesai",
+  "loadFailed": "Gagal memuat",
+  "emptyResolvedTitle": "Tidak ada peringatan yang selesai",
+  "emptyOkTitle": "Tidak ada peringatan, semua aman",
+  "emptyOpenDesc": "Semua situs berjalan normal; masalah akan diringkas di sini saat muncul.",
+  "emptyResolvedDesc": "Belum ada peringatan yang ditandai selesai.",
+  "emptyAllDesc": "Saat ini tidak ada catatan peringatan.",
+  "settingsTitle": "Pengaturan notifikasi peringatan",
+  "settingsDesc": "Setelah dikonfigurasi, peringatan kritis / peringatan baru dikirim ke webhook ini. Kosongkan dan simpan untuk menonaktifkan pengiriman.",
+  "webhookLabel": "URL Webhook",
+  "webhookHint": "Mendukung URL http(s):// seperti bot WeCom / Feishu / Slack. Kosong = nonaktif.",
+  "webhookInvalid": "Hanya alamat yang diawali http:// atau https:// yang didukung",
+  "webhookSaved": "Webhook notifikasi tersimpan",
+  "pushDisabled": "Pengiriman peringatan dinonaktifkan",
+  "settingsLoadFailed": "Gagal memuat pengaturan notifikasi",
+  "severity": {
+    "critical": "Kritis",
+    "warning": "Peringatan",
+    "info": "Info"
+  },
+  "kind": {
+    "site_down": "Situs tidak dapat dijangkau",
+    "channel_disabled": "Saluran dinonaktifkan",
+    "low_balance": "Saldo upstream rendah",
+    "job_failed": "Tugas gagal"
+  },
+  "relTime": {
+    "justNow": "baru saja",
+    "minAgo": "{n} mnt lalu",
+    "hourAgo": "{n} jam lalu",
+    "dayAgo": "{n} hr lalu"
+  }
+}

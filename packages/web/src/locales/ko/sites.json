@@ -1,0 +1,91 @@
+{
+  "title": "사이트",
+  "new": "새 사이트",
+  "summaryCount": "사이트 {n}개",
+  "summaryDown": "{n}개 다운",
+  "updating": "업데이트 중…",
+  "loadFailed": "불러오기에 실패했습니다",
+  "empty": {
+    "title": "아직 사이트가 없습니다",
+    "desc": "첫 중계 사이트를 만들거나 CLI로 기존 사이트를 인수하세요."
+  },
+  "externalManaged": "외부",
+  "columns": {
+    "status": "상태",
+    "site": "사이트",
+    "engine": "엔진 / 버전",
+    "hostPort": "포트",
+    "usage": "24시간 요청 / 비용",
+    "job": "작업"
+  },
+  "jobKind": {
+    "provision": "생성",
+    "upgrade": "업그레이드",
+    "start": "시작",
+    "stop": "중지",
+    "destroy": "삭제"
+  },
+  "jobStatus": {
+    "running": "실행 중",
+    "queued": "대기 중"
+  },
+  "toast": {
+    "queued": "작업이 대기열에 추가되었습니다 — 작업 페이지에서 확인하세요.",
+    "created": "생성 작업이 만들어졌습니다."
+  },
+  "upgrade": {
+    "title": "사이트 업그레이드",
+    "descBefore": "사이트 ",
+    "descMid": "을(를) 대상 버전으로 업그레이드합니다. 현재 버전: ",
+    "descAfter": ".",
+    "versionLabel": "대상 버전",
+    "versionHint": "이미지 태그, 예: v0.1.160",
+    "submit": "업그레이드",
+    "errRequired": "대상 버전을 입력하세요.",
+    "errSame": "대상 버전이 현재 버전과 동일합니다."
+  },
+  "destroy": {
+    "title": "사이트 삭제",
+    "action": "사이트 삭제",
+    "keepMsg": "사이트 컨테이너를 중지하고 제거하되 데이터 볼륨(데이터베이스/업로드)은 유지하므로, 나중에 다시 빌드해 복원할 수 있습니다.",
+    "purgeMsg": "사이트 컨테이너와 데이터 볼륨을 영구히 삭제합니다. 이 작업은 되돌릴 수 없습니다."
+  },
+  "create": {
+    "title": "새 사이트",
+    "submit": "사이트 생성",
+    "engineLabel": "엔진",
+    "engineRecommended": "sub2api (권장)",
+    "versionLabel": "버전",
+    "versionHint": "이미지 태그, 예: v0.1.160",
+    "slugHint": "소문자/숫자/하이픈, 2~32자, URL 및 컨테이너 ID에 사용",
+    "labelLabel": "표시 이름",
+    "labelPlaceholder": "내 중계 사이트",
+    "portLabel": "포트",
+    "portHint": "비워 두면 사용 가능한 포트가 자동 할당됩니다",
+    "portPlaceholder": "자동",
+    "emailLabel": "관리자 이메일",
+    "emailHint": "사이트의 초기 관리자 계정",
+    "brandSection": "브랜딩 (선택)",
+    "siteNameLabel": "사이트 이름",
+    "siteNamePlaceholder": "사이트 프런트엔드에 표시되는 이름",
+    "announcementLabel": "공지",
+    "announcementHint": "사이트 프런트엔드에 표시되는 공지 텍스트",
+    "announcementPlaceholder": "선택 사항",
+    "errEngine": "엔진을 선택하세요.",
+    "errVersion": "버전을 입력하세요.",
+    "errSlugRequired": "슬러그를 입력하세요.",
+    "errSlugFormat": "소문자/숫자/하이픈만, 2~32자, 문자 또는 숫자로 시작해야 합니다.",
+    "errLabel": "표시 이름을 입력하세요.",
+    "errPort": "포트는 1에서 65535 사이의 정수여야 합니다.",
+    "errEmailRequired": "관리자 이메일을 입력하세요.",
+    "errEmailFormat": "이메일 형식이 올바르지 않습니다."
+  },
+  "rowActions": {
+    "more": "추가 작업",
+    "upgrade": "버전 업그레이드…",
+    "stop": "사이트 중지",
+    "start": "사이트 시작",
+    "keepData": "데이터 볼륨 유지",
+    "destroy": "사이트 삭제…"
+  }
+}

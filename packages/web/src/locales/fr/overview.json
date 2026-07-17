@@ -1,0 +1,42 @@
+{
+  "statSites": "Total des sites",
+  "statSitesHint": "Hors sites détruits",
+  "statHealthy": "Sites sains",
+  "healthyAll": "Tous en ligne",
+  "healthyDown": "{n} site(s) défaillant(s)",
+  "healthyNoData": "Aucune donnée de sonde",
+  "stat24hReq": "Requêtes 24 h",
+  "stat24hCost": "Coût 24 h",
+  "statAllSites": "Tous sites confondus",
+  "openAlerts": "Alertes ouvertes · {n}",
+  "allAlerts": "Toutes les alertes",
+  "sitesSection": "Sites",
+  "siteManage": "Gérer les sites",
+  "latency": "Latence",
+  "req24h": "Req 24 h",
+  "cost24h": "Coût 24 h",
+  "loadFailed": "Échec du chargement",
+  "noSites": "Aucun site pour le moment",
+  "noSitesDesc": "Créez votre premier site depuis la page Sites, ou adoptez-en un existant via la CLI.",
+  "externalManaged": "Externe",
+  "jobRunning": "{kind} · en cours",
+  "jobQueued": "{kind} · en file d'attente",
+  "severity": {
+    "critical": "Critique",
+    "warning": "Avertissement",
+    "info": "Info"
+  },
+  "jobKind": {
+    "provision": "Provisionner",
+    "upgrade": "Mettre à niveau",
+    "start": "Démarrer",
+    "stop": "Arrêter",
+    "destroy": "Détruire"
+  },
+  "relTime": {
+    "justNow": "à l'instant",
+    "minAgo": "il y a {n} min",
+    "hourAgo": "il y a {n} h",
+    "dayAgo": "il y a {n} j"
+  }
+}

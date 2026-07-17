@@ -1,0 +1,43 @@
+{
+  "refreshing": "Wird aktualisiert",
+  "notifySettings": "Benachrichtigungen",
+  "colSeverity": "Schweregrad",
+  "colKind": "Art",
+  "colAlert": "Warnung",
+  "colSite": "Site",
+  "colRecent": "Zuletzt",
+  "resolve": "Erledigen",
+  "firstSeen": "Erstmals gesehen {time}",
+  "resolvedToast": "Warnung als erledigt markiert",
+  "loadFailed": "Laden fehlgeschlagen",
+  "emptyResolvedTitle": "Keine erledigten Warnungen",
+  "emptyOkTitle": "Keine Warnungen, alles in Ordnung",
+  "emptyOpenDesc": "Alle Sites laufen normal; auftretende Probleme werden hier zusammengefasst.",
+  "emptyResolvedDesc": "Es wurden noch keine Warnungen als erledigt markiert.",
+  "emptyAllDesc": "Derzeit liegen keine Warnungseinträge vor.",
+  "settingsTitle": "Einstellungen für Warnbenachrichtigungen",
+  "settingsDesc": "Nach der Einrichtung werden neue kritische Warnungen und Warnhinweise an diesen Webhook gesendet. Leer speichern deaktiviert den Versand.",
+  "webhookLabel": "Webhook-URL",
+  "webhookHint": "Unterstützt http(s)://-URLs, etwa WeCom-, Feishu- oder Slack-Bots. Leer = deaktiviert.",
+  "webhookInvalid": "Nur Adressen, die mit http:// oder https:// beginnen, werden unterstützt",
+  "webhookSaved": "Benachrichtigungs-Webhook gespeichert",
+  "pushDisabled": "Warnungsversand deaktiviert",
+  "settingsLoadFailed": "Benachrichtigungseinstellungen konnten nicht geladen werden",
+  "severity": {
+    "critical": "Kritisch",
+    "warning": "Warnung",
+    "info": "Info"
+  },
+  "kind": {
+    "site_down": "Site nicht erreichbar",
+    "channel_disabled": "Kanal deaktiviert",
+    "low_balance": "Geringes Upstream-Guthaben",
+    "job_failed": "Auftrag fehlgeschlagen"
+  },
+  "relTime": {
+    "justNow": "gerade eben",
+    "minAgo": "vor {n} Min.",
+    "hourAgo": "vor {n} Std.",
+    "dayAgo": "vor {n} T."
+  }
+}

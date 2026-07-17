@@ -70,10 +70,10 @@ function rngFor(slug: string, salt: string): Rng {
 // ---------------------------------------------------------------------------
 
 const GROUP_POOL: { name: string; ratio: number; description: string }[] = [
-  { name: '默认', ratio: 1.0, description: '标准计费分组' },
-  { name: '高级', ratio: 2.0, description: '高优先级 + 更高倍率' },
-  { name: '团队', ratio: 1.5, description: '团队共享额度' },
-  { name: '体验', ratio: 0.5, description: '试用体验半价' },
+  { name: 'Default', ratio: 1.0, description: 'Standard billing group' },
+  { name: 'Premium', ratio: 2.0, description: 'Higher priority and rate' },
+  { name: 'Team', ratio: 1.5, description: 'Shared team quota' },
+  { name: 'Trial', ratio: 0.5, description: 'Half-price trial access' },
 ];
 
 export function demoGroups(slug: string): GroupRecord[] {
@@ -92,14 +92,14 @@ export function demoGroups(slug: string): GroupRecord[] {
 // ---------------------------------------------------------------------------
 
 const CHANNEL_POOL: { name: string; protocol: ChannelRecord['protocol']; models: string[] }[] = [
-  { name: 'Claude 主力', protocol: 'anthropic', models: ['claude-sonnet', 'claude-opus'] },
-  { name: 'Claude 备用', protocol: 'anthropic', models: ['claude-sonnet'] },
-  { name: 'GPT 主力', protocol: 'openai', models: ['gpt-omni', 'gpt-mini'] },
-  { name: 'GPT 备用', protocol: 'openai-responses', models: ['gpt-omni'] },
-  { name: 'Gemini 视觉', protocol: 'gemini', models: ['gemini-pro-vision'] },
-  { name: 'Gemini 长文', protocol: 'gemini', models: ['gemini-pro'] },
-  { name: '国产大模型', protocol: 'openai', models: ['domestic-chat', 'domestic-plus'] },
-  { name: '推理增强', protocol: 'openai', models: ['reasoner-max'] },
+  { name: 'Claude Primary', protocol: 'anthropic', models: ['claude-sonnet', 'claude-opus'] },
+  { name: 'Claude Backup', protocol: 'anthropic', models: ['claude-sonnet'] },
+  { name: 'GPT Primary', protocol: 'openai', models: ['gpt-omni', 'gpt-mini'] },
+  { name: 'GPT Backup', protocol: 'openai-responses', models: ['gpt-omni'] },
+  { name: 'Gemini Vision', protocol: 'gemini', models: ['gemini-pro-vision'] },
+  { name: 'Gemini Long-context', protocol: 'gemini', models: ['gemini-pro'] },
+  { name: 'Open Models', protocol: 'openai', models: ['domestic-chat', 'domestic-plus'] },
+  { name: 'Reasoning Plus', protocol: 'openai', models: ['reasoner-max'] },
 ];
 
 export function demoChannels(slug: string): ChannelRecord[] {
@@ -158,7 +158,7 @@ export function demoUsers(slug: string): SiteUserRecord[] {
 export function demoBranding(_slug: string, siteName: string): SiteBranding {
   return {
     siteName,
-    announcement: '这是一个只读演示环境，数据均为随机生成，随时可能重置。',
+    announcement: 'Read-only demo environment. All data is randomly generated and may reset at any time.',
   };
 }
 

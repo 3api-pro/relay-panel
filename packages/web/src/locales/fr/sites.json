@@ -1,0 +1,91 @@
+{
+  "title": "Sites",
+  "new": "Nouveau site",
+  "summaryCount": "{n} sites",
+  "summaryDown": "{n} hors service",
+  "updating": "mise à jour…",
+  "loadFailed": "Échec du chargement",
+  "empty": {
+    "title": "Aucun site pour le moment",
+    "desc": "Créez votre premier site de relais, ou reprenez-en un existant via la CLI."
+  },
+  "externalManaged": "Externe",
+  "columns": {
+    "status": "Statut",
+    "site": "Site",
+    "engine": "Moteur / Version",
+    "hostPort": "Port",
+    "usage": "Requêtes / Coût 24 h",
+    "job": "Tâche"
+  },
+  "jobKind": {
+    "provision": "Provisionner",
+    "upgrade": "Mettre à niveau",
+    "start": "Démarrer",
+    "stop": "Arrêter",
+    "destroy": "Détruire"
+  },
+  "jobStatus": {
+    "running": "En cours",
+    "queued": "En file d'attente"
+  },
+  "toast": {
+    "queued": "Tâche en file d'attente — suivez-la sur la page Tâches.",
+    "created": "Tâche de provisionnement créée."
+  },
+  "upgrade": {
+    "title": "Mettre à niveau le site",
+    "descBefore": "Le site ",
+    "descMid": " sera mis à niveau vers la version cible. Version actuelle : ",
+    "descAfter": ".",
+    "versionLabel": "Version cible",
+    "versionHint": "Tag de l'image, ex. v0.1.160",
+    "submit": "Mettre à niveau",
+    "errRequired": "Saisissez une version cible.",
+    "errSame": "La version cible est identique à la version actuelle."
+  },
+  "destroy": {
+    "title": "Détruire le site",
+    "action": "Détruire le site",
+    "keepMsg": "Arrête et supprime le conteneur du site mais conserve les volumes de données (base de données / téléversements), afin de pouvoir le reconstruire et le restaurer ultérieurement.",
+    "purgeMsg": "Supprime définitivement le conteneur du site et les volumes de données. Cette action est irréversible."
+  },
+  "create": {
+    "title": "Nouveau site",
+    "submit": "Créer le site",
+    "engineLabel": "Moteur",
+    "engineRecommended": "sub2api (recommandé)",
+    "versionLabel": "Version",
+    "versionHint": "Tag de l'image, ex. v0.1.160",
+    "slugHint": "Lettres minuscules / chiffres / tirets, 2 à 32 caractères, utilisé pour l'URL et l'ID du conteneur",
+    "labelLabel": "Nom affiché",
+    "labelPlaceholder": "Mon site de relais",
+    "portLabel": "Port",
+    "portHint": "Laissez vide pour attribuer automatiquement un port disponible",
+    "portPlaceholder": "Auto",
+    "emailLabel": "E-mail administrateur",
+    "emailHint": "Compte administrateur initial du site",
+    "brandSection": "Personnalisation (facultatif)",
+    "siteNameLabel": "Nom du site",
+    "siteNamePlaceholder": "Nom affiché sur l'interface du site",
+    "announcementLabel": "Annonce",
+    "announcementHint": "Texte d'annonce affiché sur l'interface du site",
+    "announcementPlaceholder": "Facultatif",
+    "errEngine": "Sélectionnez un moteur.",
+    "errVersion": "Saisissez une version.",
+    "errSlugRequired": "Saisissez un slug.",
+    "errSlugFormat": "Lettres minuscules / chiffres / tirets uniquement, 2 à 32 caractères, doit commencer par une lettre ou un chiffre.",
+    "errLabel": "Saisissez un nom affiché.",
+    "errPort": "Le port doit être un entier compris entre 1 et 65535.",
+    "errEmailRequired": "Saisissez un e-mail administrateur.",
+    "errEmailFormat": "Format d'e-mail invalide."
+  },
+  "rowActions": {
+    "more": "Plus d'actions",
+    "upgrade": "Mettre à niveau la version…",
+    "stop": "Arrêter le site",
+    "start": "Démarrer le site",
+    "keepData": "Conserver les volumes de données",
+    "destroy": "Détruire le site…"
+  }
+}

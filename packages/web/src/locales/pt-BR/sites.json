@@ -1,0 +1,91 @@
+{
+  "title": "Sites",
+  "new": "Novo site",
+  "summaryCount": "{n} sites",
+  "summaryDown": "{n} fora do ar",
+  "updating": "atualizando…",
+  "loadFailed": "Falha ao carregar",
+  "empty": {
+    "title": "Nenhum site ainda",
+    "desc": "Crie seu primeiro site de relay ou assuma um existente via CLI."
+  },
+  "externalManaged": "Externo",
+  "columns": {
+    "status": "Status",
+    "site": "Site",
+    "engine": "Motor / Versão",
+    "hostPort": "Porta",
+    "usage": "Requisições / Custo em 24h",
+    "job": "Tarefa"
+  },
+  "jobKind": {
+    "provision": "Provisionar",
+    "upgrade": "Atualizar",
+    "start": "Iniciar",
+    "stop": "Parar",
+    "destroy": "Destruir"
+  },
+  "jobStatus": {
+    "running": "Em execução",
+    "queued": "Na fila"
+  },
+  "toast": {
+    "queued": "Tarefa na fila — acompanhe na página Tarefas.",
+    "created": "Tarefa de provisionamento criada."
+  },
+  "upgrade": {
+    "title": "Atualizar site",
+    "descBefore": "O site ",
+    "descMid": " será atualizado para a versão de destino. Versão atual: ",
+    "descAfter": ".",
+    "versionLabel": "Versão de destino",
+    "versionHint": "Tag da imagem, ex.: v0.1.160",
+    "submit": "Atualizar",
+    "errRequired": "Informe uma versão de destino.",
+    "errSame": "A versão de destino é igual à versão atual."
+  },
+  "destroy": {
+    "title": "Destruir site",
+    "action": "Destruir site",
+    "keepMsg": "Para e remove o contêiner do site, mas mantém os volumes de dados (banco de dados/uploads), para que possa ser reconstruído e restaurado depois.",
+    "purgeMsg": "Exclui permanentemente o contêiner do site e os volumes de dados. Isto não pode ser desfeito."
+  },
+  "create": {
+    "title": "Novo site",
+    "submit": "Criar site",
+    "engineLabel": "Motor",
+    "engineRecommended": "sub2api (recomendado)",
+    "versionLabel": "Versão",
+    "versionHint": "Tag da imagem, ex.: v0.1.160",
+    "slugHint": "Letras minúsculas/dígitos/hifens, 2–32 caracteres, usado na URL e no ID do contêiner",
+    "labelLabel": "Nome de exibição",
+    "labelPlaceholder": "Meu site de relay",
+    "portLabel": "Porta",
+    "portHint": "Deixe em branco para atribuir automaticamente uma porta disponível",
+    "portPlaceholder": "Automático",
+    "emailLabel": "E-mail do administrador",
+    "emailHint": "Conta de administrador inicial do site",
+    "brandSection": "Identidade visual (opcional)",
+    "siteNameLabel": "Nome do site",
+    "siteNamePlaceholder": "Nome exibido no front-end do site",
+    "announcementLabel": "Aviso",
+    "announcementHint": "Texto de aviso exibido no front-end do site",
+    "announcementPlaceholder": "Opcional",
+    "errEngine": "Selecione um motor.",
+    "errVersion": "Informe uma versão.",
+    "errSlugRequired": "Informe um slug.",
+    "errSlugFormat": "Apenas letras minúsculas/dígitos/hifens, 2–32 caracteres, deve começar com letra ou dígito.",
+    "errLabel": "Informe um nome de exibição.",
+    "errPort": "A porta deve ser um inteiro entre 1 e 65535.",
+    "errEmailRequired": "Informe um e-mail de administrador.",
+    "errEmailFormat": "Formato de e-mail inválido."
+  },
+  "rowActions": {
+    "more": "Mais ações",
+    "upgrade": "Atualizar versão…",
+    "stop": "Parar site",
+    "start": "Iniciar site",
+    "keepData": "Manter volumes de dados",
+    "destroy": "Destruir site…"
+  }
+}

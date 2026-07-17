@@ -1,0 +1,15 @@
+{
+  "overview": "Visão geral",
+  "sites": "Sites",
+  "marketplace": "Marketplace",
+  "ledger": "Livro-razão",
+  "alerts": "Alertas",
+  "jobs": "Tarefas",
+  "operators": "Operadores",
+  "billing": "Faturamento",
+  "settings": "Configurações",
+  "logout": "Sair",
+  "roleRoot": "Administrador",
+  "roleOperator": "Operador",
+  "roleViewer": "Somente leitura"
+}

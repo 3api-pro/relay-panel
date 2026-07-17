@@ -1,0 +1,42 @@
+{
+  "statSites": "Siti totali",
+  "statSitesHint": "Esclusi quelli eliminati",
+  "statHealthy": "Siti integri",
+  "healthyAll": "Tutti online",
+  "healthyDown": "{n} sito/i non integro/i",
+  "healthyNoData": "Nessun dato di sondaggio ancora",
+  "stat24hReq": "Richieste 24h",
+  "stat24hCost": "Costo 24h",
+  "statAllSites": "Su tutti i siti",
+  "openAlerts": "Avvisi aperti · {n}",
+  "allAlerts": "Tutti gli avvisi",
+  "sitesSection": "Siti",
+  "siteManage": "Gestisci siti",
+  "latency": "Latenza",
+  "req24h": "Richieste 24h",
+  "cost24h": "Costo 24h",
+  "loadFailed": "Caricamento non riuscito",
+  "noSites": "Nessun sito ancora",
+  "noSitesDesc": "Crea il tuo primo sito nella pagina Siti oppure adottane uno esistente tramite CLI.",
+  "externalManaged": "Esterno",
+  "jobRunning": "{kind} · in esecuzione",
+  "jobQueued": "{kind} · in coda",
+  "severity": {
+    "critical": "Critico",
+    "warning": "Attenzione",
+    "info": "Informazione"
+  },
+  "jobKind": {
+    "provision": "Provisioning",
+    "upgrade": "Aggiornamento",
+    "start": "Avvio",
+    "stop": "Arresto",
+    "destroy": "Eliminazione"
+  },
+  "relTime": {
+    "justNow": "proprio ora",
+    "minAgo": "{n} min fa",
+    "hourAgo": "{n} h fa",
+    "dayAgo": "{n} g fa"
+  }
+}

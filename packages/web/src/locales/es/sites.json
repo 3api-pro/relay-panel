@@ -1,0 +1,91 @@
+{
+  "title": "Sitios",
+  "new": "Nuevo sitio",
+  "summaryCount": "{n} sitios",
+  "summaryDown": "{n} caídos",
+  "updating": "actualizando…",
+  "loadFailed": "Error al cargar",
+  "empty": {
+    "title": "Aún no hay sitios",
+    "desc": "Crea tu primer sitio de retransmisión, o adopta uno existente desde la CLI."
+  },
+  "externalManaged": "Externo",
+  "columns": {
+    "status": "Estado",
+    "site": "Sitio",
+    "engine": "Motor / Versión",
+    "hostPort": "Puerto",
+    "usage": "Solicitudes / Coste 24 h",
+    "job": "Tarea"
+  },
+  "jobKind": {
+    "provision": "Aprovisionar",
+    "upgrade": "Actualizar",
+    "start": "Arrancar",
+    "stop": "Detener",
+    "destroy": "Destruir"
+  },
+  "jobStatus": {
+    "running": "En ejecución",
+    "queued": "En cola"
+  },
+  "toast": {
+    "queued": "Tarea en cola: síguela en la página Tareas.",
+    "created": "Tarea de aprovisionamiento creada."
+  },
+  "upgrade": {
+    "title": "Actualizar sitio",
+    "descBefore": "El sitio ",
+    "descMid": " se actualizará a la versión de destino. Versión actual: ",
+    "descAfter": ".",
+    "versionLabel": "Versión de destino",
+    "versionHint": "Etiqueta de imagen, p. ej. v0.1.160",
+    "submit": "Actualizar",
+    "errRequired": "Introduce una versión de destino.",
+    "errSame": "La versión de destino coincide con la versión actual."
+  },
+  "destroy": {
+    "title": "Destruir sitio",
+    "action": "Destruir sitio",
+    "keepMsg": "Detiene y elimina el contenedor del sitio, pero conserva los volúmenes de datos (base de datos/subidas), de modo que se pueda reconstruir y restaurar más adelante.",
+    "purgeMsg": "Elimina de forma permanente el contenedor del sitio y los volúmenes de datos. Esto no se puede deshacer."
+  },
+  "create": {
+    "title": "Nuevo sitio",
+    "submit": "Crear sitio",
+    "engineLabel": "Motor",
+    "engineRecommended": "sub2api (recomendado)",
+    "versionLabel": "Versión",
+    "versionHint": "Etiqueta de imagen, p. ej. v0.1.160",
+    "slugHint": "Letras minúsculas/dígitos/guiones, de 2 a 32 caracteres, se usa para la URL y el ID del contenedor",
+    "labelLabel": "Nombre visible",
+    "labelPlaceholder": "Mi sitio de retransmisión",
+    "portLabel": "Puerto",
+    "portHint": "Déjalo vacío para asignar automáticamente un puerto disponible",
+    "portPlaceholder": "Automático",
+    "emailLabel": "Correo del administrador",
+    "emailHint": "Cuenta de administrador inicial del sitio",
+    "brandSection": "Marca (opcional)",
+    "siteNameLabel": "Nombre del sitio",
+    "siteNamePlaceholder": "Nombre mostrado en el frontend del sitio",
+    "announcementLabel": "Anuncio",
+    "announcementHint": "Texto de anuncio mostrado en el frontend del sitio",
+    "announcementPlaceholder": "Opcional",
+    "errEngine": "Selecciona un motor.",
+    "errVersion": "Introduce una versión.",
+    "errSlugRequired": "Introduce un slug.",
+    "errSlugFormat": "Solo letras minúsculas/dígitos/guiones, de 2 a 32 caracteres, debe empezar por una letra o un dígito.",
+    "errLabel": "Introduce un nombre visible.",
+    "errPort": "El puerto debe ser un entero entre 1 y 65535.",
+    "errEmailRequired": "Introduce un correo de administrador.",
+    "errEmailFormat": "Formato de correo no válido."
+  },
+  "rowActions": {
+    "more": "Más acciones",
+    "upgrade": "Actualizar versión…",
+    "stop": "Detener sitio",
+    "start": "Arrancar sitio",
+    "keepData": "Conservar volúmenes de datos",
+    "destroy": "Destruir sitio…"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "title": "Tugas",
+  "subtitle": "Catatan orkestrasi untuk penyediaan / peningkatan / mulai-henti / hancurkan",
+  "activePolling": "Tugas sedang berjalan, menyegarkan tiap 5 dtk",
+  "loadFailed": "Gagal memuat",
+  "emptyList": "Belum ada catatan tugas",
+  "col": {
+    "kind": "Jenis",
+    "slug": "Situs",
+    "status": "Status",
+    "createdBy": "Dibuat oleh",
+    "createdAt": "Dibuat",
+    "duration": "Durasi"
+  },
+  "kind": {
+    "provision": "Penyediaan",
+    "upgrade": "Peningkatan",
+    "start": "Mulai",
+    "stop": "Henti",
+    "destroy": "Hancurkan"
+  },
+  "relTime": {
+    "justNow": "baru saja",
+    "minAgo": "{n} mnt lalu",
+    "hourAgo": "{n} jam lalu",
+    "dayAgo": "{n} hr lalu"
+  },
+  "detail": {
+    "titleWithId": "Tugas #{id}",
+    "title": "Detail tugas",
+    "createdBy": "Dibuat oleh",
+    "duration": "Durasi",
+    "createdAt": "Dibuat pada",
+    "finishedAt": "Selesai pada",
+    "refreshFailed": "Gagal menyegarkan detail: {msg}",
+    "errorLabel": "Kesalahan",
+    "stepsLabel": "Langkah",
+    "liveRefresh": "Langsung",
+    "noSteps": "Tidak ada catatan langkah"
+  },
+  "step": {
+    "failed": "Gagal",
+    "done": "Selesai",
+    "running": "Berjalan",
+    "queued": "Dalam antrean",
+    "provisioning": "Menyiapkan",
+    "skipped": "Dilewati"
+  }
+}

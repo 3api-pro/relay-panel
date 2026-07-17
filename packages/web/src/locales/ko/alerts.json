@@ -1,0 +1,43 @@
+{
+  "refreshing": "새로고침 중",
+  "notifySettings": "알림 설정",
+  "colSeverity": "심각도",
+  "colKind": "유형",
+  "colAlert": "알림",
+  "colSite": "사이트",
+  "colRecent": "최근",
+  "resolve": "해결",
+  "firstSeen": "최초 발생 {time}",
+  "resolvedToast": "알림을 해결됨으로 표시했습니다",
+  "loadFailed": "불러오기에 실패했습니다",
+  "emptyResolvedTitle": "해결된 알림 없음",
+  "emptyOkTitle": "알림 없음, 모두 정상",
+  "emptyOpenDesc": "모든 사이트가 정상 작동 중입니다. 문제가 발생하면 여기에 정리되어 표시됩니다.",
+  "emptyResolvedDesc": "아직 해결됨으로 표시된 알림이 없습니다.",
+  "emptyAllDesc": "현재 알림 기록이 없습니다.",
+  "settingsTitle": "알림 발송 설정",
+  "settingsDesc": "설정하면 새로운 심각/경고 알림이 이 웹훅으로 전송됩니다. 비워 두고 저장하면 발송이 비활성화됩니다.",
+  "webhookLabel": "웹훅 URL",
+  "webhookHint": "위챗 워크 / 페이슈 / 슬랙 봇 등의 http(s):// URL을 지원합니다. 비워 두면 비활성화됩니다.",
+  "webhookInvalid": "http:// 또는 https://로 시작하는 주소만 지원합니다",
+  "webhookSaved": "알림 웹훅을 저장했습니다",
+  "pushDisabled": "알림 발송이 비활성화되었습니다",
+  "settingsLoadFailed": "알림 설정을 불러오지 못했습니다",
+  "severity": {
+    "critical": "심각",
+    "warning": "경고",
+    "info": "정보"
+  },
+  "kind": {
+    "site_down": "사이트 접속 불가",
+    "channel_disabled": "채널 비활성화됨",
+    "low_balance": "업스트림 잔액 부족",
+    "job_failed": "작업 실패"
+  },
+  "relTime": {
+    "justNow": "방금 전",
+    "minAgo": "{n}분 전",
+    "hourAgo": "{n}시간 전",
+    "dayAgo": "{n}일 전"
+  }
+}

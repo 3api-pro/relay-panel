@@ -1,0 +1,15 @@
+{
+  "overview": "Übersicht",
+  "sites": "Sites",
+  "marketplace": "Marktplatz",
+  "ledger": "Umsatzbuch",
+  "alerts": "Warnungen",
+  "jobs": "Aufträge",
+  "operators": "Betreiber",
+  "billing": "Abrechnung",
+  "settings": "Einstellungen",
+  "logout": "Abmelden",
+  "roleRoot": "Administrator",
+  "roleOperator": "Betreiber",
+  "roleViewer": "Nur Lesen"
+}

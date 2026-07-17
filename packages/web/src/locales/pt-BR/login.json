@@ -1,0 +1,9 @@
+{
+  "tagline": "Console de orquestração de relay multi-site",
+  "email": "E-mail",
+  "password": "Senha",
+  "submit": "Entrar",
+  "errorEmpty": "Informe seu e-mail e senha",
+  "errorFail": "Falha ao entrar. Tente novamente mais tarde.",
+  "noRegister": "O registro está fechado. Contate o administrador da instância para um convite."
+}

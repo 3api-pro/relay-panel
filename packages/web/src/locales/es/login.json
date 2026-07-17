@@ -1,0 +1,9 @@
+{
+  "tagline": "Consola de orquestación de retransmisión multisitio",
+  "email": "Correo electrónico",
+  "password": "Contraseña",
+  "submit": "Iniciar sesión",
+  "errorEmpty": "Introduce tu correo y tu contraseña",
+  "errorFail": "No se pudo iniciar sesión. Inténtalo de nuevo más tarde.",
+  "noRegister": "El registro está cerrado. Solicita una invitación al administrador de tu instancia."
+}

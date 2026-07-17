@@ -23,7 +23,7 @@ export interface NoopLifecycleOptions {
 }
 
 /** 演示 provision 的假进度步骤（纯展示，无真实副作用） */
-const DEMO_PROVISION_STEPS = ['准备配置', '拉起实例', '健康检查', '初始化管理员'] as const;
+const DEMO_PROVISION_STEPS = ['Render config', 'Start containers', 'Health check', 'Init admin'] as const;
 
 export class NoopLifecycle implements EngineLifecycle {
   readonly engine: EngineKind;

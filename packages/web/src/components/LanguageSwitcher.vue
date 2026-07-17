@@ -5,8 +5,9 @@ import { useI18n } from 'vue-i18n';
 import { LOCALE_OPTIONS, setLocale, type Locale } from '../i18n';
 
 /**
- * 语言切换：地球玻璃 chip + 下拉（中文 / English / 日本語）。
- * 切换调 i18n setLocale（持久化）。点击外部 / ESC 关闭。
+ * 语言切换：地球玻璃 chip + 下拉（10 种语言，见 i18n LOCALE_OPTIONS）。
+ * 列表静态列全 10 种；缺失 locale 文件由 vue-i18n 自动回退 en。
+ * 切换调 i18n setLocale（持久化）。当前语言高亮。点击外部 / ESC 关闭。
  */
 const { locale } = useI18n();
 const open = ref(false);

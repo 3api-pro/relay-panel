@@ -1,0 +1,91 @@
+{
+  "title": "Sites",
+  "new": "Neue Site",
+  "summaryCount": "{n} Sites",
+  "summaryDown": "{n} ausgefallen",
+  "updating": "wird aktualisiert…",
+  "loadFailed": "Laden fehlgeschlagen",
+  "empty": {
+    "title": "Noch keine Sites",
+    "desc": "Erstellen Sie Ihre erste Relay-Site oder übernehmen Sie eine bestehende per CLI."
+  },
+  "externalManaged": "Extern",
+  "columns": {
+    "status": "Status",
+    "site": "Site",
+    "engine": "Engine / Version",
+    "hostPort": "Port",
+    "usage": "Anfragen / Kosten (24 h)",
+    "job": "Auftrag"
+  },
+  "jobKind": {
+    "provision": "Bereitstellen",
+    "upgrade": "Upgrade",
+    "start": "Starten",
+    "stop": "Stoppen",
+    "destroy": "Entfernen"
+  },
+  "jobStatus": {
+    "running": "Läuft",
+    "queued": "In Warteschlange"
+  },
+  "toast": {
+    "queued": "Auftrag in Warteschlange — verfolgen Sie ihn auf der Seite „Aufträge“.",
+    "created": "Bereitstellungs-Auftrag erstellt."
+  },
+  "upgrade": {
+    "title": "Site upgraden",
+    "descBefore": "Site ",
+    "descMid": " wird auf die Zielversion aktualisiert. Aktuelle Version: ",
+    "descAfter": ".",
+    "versionLabel": "Zielversion",
+    "versionHint": "Image-Tag, z. B. v0.1.160",
+    "submit": "Upgrade",
+    "errRequired": "Geben Sie eine Zielversion ein.",
+    "errSame": "Die Zielversion entspricht der aktuellen Version."
+  },
+  "destroy": {
+    "title": "Site entfernen",
+    "action": "Site entfernen",
+    "keepMsg": "Stoppt und entfernt den Site-Container, behält aber die Daten-Volumes (Datenbank/Uploads), sodass die Site später neu aufgebaut und wiederhergestellt werden kann.",
+    "purgeMsg": "Löscht den Site-Container und die Daten-Volumes dauerhaft. Dies kann nicht rückgängig gemacht werden."
+  },
+  "create": {
+    "title": "Neue Site",
+    "submit": "Site erstellen",
+    "engineLabel": "Engine",
+    "engineRecommended": "sub2api (empfohlen)",
+    "versionLabel": "Version",
+    "versionHint": "Image-Tag, z. B. v0.1.160",
+    "slugHint": "Kleinbuchstaben/Ziffern/Bindestriche, 2–32 Zeichen, für URL und Container-ID",
+    "labelLabel": "Anzeigename",
+    "labelPlaceholder": "Meine Relay-Site",
+    "portLabel": "Port",
+    "portHint": "Leer lassen, um automatisch einen freien Port zuzuweisen",
+    "portPlaceholder": "Automatisch",
+    "emailLabel": "Admin-E-Mail",
+    "emailHint": "Initiales Admin-Konto für die Site",
+    "brandSection": "Branding (optional)",
+    "siteNameLabel": "Site-Name",
+    "siteNamePlaceholder": "Name, der im Frontend der Site angezeigt wird",
+    "announcementLabel": "Ankündigung",
+    "announcementHint": "Ankündigungstext, der im Frontend der Site angezeigt wird",
+    "announcementPlaceholder": "Optional",
+    "errEngine": "Wählen Sie eine Engine.",
+    "errVersion": "Geben Sie eine Version ein.",
+    "errSlugRequired": "Geben Sie einen Slug ein.",
+    "errSlugFormat": "Nur Kleinbuchstaben/Ziffern/Bindestriche, 2–32 Zeichen, muss mit einem Buchstaben oder einer Ziffer beginnen.",
+    "errLabel": "Geben Sie einen Anzeigenamen ein.",
+    "errPort": "Der Port muss eine ganze Zahl zwischen 1 und 65535 sein.",
+    "errEmailRequired": "Geben Sie eine Admin-E-Mail ein.",
+    "errEmailFormat": "Ungültiges E-Mail-Format."
+  },
+  "rowActions": {
+    "more": "Weitere Aktionen",
+    "upgrade": "Version upgraden…",
+    "stop": "Site stoppen",
+    "start": "Site starten",
+    "keepData": "Daten-Volumes behalten",
+    "destroy": "Site entfernen…"
+  }
+}

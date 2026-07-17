@@ -1,0 +1,15 @@
+{
+  "overview": "Resumen",
+  "sites": "Sitios",
+  "marketplace": "Marketplace",
+  "ledger": "Libro",
+  "alerts": "Alertas",
+  "jobs": "Tareas",
+  "operators": "Operadores",
+  "billing": "Facturación",
+  "settings": "Ajustes",
+  "logout": "Cerrar sesión",
+  "roleRoot": "Administrador",
+  "roleOperator": "Operador",
+  "roleViewer": "Solo lectura"
+}

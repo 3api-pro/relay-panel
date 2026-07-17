@@ -1,0 +1,49 @@
+{
+  "title": "작업",
+  "subtitle": "생성 / 업그레이드 / 시작·중지 / 삭제 오케스트레이션 기록",
+  "activePolling": "작업 진행 중, 5초마다 새로고침",
+  "loadFailed": "불러오기에 실패했습니다",
+  "emptyList": "아직 작업 기록이 없습니다",
+  "col": {
+    "kind": "유형",
+    "slug": "사이트",
+    "status": "상태",
+    "createdBy": "생성자",
+    "createdAt": "생성일",
+    "duration": "소요 시간"
+  },
+  "kind": {
+    "provision": "생성",
+    "upgrade": "업그레이드",
+    "start": "시작",
+    "stop": "중지",
+    "destroy": "삭제"
+  },
+  "relTime": {
+    "justNow": "방금 전",
+    "minAgo": "{n}분 전",
+    "hourAgo": "{n}시간 전",
+    "dayAgo": "{n}일 전"
+  },
+  "detail": {
+    "titleWithId": "작업 #{id}",
+    "title": "작업 상세",
+    "createdBy": "생성자",
+    "duration": "소요 시간",
+    "createdAt": "생성 시각",
+    "finishedAt": "완료 시각",
+    "refreshFailed": "상세 정보를 새로고침하지 못했습니다: {msg}",
+    "errorLabel": "오류",
+    "stepsLabel": "단계",
+    "liveRefresh": "실시간",
+    "noSteps": "단계 기록 없음"
+  },
+  "step": {
+    "failed": "실패",
+    "done": "완료",
+    "running": "실행 중",
+    "queued": "대기 중",
+    "provisioning": "준비 중",
+    "skipped": "건너뜀"
+  }
+}

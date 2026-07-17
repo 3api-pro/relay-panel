@@ -1,0 +1,15 @@
+{
+  "overview": "Panoramica",
+  "sites": "Siti",
+  "marketplace": "Marketplace",
+  "ledger": "Registro",
+  "alerts": "Avvisi",
+  "jobs": "Processi",
+  "operators": "Operatori",
+  "billing": "Fatturazione",
+  "settings": "Impostazioni",
+  "logout": "Esci",
+  "roleRoot": "Amministratore",
+  "roleOperator": "Operatore",
+  "roleViewer": "Sola lettura"
+}

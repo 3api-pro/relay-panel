@@ -1,0 +1,43 @@
+{
+  "refreshing": "Aggiornamento",
+  "notifySettings": "Notifiche",
+  "colSeverity": "Gravità",
+  "colKind": "Tipo",
+  "colAlert": "Avviso",
+  "colSite": "Sito",
+  "colRecent": "Recente",
+  "resolve": "Risolvi",
+  "firstSeen": "Rilevato la prima volta {time}",
+  "resolvedToast": "Avviso contrassegnato come risolto",
+  "loadFailed": "Caricamento non riuscito",
+  "emptyResolvedTitle": "Nessun avviso risolto",
+  "emptyOkTitle": "Nessun avviso, tutto regolare",
+  "emptyOpenDesc": "Tutti i siti funzionano normalmente; eventuali problemi verranno riepilogati qui quando si presentano.",
+  "emptyResolvedDesc": "Nessun avviso è ancora stato contrassegnato come risolto.",
+  "emptyAllDesc": "Al momento non ci sono avvisi registrati.",
+  "settingsTitle": "Impostazioni notifiche avvisi",
+  "settingsDesc": "Una volta configurato, i nuovi avvisi critici / di attenzione vengono inviati a questo webhook. Lascia vuoto e salva per disattivare l'invio.",
+  "webhookLabel": "URL webhook",
+  "webhookHint": "Supporta URL http(s):// come i bot di WeCom / Feishu / Slack. Vuoto = disattivato.",
+  "webhookInvalid": "Sono supportati solo indirizzi che iniziano con http:// o https://",
+  "webhookSaved": "Webhook di notifica salvato",
+  "pushDisabled": "Invio avvisi disattivato",
+  "settingsLoadFailed": "Caricamento delle impostazioni di notifica non riuscito",
+  "severity": {
+    "critical": "Critico",
+    "warning": "Attenzione",
+    "info": "Informazione"
+  },
+  "kind": {
+    "site_down": "Sito irraggiungibile",
+    "channel_disabled": "Canale disattivato",
+    "low_balance": "Saldo upstream basso",
+    "job_failed": "Processo non riuscito"
+  },
+  "relTime": {
+    "justNow": "proprio ora",
+    "minAgo": "{n} min fa",
+    "hourAgo": "{n} h fa",
+    "dayAgo": "{n} g fa"
+  }
+}

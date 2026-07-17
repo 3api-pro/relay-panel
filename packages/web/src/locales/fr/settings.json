@@ -1,0 +1,35 @@
+{
+  "loadFailed": "Échec du chargement",
+  "loadErrorNoAccount": "Impossible de charger votre compte. Veuillez vous reconnecter.",
+  "changePassword": "Changer le mot de passe",
+  "currentPassword": "Mot de passe actuel",
+  "currentPasswordPlaceholder": "Saisissez le mot de passe actuel",
+  "newPassword": "Nouveau mot de passe",
+  "newPasswordPlaceholder": "Définissez un nouveau mot de passe",
+  "confirmPassword": "Confirmez le nouveau mot de passe",
+  "confirmPasswordPlaceholder": "Ressaisissez le nouveau mot de passe",
+  "pwHint": "Au moins 8 caractères",
+  "pwMinLength": "Le mot de passe doit comporter au moins 8 caractères",
+  "pwMismatch": "Les mots de passe ne correspondent pas",
+  "pwNote": "Les autres appareils connectés seront déconnectés après la modification.",
+  "updatePassword": "Mettre à jour le mot de passe",
+  "pwUpdated": "Mot de passe mis à jour. Les autres appareils devront se reconnecter.",
+  "accountInfo": "Compte",
+  "email": "E-mail",
+  "displayName": "Nom affiché",
+  "notSet": "Non défini",
+  "roleLabel": "Rôle",
+  "role": {
+    "root": "Super administrateur",
+    "operator": "Opérateur",
+    "viewer": "Observateur"
+  },
+  "instanceConfig": "Configuration de l'instance",
+  "signupModeLabel": "Mode d'inscription",
+  "signupMode": {
+    "closed": "Fermé",
+    "invite": "Sur invitation",
+    "open": "Ouvert"
+  },
+  "alertsHint": "Configurez le webhook d'alerte sur la page Alertes pour être notifié lorsqu'un site tombe en panne."
+}

@@ -1,0 +1,35 @@
+{
+  "loadFailed": "Gagal memuat",
+  "loadErrorNoAccount": "Tidak dapat memuat akun Anda. Silakan masuk kembali.",
+  "changePassword": "Ubah kata sandi",
+  "currentPassword": "Kata sandi saat ini",
+  "currentPasswordPlaceholder": "Masukkan kata sandi saat ini",
+  "newPassword": "Kata sandi baru",
+  "newPasswordPlaceholder": "Tetapkan kata sandi baru",
+  "confirmPassword": "Konfirmasi kata sandi baru",
+  "confirmPasswordPlaceholder": "Masukkan ulang kata sandi baru",
+  "pwHint": "Minimal 8 karakter",
+  "pwMinLength": "Kata sandi harus minimal 8 karakter",
+  "pwMismatch": "Kata sandi tidak cocok",
+  "pwNote": "Perangkat lain yang sedang masuk akan dikeluarkan setelah perubahan.",
+  "updatePassword": "Perbarui kata sandi",
+  "pwUpdated": "Kata sandi diperbarui. Perangkat lain harus masuk kembali.",
+  "accountInfo": "Akun",
+  "email": "Email",
+  "displayName": "Nama tampilan",
+  "notSet": "Belum diatur",
+  "roleLabel": "Peran",
+  "role": {
+    "root": "Admin utama",
+    "operator": "Operator",
+    "viewer": "Peninjau"
+  },
+  "instanceConfig": "Konfigurasi instans",
+  "signupModeLabel": "Mode pendaftaran",
+  "signupMode": {
+    "closed": "Ditutup",
+    "invite": "Hanya undangan",
+    "open": "Terbuka"
+  },
+  "alertsHint": "Konfigurasikan webhook peringatan di halaman Peringatan agar diberi tahu saat sebuah situs tidak aktif."
+}

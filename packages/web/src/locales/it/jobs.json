@@ -1,0 +1,49 @@
+{
+  "title": "Processi",
+  "subtitle": "Registro di orchestrazione per provisioning / aggiornamento / avvio-arresto / eliminazione",
+  "activePolling": "Processi in corso, aggiornamento ogni 5 s",
+  "loadFailed": "Caricamento non riuscito",
+  "emptyList": "Nessun processo registrato",
+  "col": {
+    "kind": "Tipo",
+    "slug": "Sito",
+    "status": "Stato",
+    "createdBy": "Creato da",
+    "createdAt": "Creato",
+    "duration": "Durata"
+  },
+  "kind": {
+    "provision": "Provisioning",
+    "upgrade": "Aggiornamento",
+    "start": "Avvio",
+    "stop": "Arresto",
+    "destroy": "Eliminazione"
+  },
+  "relTime": {
+    "justNow": "proprio ora",
+    "minAgo": "{n} min fa",
+    "hourAgo": "{n} h fa",
+    "dayAgo": "{n} g fa"
+  },
+  "detail": {
+    "titleWithId": "Processo n. {id}",
+    "title": "Dettaglio processo",
+    "createdBy": "Creato da",
+    "duration": "Durata",
+    "createdAt": "Creato il",
+    "finishedAt": "Terminato il",
+    "refreshFailed": "Aggiornamento del dettaglio non riuscito: {msg}",
+    "errorLabel": "Errore",
+    "stepsLabel": "Passaggi",
+    "liveRefresh": "In tempo reale",
+    "noSteps": "Nessun passaggio registrato"
+  },
+  "step": {
+    "failed": "Non riuscito",
+    "done": "Completato",
+    "running": "In esecuzione",
+    "queued": "In coda",
+    "provisioning": "Preparazione",
+    "skipped": "Saltato"
+  }
+}

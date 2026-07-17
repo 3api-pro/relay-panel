@@ -1,0 +1,9 @@
+{
+  "tagline": "Console di orchestrazione relay multi-sito",
+  "email": "Email",
+  "password": "Password",
+  "submit": "Accedi",
+  "errorEmpty": "Inserisci email e password",
+  "errorFail": "Accesso non riuscito. Riprova più tardi.",
+  "noRegister": "Le registrazioni sono chiuse. Contatta l'amministratore dell'istanza per un invito."
+}

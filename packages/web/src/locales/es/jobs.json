@@ -1,0 +1,49 @@
+{
+  "title": "Tareas",
+  "subtitle": "Registros de orquestación de aprovisionamiento / actualización / arranque-parada / destrucción",
+  "activePolling": "Tareas en curso, actualizando cada 5 s",
+  "loadFailed": "Error al cargar",
+  "emptyList": "Aún no hay registros de tareas",
+  "col": {
+    "kind": "Tipo",
+    "slug": "Sitio",
+    "status": "Estado",
+    "createdBy": "Creada por",
+    "createdAt": "Creada",
+    "duration": "Duración"
+  },
+  "kind": {
+    "provision": "Aprovisionar",
+    "upgrade": "Actualizar",
+    "start": "Arrancar",
+    "stop": "Detener",
+    "destroy": "Destruir"
+  },
+  "relTime": {
+    "justNow": "ahora mismo",
+    "minAgo": "hace {n} min",
+    "hourAgo": "hace {n} h",
+    "dayAgo": "hace {n} d"
+  },
+  "detail": {
+    "titleWithId": "Tarea n.º {id}",
+    "title": "Detalle de la tarea",
+    "createdBy": "Creada por",
+    "duration": "Duración",
+    "createdAt": "Creada el",
+    "finishedAt": "Finalizada el",
+    "refreshFailed": "Error al actualizar el detalle: {msg}",
+    "errorLabel": "Error",
+    "stepsLabel": "Pasos",
+    "liveRefresh": "En vivo",
+    "noSteps": "No hay registros de pasos"
+  },
+  "step": {
+    "failed": "Fallido",
+    "done": "Hecho",
+    "running": "En ejecución",
+    "queued": "En cola",
+    "provisioning": "Preparando",
+    "skipped": "Omitido"
+  }
+}

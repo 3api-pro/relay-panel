@@ -1,0 +1,9 @@
+{
+  "tagline": "Konsol orkestrasi relay multi-situs",
+  "email": "Email",
+  "password": "Kata sandi",
+  "submit": "Masuk",
+  "errorEmpty": "Silakan masukkan email dan kata sandi Anda",
+  "errorFail": "Gagal masuk. Silakan coba lagi nanti.",
+  "noRegister": "Pendaftaran ditutup. Hubungi admin instans Anda untuk undangan."
+}

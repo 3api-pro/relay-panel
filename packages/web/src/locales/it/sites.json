@@ -1,0 +1,91 @@
+{
+  "title": "Siti",
+  "new": "Nuovo sito",
+  "summaryCount": "{n} siti",
+  "summaryDown": "{n} offline",
+  "updating": "aggiornamento…",
+  "loadFailed": "Caricamento non riuscito",
+  "empty": {
+    "title": "Nessun sito ancora",
+    "desc": "Crea il tuo primo sito relay oppure adottane uno esistente tramite la CLI."
+  },
+  "externalManaged": "Esterno",
+  "columns": {
+    "status": "Stato",
+    "site": "Sito",
+    "engine": "Engine / Versione",
+    "hostPort": "Porta",
+    "usage": "Richieste / Costo 24h",
+    "job": "Processo"
+  },
+  "jobKind": {
+    "provision": "Provisioning",
+    "upgrade": "Aggiornamento",
+    "start": "Avvio",
+    "stop": "Arresto",
+    "destroy": "Eliminazione"
+  },
+  "jobStatus": {
+    "running": "In esecuzione",
+    "queued": "In coda"
+  },
+  "toast": {
+    "queued": "Processo in coda — monitoralo nella pagina Processi.",
+    "created": "Processo di provisioning creato."
+  },
+  "upgrade": {
+    "title": "Aggiorna sito",
+    "descBefore": "Il sito ",
+    "descMid": " verrà aggiornato alla versione di destinazione. Versione attuale: ",
+    "descAfter": ".",
+    "versionLabel": "Versione di destinazione",
+    "versionHint": "Tag immagine, es. v0.1.160",
+    "submit": "Aggiorna",
+    "errRequired": "Inserisci una versione di destinazione.",
+    "errSame": "La versione di destinazione coincide con quella attuale."
+  },
+  "destroy": {
+    "title": "Elimina sito",
+    "action": "Elimina sito",
+    "keepMsg": "Arresta e rimuove il container del sito ma conserva i volumi di dati (database/caricamenti), così può essere ricostruito e ripristinato in seguito.",
+    "purgeMsg": "Elimina in modo permanente il container del sito e i volumi di dati. Operazione irreversibile."
+  },
+  "create": {
+    "title": "Nuovo sito",
+    "submit": "Crea sito",
+    "engineLabel": "Engine",
+    "engineRecommended": "sub2api (consigliato)",
+    "versionLabel": "Versione",
+    "versionHint": "Tag immagine, es. v0.1.160",
+    "slugHint": "Lettere minuscole/cifre/trattini, 2–32 caratteri, usato per URL e ID container",
+    "labelLabel": "Nome visualizzato",
+    "labelPlaceholder": "Il mio sito relay",
+    "portLabel": "Porta",
+    "portHint": "Lascia vuoto per assegnare automaticamente una porta libera",
+    "portPlaceholder": "Auto",
+    "emailLabel": "Email amministratore",
+    "emailHint": "Account amministratore iniziale del sito",
+    "brandSection": "Personalizzazione (opzionale)",
+    "siteNameLabel": "Nome del sito",
+    "siteNamePlaceholder": "Nome mostrato sul front-end del sito",
+    "announcementLabel": "Annuncio",
+    "announcementHint": "Testo dell'annuncio mostrato sul front-end del sito",
+    "announcementPlaceholder": "Opzionale",
+    "errEngine": "Seleziona un engine.",
+    "errVersion": "Inserisci una versione.",
+    "errSlugRequired": "Inserisci uno slug.",
+    "errSlugFormat": "Solo lettere minuscole/cifre/trattini, 2–32 caratteri, deve iniziare con una lettera o una cifra.",
+    "errLabel": "Inserisci un nome visualizzato.",
+    "errPort": "La porta deve essere un intero compreso tra 1 e 65535.",
+    "errEmailRequired": "Inserisci un'email amministratore.",
+    "errEmailFormat": "Formato email non valido."
+  },
+  "rowActions": {
+    "more": "Altre azioni",
+    "upgrade": "Aggiorna versione…",
+    "stop": "Arresta sito",
+    "start": "Avvia sito",
+    "keepData": "Conserva i volumi di dati",
+    "destroy": "Elimina sito…"
+  }
+}

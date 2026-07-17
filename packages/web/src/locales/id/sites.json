@@ -1,0 +1,91 @@
+{
+  "title": "Situs",
+  "new": "Situs Baru",
+  "summaryCount": "{n} situs",
+  "summaryDown": "{n} tidak aktif",
+  "updating": "memperbarui…",
+  "loadFailed": "Gagal memuat",
+  "empty": {
+    "title": "Belum ada situs",
+    "desc": "Buat situs relay pertama Anda, atau ambil alih yang sudah ada via CLI."
+  },
+  "externalManaged": "Eksternal",
+  "columns": {
+    "status": "Status",
+    "site": "Situs",
+    "engine": "Engine / Versi",
+    "hostPort": "Port",
+    "usage": "Permintaan / Biaya 24 jam",
+    "job": "Tugas"
+  },
+  "jobKind": {
+    "provision": "Penyediaan",
+    "upgrade": "Peningkatan",
+    "start": "Mulai",
+    "stop": "Henti",
+    "destroy": "Hancurkan"
+  },
+  "jobStatus": {
+    "running": "Berjalan",
+    "queued": "Dalam antrean"
+  },
+  "toast": {
+    "queued": "Tugas masuk antrean — lacak di halaman Tugas.",
+    "created": "Tugas penyediaan dibuat."
+  },
+  "upgrade": {
+    "title": "Tingkatkan Situs",
+    "descBefore": "Situs ",
+    "descMid": " akan ditingkatkan ke versi target. Versi saat ini: ",
+    "descAfter": ".",
+    "versionLabel": "Versi target",
+    "versionHint": "Tag image, mis. v0.1.160",
+    "submit": "Tingkatkan",
+    "errRequired": "Masukkan versi target.",
+    "errSame": "Versi target sama dengan versi saat ini."
+  },
+  "destroy": {
+    "title": "Hancurkan Situs",
+    "action": "Hancurkan Situs",
+    "keepMsg": "Menghentikan dan menghapus kontainer situs tetapi menyimpan volume data (basis data/unggahan), sehingga dapat dibangun ulang dan dipulihkan nanti.",
+    "purgeMsg": "Menghapus permanen kontainer situs dan volume data. Ini tidak dapat dibatalkan."
+  },
+  "create": {
+    "title": "Situs Baru",
+    "submit": "Buat Situs",
+    "engineLabel": "Engine",
+    "engineRecommended": "sub2api (disarankan)",
+    "versionLabel": "Versi",
+    "versionHint": "Tag image, mis. v0.1.160",
+    "slugHint": "Huruf kecil/angka/tanda hubung, 2–32 karakter, dipakai untuk URL dan ID kontainer",
+    "labelLabel": "Nama tampilan",
+    "labelPlaceholder": "Situs relay saya",
+    "portLabel": "Port",
+    "portHint": "Kosongkan untuk menetapkan port yang tersedia secara otomatis",
+    "portPlaceholder": "Otomatis",
+    "emailLabel": "Email admin",
+    "emailHint": "Akun admin awal untuk situs",
+    "brandSection": "Branding (opsional)",
+    "siteNameLabel": "Nama situs",
+    "siteNamePlaceholder": "Nama yang ditampilkan di front end situs",
+    "announcementLabel": "Pengumuman",
+    "announcementHint": "Teks pengumuman yang ditampilkan di front end situs",
+    "announcementPlaceholder": "Opsional",
+    "errEngine": "Pilih engine.",
+    "errVersion": "Masukkan versi.",
+    "errSlugRequired": "Masukkan slug.",
+    "errSlugFormat": "Hanya huruf kecil/angka/tanda hubung, 2–32 karakter, harus diawali huruf atau angka.",
+    "errLabel": "Masukkan nama tampilan.",
+    "errPort": "Port harus bilangan bulat antara 1 dan 65535.",
+    "errEmailRequired": "Masukkan email admin.",
+    "errEmailFormat": "Format email tidak valid."
+  },
+  "rowActions": {
+    "more": "Aksi lainnya",
+    "upgrade": "Tingkatkan versi…",
+    "stop": "Hentikan situs",
+    "start": "Mulai situs",
+    "keepData": "Pertahankan volume data",
+    "destroy": "Hancurkan situs…"
+  }
+}

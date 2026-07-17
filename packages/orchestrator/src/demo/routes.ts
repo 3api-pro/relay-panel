@@ -40,7 +40,7 @@ export function registerDemoRoutes(app: FastifyInstance, deps: DemoRoutesDeps): 
   app.post('/api/demo/login', async (req, reply) => {
     const rows = await db.orm.select().from(operators).where(eq(operators.email, DEMO_EMAIL)).limit(1);
     const op = rows[0];
-    if (!op) return reply.code(503).send({ error: '演示账号未就绪' });
+    if (!op) return reply.code(503).send({ error: 'Demo account not ready' });
 
     const ua = req.headers['user-agent'];
     const { token } = await createSession(db, op.id, config.sessionTtlHours, {

@@ -1,0 +1,43 @@
+{
+  "refreshing": "Actualizando",
+  "notifySettings": "Notificaciones",
+  "colSeverity": "Severidad",
+  "colKind": "Tipo",
+  "colAlert": "Alerta",
+  "colSite": "Sitio",
+  "colRecent": "Reciente",
+  "resolve": "Resolver",
+  "firstSeen": "Detectada por primera vez {time}",
+  "resolvedToast": "Alerta marcada como resuelta",
+  "loadFailed": "Error al cargar",
+  "emptyResolvedTitle": "No hay alertas resueltas",
+  "emptyOkTitle": "Sin alertas, todo en orden",
+  "emptyOpenDesc": "Todos los sitios funcionan con normalidad; cualquier incidencia se resumirá aquí cuando surja.",
+  "emptyResolvedDesc": "Aún no se ha marcado ninguna alerta como resuelta.",
+  "emptyAllDesc": "Por el momento no hay registros de alertas.",
+  "settingsTitle": "Configuración de notificaciones de alertas",
+  "settingsDesc": "Una vez configurado, las nuevas alertas críticas o de advertencia se envían a este webhook. Deja el campo vacío y guarda para desactivar el envío.",
+  "webhookLabel": "URL del webhook",
+  "webhookHint": "Admite URL http(s):// como bots de WeCom, Feishu o Slack. Vacío = desactivado.",
+  "webhookInvalid": "Solo se admiten direcciones que empiecen por http:// o https://",
+  "webhookSaved": "Webhook de notificaciones guardado",
+  "pushDisabled": "Envío de alertas desactivado",
+  "settingsLoadFailed": "Error al cargar la configuración de notificaciones",
+  "severity": {
+    "critical": "Crítica",
+    "warning": "Advertencia",
+    "info": "Información"
+  },
+  "kind": {
+    "site_down": "Sitio inaccesible",
+    "channel_disabled": "Canal desactivado",
+    "low_balance": "Saldo bajo en el proveedor",
+    "job_failed": "Tarea fallida"
+  },
+  "relTime": {
+    "justNow": "ahora mismo",
+    "minAgo": "hace {n} min",
+    "hourAgo": "hace {n} h",
+    "dayAgo": "hace {n} d"
+  }
+}

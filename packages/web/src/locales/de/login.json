@@ -1,0 +1,9 @@
+{
+  "tagline": "Orchestrierungskonsole für Multi-Site-Relays",
+  "email": "E-Mail",
+  "password": "Passwort",
+  "submit": "Anmelden",
+  "errorEmpty": "Bitte geben Sie E-Mail und Passwort ein",
+  "errorFail": "Anmeldung fehlgeschlagen. Bitte versuchen Sie es später erneut.",
+  "noRegister": "Die Registrierung ist geschlossen. Wenden Sie sich für eine Einladung an Ihren Instanz-Administrator."
+}

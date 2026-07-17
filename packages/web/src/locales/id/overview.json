@@ -1,0 +1,42 @@
+{
+  "statSites": "Total situs",
+  "statSitesHint": "Tidak termasuk yang dihancurkan",
+  "statHealthy": "Situs sehat",
+  "healthyAll": "Semua daring",
+  "healthyDown": "{n} situs tidak sehat",
+  "healthyNoData": "Belum ada data pemeriksaan",
+  "stat24hReq": "Permintaan 24 jam",
+  "stat24hCost": "Biaya 24 jam",
+  "statAllSites": "Di seluruh situs",
+  "openAlerts": "Peringatan terbuka · {n}",
+  "allAlerts": "Semua peringatan",
+  "sitesSection": "Situs",
+  "siteManage": "Kelola situs",
+  "latency": "Latensi",
+  "req24h": "Permintaan 24 jam",
+  "cost24h": "Biaya 24 jam",
+  "loadFailed": "Gagal memuat",
+  "noSites": "Belum ada situs",
+  "noSitesDesc": "Buat situs pertama Anda di halaman Situs, atau adopsi yang sudah ada via CLI.",
+  "externalManaged": "Eksternal",
+  "jobRunning": "{kind} · berjalan",
+  "jobQueued": "{kind} · dalam antrean",
+  "severity": {
+    "critical": "Kritis",
+    "warning": "Peringatan",
+    "info": "Info"
+  },
+  "jobKind": {
+    "provision": "Penyediaan",
+    "upgrade": "Peningkatan",
+    "start": "Mulai",
+    "stop": "Henti",
+    "destroy": "Hancurkan"
+  },
+  "relTime": {
+    "justNow": "baru saja",
+    "minAgo": "{n} mnt lalu",
+    "hourAgo": "{n} jam lalu",
+    "dayAgo": "{n} hr lalu"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "statSites": "총 사이트",
+  "statSitesHint": "삭제된 항목 제외",
+  "statHealthy": "정상 사이트",
+  "healthyAll": "전체 온라인",
+  "healthyDown": "{n}개 사이트 비정상",
+  "healthyNoData": "아직 점검 데이터 없음",
+  "stat24hReq": "24시간 요청",
+  "stat24hCost": "24시간 비용",
+  "statAllSites": "전체 사이트 합계",
+  "openAlerts": "미해결 알림 · {n}",
+  "allAlerts": "전체 알림",
+  "sitesSection": "사이트",
+  "siteManage": "사이트 관리",
+  "latency": "지연 시간",
+  "req24h": "24시간 요청",
+  "cost24h": "24시간 비용",
+  "loadFailed": "불러오기에 실패했습니다",
+  "noSites": "아직 사이트가 없습니다",
+  "noSitesDesc": "사이트 페이지에서 첫 사이트를 만들거나 CLI로 기존 사이트를 인수하세요.",
+  "externalManaged": "외부",
+  "jobRunning": "{kind} · 실행 중",
+  "jobQueued": "{kind} · 대기 중",
+  "severity": {
+    "critical": "심각",
+    "warning": "경고",
+    "info": "정보"
+  },
+  "jobKind": {
+    "provision": "생성",
+    "upgrade": "업그레이드",
+    "start": "시작",
+    "stop": "중지",
+    "destroy": "삭제"
+  },
+  "relTime": {
+    "justNow": "방금 전",
+    "minAgo": "{n}분 전",
+    "hourAgo": "{n}시간 전",
+    "dayAgo": "{n}일 전"
+  }
+}

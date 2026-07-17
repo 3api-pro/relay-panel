@@ -1,0 +1,9 @@
+{
+  "tagline": "Console d'orchestration de relais multi-sites",
+  "email": "E-mail",
+  "password": "Mot de passe",
+  "submit": "Se connecter",
+  "errorEmpty": "Veuillez saisir votre e-mail et votre mot de passe",
+  "errorFail": "Échec de la connexion. Veuillez réessayer plus tard.",
+  "noRegister": "Les inscriptions sont fermées. Contactez l'administrateur de votre instance pour obtenir une invitation."
+}

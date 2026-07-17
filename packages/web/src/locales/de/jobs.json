@@ -1,0 +1,49 @@
+{
+  "title": "Aufträge",
+  "subtitle": "Orchestrierungsprotokolle für Bereitstellung / Upgrade / Start-Stopp / Entfernen",
+  "activePolling": "Aufträge laufen, Aktualisierung alle 5 s",
+  "loadFailed": "Laden fehlgeschlagen",
+  "emptyList": "Noch keine Auftragseinträge",
+  "col": {
+    "kind": "Typ",
+    "slug": "Site",
+    "status": "Status",
+    "createdBy": "Erstellt von",
+    "createdAt": "Erstellt",
+    "duration": "Dauer"
+  },
+  "kind": {
+    "provision": "Bereitstellen",
+    "upgrade": "Upgrade",
+    "start": "Starten",
+    "stop": "Stoppen",
+    "destroy": "Entfernen"
+  },
+  "relTime": {
+    "justNow": "gerade eben",
+    "minAgo": "vor {n} Min.",
+    "hourAgo": "vor {n} Std.",
+    "dayAgo": "vor {n} T."
+  },
+  "detail": {
+    "titleWithId": "Auftrag Nr. {id}",
+    "title": "Auftragsdetails",
+    "createdBy": "Erstellt von",
+    "duration": "Dauer",
+    "createdAt": "Erstellt am",
+    "finishedAt": "Abgeschlossen am",
+    "refreshFailed": "Details konnten nicht aktualisiert werden: {msg}",
+    "errorLabel": "Fehler",
+    "stepsLabel": "Schritte",
+    "liveRefresh": "Live",
+    "noSteps": "Keine Schrittprotokolle"
+  },
+  "step": {
+    "failed": "Fehlgeschlagen",
+    "done": "Fertig",
+    "running": "Läuft",
+    "queued": "In Warteschlange",
+    "provisioning": "Wird vorbereitet",
+    "skipped": "Übersprungen"
+  }
+}
