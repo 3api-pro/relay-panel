@@ -5,5 +5,8 @@
   "submit": "登录",
   "errorEmpty": "请输入邮箱和密码",
   "errorFail": "登录失败，请稍后重试",
-  "noRegister": "未开放注册？请联系实例管理员获取邀请。"
+  "noRegister": "未开放注册？请联系实例管理员获取邀请。",
+  "demoEnter": "进入演示",
+  "demoNote": "只读演示环境，示例数据，点击即可体验。",
+  "demoCreds": "或用以下账号登录"
 }

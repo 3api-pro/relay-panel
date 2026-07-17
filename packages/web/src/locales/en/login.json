@@ -5,5 +5,8 @@
   "submit": "Sign in",
   "errorEmpty": "Please enter your email and password",
   "errorFail": "Sign-in failed. Please try again later.",
-  "noRegister": "Registration is closed. Contact your instance admin for an invite."
+  "noRegister": "Registration is closed. Contact your instance admin for an invite.",
+  "demoEnter": "Enter demo",
+  "demoNote": "Read-only demo with sample data — click to explore.",
+  "demoCreds": "or sign in with"
 }
