@@ -30,9 +30,9 @@ Two tracks. The marketplace is the commercial core; the second engine is the eco
 - [x] Compose template for new-api provisioning (`newapiCompose.ts`)
 - [x] Capability flags where new-api and sub2api diverge
 - [x] E2E verified against a live new-api instance (channels create/list/status-toggle/remove, groups, users, branding, usage)
-- [ ] Wire new-api into the provisioning state machine (`NewapiLifecycle`) alongside sub2api
+- [x] Wire new-api into the provisioning state machine (`NewapiLifecycle` + `makeLifecycles` registry) alongside sub2api
 
-**Acceptance:** ✅ adapter drives a live new-api instance through the same interface as sub2api; both engines now selectable in dashboard + marketplace.
+**Acceptance:** ✅ `provision --engine newapi` brings up a fresh new-api site end-to-end (render → compose up → health → root init → credential), and the adapter drives it through the same interface as sub2api. Both engines selectable in dashboard, marketplace, and provisioner.
 
 ### P2.2 — Channel Marketplace (commercial core)
 - [ ] `ChannelTemplate` model: upstream product (models, protocol, suggested ratio, param schema)

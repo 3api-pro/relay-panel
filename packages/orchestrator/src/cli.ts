@@ -1,40 +1,45 @@
 /**
  * 开发用 CLI（正式 CLI 在 P3 打磨）：
- *   node dist/cli.js provision <slug> <version> <port>
- *   node dist/cli.js verify <slug> <port>          — adapter 全链路 E2E
+ *   node dist/cli.js provision <slug> <version> <port> [--engine sub2api|newapi]
+ *   node dist/cli.js verify <slug> <port>          — adapter 全链路 E2E（sub2api）
  *   node dist/cli.js destroy <slug> <port> [--keep-data]
  * 凭据处理：开发模式明文写入站点目录 credentials.json（仅本机测试！生产走加密凭据库）。
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Sub2apiAdapter } from '@relay-panel/adapter-sub2api';
-import type { CredentialStore, InstanceInfo } from '@relay-panel/adapter-core';
-import { Sub2apiLifecycle } from './provision/sub2apiLifecycle.js';
+import type { CredentialStore, EngineKind, InstanceInfo } from '@relay-panel/adapter-core';
+import { makeLifecycles } from './provision/index.js';
 
 const sitesRoot = process.env.RP_SITES_ROOT ?? join(process.cwd(), 'data', 'sites');
 
-const lifecycle = new Sub2apiLifecycle({
-  sitesRoot,
-  storeCredential: async (slug, secrets) => {
-    const path = join(sitesRoot, slug, 'credentials.json');
-    await writeFile(path, JSON.stringify({ kind: 'dev-plaintext', ...secrets }, null, 2), 'utf8');
-    return `devfile:${path}`;
-  },
-  onStep: async (slug, step, status, detail) => {
-    console.log(`[${slug}] ${step}: ${status}${detail ? ` — ${detail}` : ''}`);
-  },
+async function devStore(slug: string, secrets: Record<string, string>): Promise<string> {
+  const path = join(sitesRoot, slug, 'credentials.json');
+  await writeFile(path, JSON.stringify({ kind: 'dev-plaintext', ...secrets }, null, 2), 'utf8');
+  return `devfile:${path}`;
+}
+const onStep = async (slug: string, step: string, status: string, detail?: string) => {
+  console.log(`[${slug}] ${step}: ${status}${detail ? ` — ${detail}` : ''}`);
+};
+
+const lifecycles = makeLifecycles({
+  sub2api: { sitesRoot, storeCredential: (s, sec) => devStore(s, sec), onStep },
+  newapi: { sitesRoot, storeCredential: (s, sec) => devStore(s, sec), onStep },
 });
 
-const [cmd, slug, a, b] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const [cmd, slug, a, b] = argv;
+const engineFlag = argv[argv.indexOf('--engine') + 1];
+const engine: EngineKind = engineFlag === 'newapi' ? 'newapi' : 'sub2api';
 
 if (cmd === 'provision' && slug && a && b) {
-  const inst = await lifecycle.provision({
+  const inst = await lifecycles[engine].provision({
     slug,
-    engine: 'sub2api',
+    engine,
     version: a,
     domains: [],
     hostPort: Number(b),
-    database: { mode: 'dedicated', dbName: 'sub2api' },
+    database: { mode: 'dedicated', dbName: engine },
     adminEmail: `admin@${slug}.local`,
   });
   console.log('provisioned:', JSON.stringify(inst, null, 2));
@@ -93,10 +98,10 @@ if (cmd === 'provision' && slug && a && b) {
   console.log('channel removed: ok');
   console.log('E2E VERIFY: ALL PASS');
 } else if (cmd === 'destroy' && slug && a) {
-  await lifecycle.destroy(
+  await lifecycles[engine].destroy(
     {
       siteSlug: slug,
-      engine: 'sub2api',
+      engine,
       version: 'n/a',
       baseUrl: `http://127.0.0.1:${a}`,
       dataDir: join(sitesRoot, slug),
@@ -107,6 +112,8 @@ if (cmd === 'provision' && slug && a && b) {
   );
   console.log('destroyed');
 } else {
-  console.log('usage: cli.ts provision <slug> <version> <port> | destroy <slug> <port> [--keep-data]');
+  console.log(
+    'usage: cli.ts provision <slug> <version> <port> [--engine sub2api|newapi] | verify <slug> <port> | destroy <slug> <port> [--engine ..] [--keep-data]',
+  );
   process.exit(1);
 }
