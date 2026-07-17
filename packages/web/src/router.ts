@@ -21,8 +21,6 @@ declare module 'vue-router' {
   }
 }
 
-const placeholder = () => import('./views/PlaceholderView.vue');
-
 const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView, meta: { title: '登录', public: true } },
   // 组件厨房：仅 dev 构建注册
@@ -34,15 +32,15 @@ const routes: RouteRecordRaw[] = [
     component: Shell,
     children: [
       { path: '', component: OverviewView, meta: { title: '总览' } },
-      { path: 'sites', component: placeholder, meta: { title: '站点' } },
-      { path: 'sites/:slug', component: placeholder, meta: { title: '站点详情' } },
-      { path: 'marketplace', component: placeholder, meta: { title: '渠道市场' } },
-      { path: 'ledger', component: placeholder, meta: { title: '账本' } },
-      { path: 'alerts', component: placeholder, meta: { title: '告警' } },
-      { path: 'jobs', component: placeholder, meta: { title: '任务' } },
-      { path: 'operators', component: placeholder, meta: { title: '操作员' } },
-      { path: 'billing', component: placeholder, meta: { title: '计费' } },
-      { path: 'settings', component: placeholder, meta: { title: '设置' } },
+      { path: 'sites', component: () => import('./views/SitesView.vue'), meta: { title: '站点' } },
+      { path: 'sites/:slug', component: () => import('./views/SiteDetailView.vue'), meta: { title: '站点详情' } },
+      { path: 'marketplace', component: () => import('./views/MarketplaceView.vue'), meta: { title: '渠道市场' } },
+      { path: 'ledger', component: () => import('./views/LedgerView.vue'), meta: { title: '账本' } },
+      { path: 'alerts', component: () => import('./views/AlertsView.vue'), meta: { title: '告警' } },
+      { path: 'jobs', component: () => import('./views/JobsView.vue'), meta: { title: '任务' } },
+      { path: 'operators', component: () => import('./views/OperatorsView.vue'), meta: { title: '操作员' } },
+      { path: 'billing', component: () => import('./views/BillingView.vue'), meta: { title: '计费' } },
+      { path: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: '设置' } },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },

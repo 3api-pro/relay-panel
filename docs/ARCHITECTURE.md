@@ -10,8 +10,8 @@
 
 | 层 | 选择 | 理由 |
 |---|---|---|
-| 编排器后端 | TypeScript + Node 22+ / Fastify + Drizzle + PostgreSQL | 与团队既有栈（llmapi-v2 / mythos-v3）一致，adapter 可直接移植既有自动化脚本（jwtgen、admin API 封装） |
-| 编排器前端 | Vue 3 + Vite + Tailwind | 与 sub2api 二开经验一致；UI 风格对标 Linear/Vercel 深色产品站 |
+| 编排器后端 | TypeScript + Node 22+ / Fastify + Drizzle + PostgreSQL | 成熟的 Node/TS 服务端栈，adapter 可复用引擎既有 admin API 封装模式 |
+| 编排器前端 | Vue 3 + Vite + Tailwind | 与引擎自身的前端技术栈一致，二开经验可迁移；UI 风格对标 Linear/Vercel 深色产品站 |
 | 数据面 | Docker Compose（每站一个 compose 项目） | 隔离、可迁出、官方镜像即拉即用；生产目标 Linux |
 | 反代/TLS | Caddy（编排器托管其配置） | 自动 HTTPS，按站点动态挂域名 |
 | 发行 | 编排器自身打包为 docker image + compose 一键起 | 自部署体验 30 秒 |

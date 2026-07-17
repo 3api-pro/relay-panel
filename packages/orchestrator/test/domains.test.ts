@@ -39,8 +39,8 @@ async function makeFakeCaddy(): Promise<FakeCaddy> {
     state.routeExists = false;
     return {};
   });
-  app.put('/config/apps/http/servers/rp/routes', async (req, reply) => {
-    requests.push({ method: 'PUT', url: req.url, body: req.body });
+  app.post('/config/apps/http/servers/rp/routes', async (req, reply) => {
+    requests.push({ method: 'POST', url: req.url, body: req.body });
     if (state.fail) return reply.code(500).send({ error: 'injected caddy failure' });
     state.routeExists = true;
     return {};
@@ -231,14 +231,14 @@ describe('无 caddy：纯 DB 模式', () => {
 });
 
 describe('caddy 客户端（直调，假 caddy admin 断言请求形状）', () => {
-  it('applyDomains：DELETE @id（404 忽略）→ PUT 路由对象', async () => {
+  it('applyDomains：DELETE @id（404 忽略）→ POST 路由对象', async () => {
     caddy.requests.length = 0;
     caddy.state.routeExists = false; // 首次下发：DELETE 会 404，必须被忽略
     await applyDomains(caddy.url, 'site-x', ['x.example.com', 'y.example.com'], 18201);
 
     expect(caddy.requests.map((r) => `${r.method} ${r.url}`)).toEqual([
       'DELETE /id/rp-site-x',
-      'PUT /config/apps/http/servers/rp/routes',
+      'POST /config/apps/http/servers/rp/routes',
     ]);
     expect(caddy.requests[1]!.body).toEqual({
       '@id': 'rp-site-x',
@@ -248,7 +248,7 @@ describe('caddy 客户端（直调，假 caddy admin 断言请求形状）', () 
     expect(caddy.requests[1]!.body).toEqual(buildRoute('site-x', ['x.example.com', 'y.example.com'], 18201));
   });
 
-  it('applyDomains 空列表 / removeDomains：只 DELETE 不 PUT', async () => {
+  it('applyDomains 空列表 / removeDomains：只 DELETE 不 POST', async () => {
     caddy.requests.length = 0;
     await applyDomains(caddy.url, 'site-x', [], 18201);
     await removeDomains(caddy.url, 'site-x');
@@ -269,7 +269,7 @@ describe('caddy 客户端（直调，假 caddy admin 断言请求形状）', () 
 });
 
 describe('配置了 caddy：路由级下发与失败回滚', () => {
-  it('添加域名 → caddy 收到 DELETE + PUT（形状正确）', async () => {
+  it('添加域名 → caddy 收到 DELETE + POST（形状正确）', async () => {
     caddy.requests.length = 0;
     caddy.state.routeExists = false;
     const res = await tsCaddy.app.inject({
@@ -282,7 +282,7 @@ describe('配置了 caddy：路由级下发与失败回滚', () => {
     expect(res.json()).toEqual({ domains: ['c.example.com'] });
     expect(caddy.requests.map((r) => `${r.method} ${r.url}`)).toEqual([
       'DELETE /id/rp-dom-c',
-      'PUT /config/apps/http/servers/rp/routes',
+      'POST /config/apps/http/servers/rp/routes',
     ]);
     expect(caddy.requests[1]!.body).toEqual({
       '@id': 'rp-dom-c',
@@ -312,7 +312,7 @@ describe('配置了 caddy：路由级下发与失败回滚', () => {
     expect(failed[0]!.payload).toMatchObject({ domain: 'd.example.com' });
   });
 
-  it('删除最后一个域名 → caddy 只 DELETE（空列表不再 PUT）', async () => {
+  it('删除最后一个域名 → caddy 只 DELETE（空列表不再 POST）', async () => {
     caddy.requests.length = 0;
     const res = await tsCaddy.app.inject({
       method: 'DELETE',

@@ -59,8 +59,9 @@ export async function applyDomains(
 ): Promise<void> {
   await deleteRoute(caddyUrl, slug);
   if (domains.length === 0) return;
+  // Caddy admin API：目标是数组时用 POST 追加（PUT 是按索引插入，路径非索引会报错）。
   const res = await caddyFetch(`${baseOf(caddyUrl)}/config/apps/http/servers/rp/routes`, {
-    method: 'PUT',
+    method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(buildRoute(slug, domains, hostPort)),
   });
