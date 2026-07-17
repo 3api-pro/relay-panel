@@ -1,0 +1,24 @@
+{
+  "name": "@relay-panel/orchestrator",
+  "version": "2.0.0-alpha.0",
+  "type": "module",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "node --watch --experimental-strip-types src/index.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@relay-panel/adapter-core": "*",
+    "@relay-panel/adapter-sub2api": "*",
+    "drizzle-orm": "^0.44.0",
+    "fastify": "^5.0.0",
+    "pg": "^8.13.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "drizzle-kit": "^0.31.0"
+  }
+}

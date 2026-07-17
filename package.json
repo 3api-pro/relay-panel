@@ -1,0 +1,24 @@
+{
+  "name": "relay-panel",
+  "private": true,
+  "version": "2.0.0-alpha.0",
+  "description": "Multi-site orchestrator for open-source LLM relay engines (sub2api / new-api)",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "tsc -b",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
