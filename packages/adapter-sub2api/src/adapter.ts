@@ -15,7 +15,7 @@ import type {
   UsageSummary,
 } from '@relay-panel/adapter-core';
 import { Sub2apiHttp, type PaginatedData } from './http.js';
-import { bootstrapAdminApiKey } from './auth.js';
+import { ensureCompliance, loginAdmin } from './auth.js';
 
 /**
  * 概念映射（sub2api 语义与 adapter-core 抽象的对应）：
@@ -100,19 +100,23 @@ export class Sub2apiAdapter implements EngineAdapter {
 
   async connect(inst: InstanceInfo, credentials: CredentialStore): Promise<EngineAdminClient> {
     const cred = await credentials.resolve(inst.credentialRef);
-    let apiKey: string;
+    let auth: { kind: 'api-key'; key: string } | { kind: 'bearer'; token: string };
     if (cred.kind === 'admin-token') {
-      apiKey = cred.secret;
+      // 长期 admin-api-key（推荐的生产凭据），直接用，不触碰站点状态。
+      auth = { kind: 'api-key', key: cred.secret };
     } else if (cred.kind === 'admin-password') {
+      // 非破坏性：登录换 JWT 直接做 bearer，**不** regenerate 站点的 admin-api-key
+      // （regenerate 会作废既有 key，重复 connect 自相踩踏）。
+      // 需要长期 key 时用独立的一次性引导（bootstrapAdminApiKey），不在 connect 里做。
       if (!cred.adminEmail) throw new Error('admin-password credential requires adminEmail');
-      // 引导流程：密码 → JWT → 合规 → 长期 Admin API Key。
-      // 上层拿到 client 后应尽快把 key 轮换入凭据库（provision 完成时做一次）。
-      apiKey = await bootstrapAdminApiKey(inst.baseUrl, cred.adminEmail, cred.secret);
+      const token = await loginAdmin(inst.baseUrl, cred.adminEmail, cred.secret);
+      const http0 = new Sub2apiHttp(inst.baseUrl, { kind: 'bearer', token });
+      await ensureCompliance(http0);
+      auth = { kind: 'bearer', token };
     } else {
       throw new Error(`unsupported credential kind for sub2api: ${cred.kind}`);
     }
-    const http = new Sub2apiHttp(inst.baseUrl, { kind: 'api-key', key: apiKey });
-    return new Sub2apiAdminClient(inst, http, apiKey);
+    return new Sub2apiAdminClient(inst, new Sub2apiHttp(inst.baseUrl, auth));
   }
 }
 
@@ -120,8 +124,6 @@ export class Sub2apiAdminClient implements EngineAdminClient {
   constructor(
     readonly inst: InstanceInfo,
     private readonly http: Sub2apiHttp,
-    /** connect() 引导出的长期 key；上层负责加密入库，绝不落日志 */
-    readonly adminApiKey: string,
   ) {}
 
   channels = {

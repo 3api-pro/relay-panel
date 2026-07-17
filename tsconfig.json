@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/adapter-core" },
     { "path": "packages/adapter-sub2api" },
+    { "path": "packages/adapter-newapi" },
     { "path": "packages/orchestrator" }
   ]
 }

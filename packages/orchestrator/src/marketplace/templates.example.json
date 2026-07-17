@@ -1,0 +1,20 @@
+[
+  {
+    "key": "example-claude-byo",
+    "title": "Claude (自带上游)",
+    "description": "示例模板：站长自带 Anthropic 兼容上游 base_url + key",
+    "protocol": "anthropic",
+    "models": ["claude-sonnet-4", "claude-opus-4"],
+    "suggestedRatio": 1.0,
+    "source": "byo"
+  },
+  {
+    "key": "example-openai-byo",
+    "title": "OpenAI 兼容 (自带上游)",
+    "description": "示例模板：OpenAI Chat Completions 协议，自带上游",
+    "protocol": "openai",
+    "models": ["gpt-4o", "gpt-4o-mini"],
+    "suggestedRatio": 1.0,
+    "source": "byo"
+  }
+]
