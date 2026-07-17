@@ -9,9 +9,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-3d5afe.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-43d17f.svg)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-f0b74a.svg)](CONTRIBUTING.md)
+[![在线演示](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E6%BC%94%E7%A4%BA-demo.3api.pro-6d8bff.svg)](https://demo.3api.pro)
 
-[English](README.md) · **简体中文**
+[English](README.md) · **简体中文** — [**在线演示 →**](https://demo.3api.pro)
+
+<br/>
+
+<img src="docs/media/overview-dark.png" alt="relay-panel 站群总览" width="880" />
 
 </div>
 
@@ -37,7 +41,7 @@ relay-panel 把这些收敛成一个控制面：
 ## 功能
 
 - **站点生命周期** —— 一键开站 / 钉版本升级带自动回滚 / 启停 / 销毁，任务引擎驱动、逐步骤时间线。
-- **Web 管理后台** —— Vue 3 SPA：站群总览、单站钻取（渠道 / 用户 / 用量 / 域名 / 审计）、任务时间线，全中文界面。
+- **Web 管理后台** —— Vue 3 SPA：站群总览、单站钻取（渠道 / 用户 / 用量 / 域名 / 审计）、任务时间线。液态玻璃界面，明/暗双主题，**10 国语言 i18n**（English / 中文 / 日本語 / 한국어 / Français / Deutsch / Español / Português / Italiano / Bahasa Indonesia）。
 - **多引擎、零修改** —— sub2api 与 new-api 收敛到同一套适配接口，引擎始终跑官方发行版。
 - **渠道市场** —— 上游渠道模板一键注入任意站点（站长自带上游，或由计量网关签发 managed key），配套用量/结算账本。
 - **告警** —— 站点不可达 / 任务失败 / 渠道被禁 / 余额过低，webhook 通知。
@@ -47,6 +51,25 @@ relay-panel 把这些收敛成一个控制面：
 - **可观测** —— Prometheus `/metrics`、健康探测、结构化审计流水。
 - **备份/恢复** —— 一条命令导出编排器状态 + 每站数据库。
 - **一键部署** —— `deploy/` 目录 `docker compose up -d`。
+
+## 截图
+
+> 在线体验 **[demo.3api.pro](https://demo.3api.pro)** —— 只读演示、示例数据、定期重置。
+
+<table>
+<tr>
+<td width="50%"><img src="docs/media/site-detail.png" alt="单站钻取与用量趋势" /><br/><sub>单站钻取 —— 渠道、用户、用量趋势、域名、审计</sub></td>
+<td width="50%"><img src="docs/media/marketplace.png" alt="渠道市场" /><br/><sub>渠道市场 —— 模板、授权、结算</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/media/ledger.png" alt="分账账本" /><br/><sub>分账账本 —— 用量、上游成本、毛利</sub></td>
+<td width="50%"><img src="docs/media/alerts.png" alt="告警" /><br/><sub>告警 —— 站点不可达 / 任务失败 / 渠道被禁 / 余额过低</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/media/overview-light.png" alt="浅色主题" /><br/><sub>浅色主题</sub></td>
+<td width="50%"><img src="docs/media/billing-light.png" alt="计费与配额" /><br/><sub>计费与配额 · 套餐与订阅</sub></td>
+</tr>
+</table>
 
 ## 核心原则
 

@@ -9,9 +9,13 @@ Provision, upgrade, and monitor any number of self-hosted [sub2api](https://gith
 [![License: MIT](https://img.shields.io/badge/License-MIT-3d5afe.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-43d17f.svg)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-f0b74a.svg)](CONTRIBUTING.md)
+[![Live demo](https://img.shields.io/badge/live%20demo-demo.3api.pro-6d8bff.svg)](https://demo.3api.pro)
 
-**English** · [简体中文](README.zh-CN.md)
+**English** · [简体中文](README.zh-CN.md) — [**Live demo →**](https://demo.3api.pro)
+
+<br/>
+
+<img src="docs/media/overview-dark.png" alt="relay-panel — fleet overview" width="880" />
 
 </div>
 
@@ -37,7 +41,7 @@ relay-panel collapses that into one control plane:
 ## Features
 
 - **Site lifecycle** — one-click provision / pinned-version upgrade with auto-rollback / start / stop / destroy, driven by a job engine with per-step timelines.
-- **Web admin backend** — Vue 3 SPA: fleet overview, per-site drill-down (channels / users / usage / domains / audit), job timelines. Chinese-first UI.
+- **Web admin backend** — Vue 3 SPA: fleet overview, per-site drill-down (channels / users / usage / domains / audit), job timelines. Liquid-glass UI with light/dark themes and **10-language i18n** (English / 中文 / 日本語 / 한국어 / Français / Deutsch / Español / Português / Italiano / Bahasa Indonesia).
 - **Multi-engine, zero modification** — sub2api and new-api behind one adapter interface; engines always run official releases.
 - **Channel marketplace** — upstream channel templates, one-click injection into any site (bring-your-own upstream, or managed keys issued by a metering gateway), with a usage/settlement ledger.
 - **Alerting** — site down / job failed / channel disabled / low balance, with webhook notifications.
@@ -47,6 +51,25 @@ relay-panel collapses that into one control plane:
 - **Observability** — Prometheus `/metrics`, health probes, structured audit log.
 - **Backup / restore** — one command dumps orchestrator state plus every site's database.
 - **One-command deploy** — `docker compose up -d` from `deploy/`.
+
+## Screenshots
+
+> Try it live at **[demo.3api.pro](https://demo.3api.pro)** — read-only demo, sample data, resets periodically.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/media/site-detail.png" alt="Per-site drill-down with usage trends" /><br/><sub>Per-site drill-down — channels, users, usage trends, domains, audit</sub></td>
+<td width="50%"><img src="docs/media/marketplace.png" alt="Channel marketplace" /><br/><sub>Channel marketplace — templates, grants, settlement</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/media/ledger.png" alt="Settlement ledger" /><br/><sub>Settlement ledger — usage, upstream cost, margin</sub></td>
+<td width="50%"><img src="docs/media/alerts.png" alt="Alerting" /><br/><sub>Alerting — site down / job failed / channel disabled / low balance</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/media/overview-light.png" alt="Light theme" /><br/><sub>Light theme</sub></td>
+<td width="50%"><img src="docs/media/billing-light.png" alt="Billing and quotas" /><br/><sub>Billing &amp; quotas · plans and subscriptions</sub></td>
+</tr>
+</table>
 
 ## Core principles
 
