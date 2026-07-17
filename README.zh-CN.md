@@ -109,20 +109,15 @@ npm test
 relay-panel 的开发由这些 LLM API 中转平台支持 —— 它们正是本项目所编排引擎的生产用户：
 
 <table align="center">
-<tr>
-<td align="center" width="240">
-<a href="https://llmapi.pro"><b>llmapi.pro</b></a><br/>
-<sub>多模型 LLM API 中转<br/>Claude · GPT · Gemini 等</sub>
-</td>
-<td align="center" width="240">
-<a href="https://tieapi.com"><b>tieapi.com</b></a><br/>
-<sub>高可用 API 网关<br/>面向团队与开发者</sub>
-</td>
-<td align="center" width="240">
-<a href="https://vipapi.ai"><b>vipapi.ai</b></a><br/>
-<sub>灵活套餐的<br/>高端 LLM API 服务</sub>
-</td>
-</tr>
+<tr><td align="center" width="520">
+<a href="https://llmapi.pro"><b>llmapi.pro</b></a> —— 多模型 LLM API 中转 · Claude · GPT · Gemini 等
+</td></tr>
+<tr><td align="center" width="520">
+<a href="https://tieapi.com"><b>tieapi.com</b></a> —— 高可用 API 网关，面向团队与开发者
+</td></tr>
+<tr><td align="center" width="520">
+<a href="https://vipapi.ai"><b>vipapi.ai</b></a> —— 灵活套餐的高端 LLM API 服务
+</td></tr>
 </table>
 
 有意赞助？欢迎提 [issue](https://github.com/3api-pro/relay-panel/issues)。
