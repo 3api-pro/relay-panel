@@ -9,3 +9,10 @@ data/
 data/
 registry.json
 *.log
+preview-cred.txt
+
+# local ops scripts (site-specific topology, never publish)
+packages/orchestrator/prod-smoke.mjs
+packages/orchestrator/onboard-admin-keys.mjs
+packages/orchestrator/branding-fix.mjs
+packages/orchestrator/*-ops.mjs

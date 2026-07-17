@@ -1,11 +1,35 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { timingSafeEqual } from 'node:crypto';
 import Fastify from 'fastify';
 import { loadRegistry } from './registry.js';
 import { allSnapshots, siteSnapshot } from './dashboard.js';
 
 const app = Fastify({ logger: true });
+
+// 登录闸：设了 RP_AUTH_USER/RP_AUTH_PASS 则全站要求 HTTP Basic Auth。
+// 看板聚合全站营收/成本，绝不可无认证暴露公网 —— 对外部署必须设置这两个变量。
+const AUTH_USER = process.env.RP_AUTH_USER ?? '';
+const AUTH_PASS = process.env.RP_AUTH_PASS ?? '';
+function safeEq(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ab.length === bb.length && timingSafeEqual(ab, bb);
+}
+if (AUTH_USER && AUTH_PASS) {
+  app.addHook('onRequest', async (req, reply) => {
+    if (req.url === '/healthz') return;
+    const hdr = req.headers.authorization ?? '';
+    if (hdr.startsWith('Basic ')) {
+      const [u, p] = Buffer.from(hdr.slice(6), 'base64').toString('utf8').split(':');
+      if (safeEq(u ?? '', AUTH_USER) && safeEq(p ?? '', AUTH_PASS)) return;
+    }
+    reply.header('WWW-Authenticate', 'Basic realm="relay-panel"').code(401).send('auth required');
+  });
+} else {
+  app.log.warn('RP_AUTH_USER/RP_AUTH_PASS unset — dashboard is UNAUTHENTICATED (bind loopback only!)');
+}
 
 const registryPath = process.env.RP_REGISTRY ?? join(process.cwd(), 'registry.json');
 // UI 是静态资源，从源码树读取（tsc 不搬运非 TS 文件）
