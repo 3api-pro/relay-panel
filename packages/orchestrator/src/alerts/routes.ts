@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, type SQL } from 'drizzle-orm';
 import type { Config } from '../config.js';
 import type { Db } from '../db/client.js';
 import { alerts, appSettings, sites, type AlertRow } from '../db/schema.js';
@@ -79,6 +79,14 @@ export function registerAlertsRoutes(app: FastifyInstance, deps: AlertsRoutesDep
         ? Math.min(Math.floor(rawLimit), MAX_LIMIT)
         : DEFAULT_LIMIT;
 
+    // 可见性下推 SQL（修复 F）：先按 operator 过滤再 LIMIT，避免 own 站告警被他人告警
+    // 挤出 lastSeenAt 窗口。sites 为 leftJoin——operator 加 sites.operator_id = 自身：
+    // site_id 为 null 的全局告警 leftJoin 后 operatorId 为 NULL，不匹配，天然排除
+    // （全局告警仅 root/viewer 可见）。root/viewer 不加可见性过滤。
+    const conds: SQL[] = [];
+    if (status !== 'all') conds.push(eq(alerts.status, status));
+    if (ctx.role === 'operator') conds.push(eq(sites.operatorId, ctx.operatorId));
+
     const rows = await db.orm
       .select({
         alert: alerts,
@@ -88,10 +96,11 @@ export function registerAlertsRoutes(app: FastifyInstance, deps: AlertsRoutesDep
       })
       .from(alerts)
       .leftJoin(sites, eq(alerts.siteId, sites.id))
-      .where(status === 'all' ? undefined : eq(alerts.status, status))
+      .where(conds.length > 0 ? and(...conds) : undefined)
       .orderBy(desc(alerts.lastSeenAt), desc(alerts.id))
       .limit(limit);
 
+    // 兜底二次校验：SQL 已按可见性过滤，此处防御性再确认一遍（含 root/viewer 全量放行）
     const visible = rows.filter((r) => canSeeAlert(ctx, r.alert, r.siteOperatorId));
     return {
       alerts: visible.map((r) => ({

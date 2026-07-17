@@ -57,6 +57,9 @@ CREATE TABLE sites (
   updated_at timestamp NOT NULL DEFAULT now()
 );
 
+-- 未销毁站的 host_port 唯一（纵深防御 TOCTOU；destroyed 站不占端口故排除）
+CREATE UNIQUE INDEX IF NOT EXISTS sites_host_port_active_uk ON sites(host_port) WHERE status <> 'destroyed' AND managed = 'compose';
+
 CREATE TABLE credentials (
   ref text PRIMARY KEY,
   kind text NOT NULL,
@@ -141,8 +144,8 @@ CREATE TABLE usage_ledger (
   requests integer NOT NULL DEFAULT 0,
   prompt_tokens bigint NOT NULL DEFAULT 0,
   completion_tokens bigint NOT NULL DEFAULT 0,
-  upstream_cost real NOT NULL DEFAULT 0,
-  billed_cost real NOT NULL DEFAULT 0,
+  upstream_cost numeric(14, 6) NOT NULL DEFAULT 0,
+  billed_cost numeric(14, 6) NOT NULL DEFAULT 0,
   source text NOT NULL DEFAULT 'gateway',
   created_at timestamp NOT NULL DEFAULT now(),
   CONSTRAINT usage_ledger_grant_period_source_unique UNIQUE (grant_id, period_start, source)
@@ -152,7 +155,7 @@ CREATE TABLE plans (
   id serial PRIMARY KEY,
   key text NOT NULL UNIQUE,
   title text NOT NULL,
-  price_monthly real NOT NULL DEFAULT 0,
+  price_monthly numeric(10, 2) NOT NULL DEFAULT 0,
   site_quota integer NOT NULL,
   features jsonb,
   active boolean NOT NULL DEFAULT true

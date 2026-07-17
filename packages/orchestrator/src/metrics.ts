@@ -63,8 +63,12 @@ export function registerMetricsRoutes(app: FastifyInstance, deps: MetricsRoutesD
 
   app.get('/metrics', async (req, reply) => {
     const bearerOk = config.metricsToken !== undefined && tokenMatches(req.headers.authorization, config.metricsToken);
-    if (!req.ctx && !bearerOk) {
-      return reply.code(401).send({ error: '未授权' });
+    // 全局指标含全租户 slug/24h 成本/计数，operator 会话读到会破坏 canAccessSite 隔离——
+    // session 访问路径加角色门：仅 root/viewer 可读，operator 一律 403。
+    const sessionOk = req.ctx?.role === 'root' || req.ctx?.role === 'viewer';
+    if (!sessionOk && !bearerOk) {
+      // 有 session 但角色不足 → 403（无权）；无凭据 → 401（未授权）
+      return req.ctx ? reply.code(403).send({ error: '无权访问' }) : reply.code(401).send({ error: '未授权' });
     }
 
     const [siteRows, jobRows, alertRows] = await Promise.all([

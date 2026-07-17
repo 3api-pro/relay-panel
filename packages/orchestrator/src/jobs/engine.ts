@@ -115,8 +115,32 @@ export class JobEngine {
     return inserted[0]!.id;
   }
 
+  /**
+   * 回收遗留 running job（规格 §5 崩溃恢复）。
+   * 单进程模型：start 时本进程内没有任何在跑 job，DB 里残留的 status='running'
+   * 只可能来自上次进程重启前未落终态的僵尸——全部标 failed 即可，避免其永久占据
+   * enqueue 去重（inArray queued/running），导致对应 slug 一律 409、站点彻底卡死。
+   * 返回回收条数。
+   */
+  async reconcileOrphans(): Promise<number> {
+    const recovered = await this.db.orm
+      .update(jobs)
+      .set({ status: 'failed', error: 'orphaned by restart', finishedAt: sql`now()` })
+      .where(eq(jobs.status, 'running'))
+      .returning({ id: jobs.id });
+    if (recovered.length > 0) {
+      console.warn(`[jobs] 重启回收遗留 running 任务 ${recovered.length} 条`);
+    }
+    return recovered.length;
+  }
+
   start(intervalMs = 1500): void {
     if (this.timer) return;
+    // 起定时器前先回收上次重启遗留的 running 僵尸，否则其占据 slug 去重致 409 卡死站点。
+    // 单进程模型下本进程此刻无在跑 job，全量回收安全。
+    void this.reconcileOrphans().catch((err) => {
+      console.warn('[jobs] 遗留任务回收失败:', redactText(errorMessage(err)));
+    });
     this.timer = setInterval(() => {
       void this.tick().catch((err) => {
         console.warn('[jobs] 轮询失败:', redactText(errorMessage(err)));

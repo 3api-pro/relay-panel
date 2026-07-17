@@ -171,7 +171,9 @@ export async function settlement(db: Db, filter: SettlementFilter = {}): Promise
     .innerJoin(sites, eq(channelGrants.siteId, sites.id))
     .where(conds.length > 0 ? and(...conds) : undefined);
 
-  // 行量小（月度×grant 粒度），JS 聚合避免各驱动对 sum(bigint/numeric) 返回类型不一致的坑
+  // 行量小（月度×grant 粒度），JS 聚合避免各驱动对 sum(bigint/numeric) 返回类型不一致的坑。
+  // 金额列已是 numeric(mode:'number')，读出即 number；此处仍用 Number() 兜底归一
+  // （防御 driver/mode 变更导致回字符串时字符串拼接），确保 margin=billed-upstream 无精度漂移。
   const byGrant = new Map<number, SettlementRow>();
   for (const r of rows) {
     let agg = byGrant.get(r.grant.id);
@@ -200,8 +202,8 @@ export async function settlement(db: Db, filter: SettlementFilter = {}): Promise
     agg.promptTokens += r.ledger.promptTokens;
     agg.completionTokens += r.ledger.completionTokens;
     agg.tokens += r.ledger.promptTokens + r.ledger.completionTokens;
-    agg.upstreamCost += r.ledger.upstreamCost;
-    agg.billedCost += r.ledger.billedCost;
+    agg.upstreamCost += Number(r.ledger.upstreamCost);
+    agg.billedCost += Number(r.ledger.billedCost);
   }
   for (const agg of byGrant.values()) {
     agg.margin = agg.billedCost - agg.upstreamCost;

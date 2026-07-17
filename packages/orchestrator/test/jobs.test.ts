@@ -265,6 +265,40 @@ describe('JobEngine: 去重 / 串行 / 并发', () => {
     }
   });
 
+  it('reconcileOrphans 回收遗留 running 僵尸 → failed，同 slug 可重新入队', async () => {
+    const engine = new JobEngine(db);
+    // 模拟进程重启前未落终态的僵尸：直插一条 status='running'
+    const zombie = (
+      await db.orm
+        .insert(jobs)
+        .values({ kind: 'upgrade', slug: 'orphan-a', createdBy: 'system', status: 'running' })
+        .returning({ id: jobs.id })
+    )[0]!.id;
+
+    // 回收前：该 slug 被 running 占据，enqueue 去重命中 409
+    await expect(
+      engine.enqueue('start', 'orphan-a', undefined, 'root@example.com'),
+    ).rejects.toMatchObject({ statusCode: 409 });
+
+    const recovered = await engine.reconcileOrphans();
+    expect(recovered).toBe(1);
+
+    const row = await getJob(zombie);
+    expect(row.status).toBe('failed');
+    expect(row.error).toBe('orphaned by restart');
+    expect(row.finishedAt).toBeTruthy();
+
+    // 回收后：同 slug 不再 409，可重新入队
+    const id2 = await engine.enqueue('start', 'orphan-a', undefined, 'root@example.com');
+    expect(id2).toBeGreaterThan(zombie);
+    expect((await getJob(id2)).status).toBe('queued');
+
+    // 无遗留时回收返回 0
+    // 先清掉刚入队的 queued，避免污染 afterEach 之外的断言
+    await db.orm.update(jobs).set({ status: 'cancelled' }).where(eq(jobs.id, id2));
+    expect(await engine.reconcileOrphans()).toBe(0);
+  });
+
   it('start/stop 轮询循环可自动消化队列', async () => {
     const engine = new JobEngine(db);
     engine.registerHandler('stop', async () => {});

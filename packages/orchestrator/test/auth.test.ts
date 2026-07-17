@@ -15,7 +15,15 @@ import {
   resolveSession,
   toPgTimestamp,
 } from '../src/auth/sessions.js';
-import { ApiError, authenticate, canAccessSite, requireRoot, requireWrite, type SessionCtx } from '../src/auth/rbac.js';
+import {
+  ApiError,
+  authenticate,
+  authenticateDetailed,
+  canAccessSite,
+  requireRoot,
+  requireWrite,
+  type SessionCtx,
+} from '../src/auth/rbac.js';
 import { registerAuthRoutes, type AuthRoutesDeps } from '../src/auth/routes.js';
 import { makeTestConfig, makeTestDb, seedOperator } from './helpers.js';
 
@@ -229,6 +237,31 @@ describe('rbac: 角色矩阵与 authenticate', () => {
     expect(await authenticate(db, { cookies: { rp_session: s.token } }, 168)).toBeNull();
     expect(await authenticate(db, {}, 168)).toBeNull();
     expect(await authenticate(db, { cookies: {} }, 168)).toBeNull();
+  });
+
+  it('authenticateDetailed: 滑动续期时透出 renewed=true + 原始 token 供钩子刷新 cookie', async () => {
+    const opId = await seedOperator(db, { email: 'rbac-renew@example.com', role: 'operator' });
+    const { token } = await createSession(db, opId, 168);
+    // 压到只剩 10h（阈值 84h）→ 下次 resolve 触发续期
+    await db.orm
+      .update(sessions)
+      .set({ expiresAt: toPgTimestamp(new Date(Date.now() + 10 * 3600_000)) })
+      .where(eq(sessions.tokenHash, hashToken(token)));
+
+    const detailed = await authenticateDetailed(db, { cookies: { rp_session: token } }, 168);
+    expect(detailed).not.toBeNull();
+    expect(detailed!.renewed).toBe(true);
+    expect(detailed!.token).toBe(token);
+    expect(detailed!.ctx).toEqual({ operatorId: opId, email: 'rbac-renew@example.com', role: 'operator' });
+
+    // 续满后再取详情不再续期，token 仍原样透出
+    const again = await authenticateDetailed(db, { cookies: { rp_session: token } }, 168);
+    expect(again!.renewed).toBe(false);
+    expect(again!.token).toBe(token);
+
+    // 无 cookie / 无效 token 一律 null
+    expect(await authenticateDetailed(db, {}, 168)).toBeNull();
+    expect(await authenticateDetailed(db, { cookies: { rp_session: 'ab'.repeat(32) } }, 168)).toBeNull();
   });
 });
 

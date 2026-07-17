@@ -1,11 +1,12 @@
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { ChannelRecord, EngineKind } from '@relay-panel/adapter-core';
 import type { Config } from '../src/config.js';
 import type { Db } from '../src/db/client.js';
 import { alerts, appSettings, auditEvents, sites, type AlertRow } from '../src/db/schema.js';
 import { JobEngine } from '../src/jobs/engine.js';
+import { toPgTimestamp } from '../src/auth/sessions.js';
 import { startMonitor, type MonitorDeps } from '../src/alerts/engine.js';
 import { WEBHOOK_SETTINGS_KEY, WebhookNotifier, type Notifier } from '../src/alerts/notify.js';
 import { makeTestConfig, makeTestDb, makeTestServer, seedOperator, type TestServer } from './helpers.js';
@@ -445,6 +446,37 @@ describe('告警路由: 权限矩阵与设置', () => {
     expect(ids).toContain(resolvedAlertId);
     expect(ids).not.toContain(otherAlertId);
     expect(ids).not.toContain(globalAlertId);
+  });
+
+  it('可见性下推：他站 100 条更新的 open 告警塞满 LIMIT 窗口，operator 仍能拿到自己那条', async () => {
+    // 他站（other 名下）灌 100 条 lastSeenAt 更新的 open 告警：若可见性在 LIMIT 之后
+    // 过滤，这 100 条会挤满默认 LIMIT=100 窗口，operator own 站的旧告警被挤出→看不到。
+    const base = Date.now() + 3_600_000; // 保证严格新于 beforeAll 里 own 告警
+    const decoys = Array.from({ length: 100 }, (_, i) => ({
+      kind: 'site_down',
+      severity: 'warning',
+      title: '他站噪声告警',
+      status: 'open',
+      siteId: otherSiteId,
+      lastSeenAt: toPgTimestamp(new Date(base + i * 1000)),
+    }));
+    const inserted = await ts.db.orm.insert(alerts).values(decoys).returning({ id: alerts.id });
+    const decoyIds = inserted.map((r) => r.id);
+    try {
+      const res = await ts.app.inject({
+        method: 'GET',
+        url: '/api/alerts',
+        cookies: { rp_session: opCookie },
+      });
+      expect(res.statusCode).toBe(200);
+      const ids = idsOf(res);
+      // own 站的 open 告警仍在，且没有任何他站噪声泄露
+      expect(ids).toContain(ownAlertId);
+      for (const id of decoyIds) expect(ids).not.toContain(id);
+    } finally {
+      // 仅清理本用例注入的噪声，保留 beforeAll 里的原始 otherAlertId 供后续用例断言
+      await ts.db.orm.delete(alerts).where(inArray(alerts.id, decoyIds));
+    }
   });
 
   it('status 过滤：resolved / all / 非法值 400', async () => {

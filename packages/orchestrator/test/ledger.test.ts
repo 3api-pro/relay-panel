@@ -137,6 +137,19 @@ describe('upsertRows 幂等', () => {
       upsertRows(ts.db, g1, [{ ...base, periodEnd: base.periodStart }], 'manual'),
     ).rejects.toMatchObject({ statusCode: 400 });
   });
+
+  it('numeric 金额精确 round-trip（scale=6，无 float4 舍入漂移，读出为 number）', async () => {
+    // real(float4) 只有 ~7 位有效数字，0.123457 会舍成 0.12345700…≠；numeric(14,6) 精确保 6 位
+    const precise = row(8, 1, { requests: 999, upstreamCost: 0.123457, billedCost: 1.234561 });
+    await upsertRows(ts.db, g1, [precise], 'gateway');
+    const stored = (await ts.db.orm.select().from(usageLedger).where(eq(usageLedger.grantId, g1))).find(
+      (r) => r.requests === 999,
+    )!;
+    expect(typeof stored.upstreamCost).toBe('number');
+    expect(stored.upstreamCost).toBe(0.123457);
+    expect(stored.billedCost).toBe(1.234561);
+    expect(stored.billedCost - stored.upstreamCost).toBeCloseTo(1.111104, 6);
+  });
 });
 
 describe('pullOnce 增量窗口', () => {

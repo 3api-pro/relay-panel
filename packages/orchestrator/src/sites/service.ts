@@ -76,6 +76,39 @@ export function clearSiteCaches(): void {
 }
 
 /**
+ * 建站临界区互斥（问题 C/D 修复）：单进程模型下，配额检查 → 端口分配 → 插行三步必须原子，
+ * 否则两个并发建站可能都通过配额检查、或分到同一 host_port（checkQuota/allocatePort 与 insert
+ * 之间的 TOCTOU 窗口）。用 promise 链做异步互斥把整段串行化——互斥即消除窗口。
+ * 一次失败不阻断后续（推进链时吞掉结果，只用于排队，不传播异常）。
+ */
+let createSiteMutex: Promise<unknown> = Promise.resolve();
+function runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+  const result = createSiteMutex.then(fn, fn);
+  createSiteMutex = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+/**
+ * 判定 insert 是否因 host_port 部分唯一索引(sites_host_port_active_uk)撞车——
+ * 互斥外的纵深防御路径（如多进程并发）。node-postgres 带 constraint 字段，
+ * pglite 把约束名写进 message，两者都能命中索引名。
+ */
+function isHostPortUniqueViolation(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const constraint = (err as { constraint?: unknown }).constraint;
+  const cause = (err as { cause?: unknown }).cause;
+  const text = [
+    err.message,
+    typeof constraint === 'string' ? constraint : '',
+    cause instanceof Error ? cause.message : '',
+  ].join(' ');
+  return /sites_host_port_active_uk|host_port/i.test(text) && /duplicate|unique/i.test(text);
+}
+
+/**
  * 生命周期步骤汇聚点。lifecycle 构造期只拿到本函数（index.ts 把它接进
  * makeLifecycles 的 onStep），运行期由当前 job handler 按 slug 注册真正的落库回调
  * ——同 slug 串行由 JobEngine 保证，故 Map 无并发冲突。
@@ -336,44 +369,55 @@ export class SitesService {
   /** 建站：配额检查 → 端口分配 → 插 pending 行 → enqueue provision */
   async createSite(ctx: SessionCtx, input: CreateSiteInput): Promise<{ slug: string; jobId: number; hostPort: number }> {
     requireWrite(ctx);
-    await this.checkQuota(ctx);
 
-    const dup = await this.deps.db.orm
-      .select({ id: sites.id })
-      .from(sites)
-      .where(eq(sites.slug, input.slug))
-      .limit(1);
-    if (dup.length > 0) throw new ApiError(409, '站点标识已存在');
+    // 配额检查 → 端口分配 → 插行整段串行化（问题 C/D：消除 TOCTOU 双分端口/突破配额）
+    const site = await runExclusive(async () => {
+      await this.checkQuota(ctx);
 
-    let hostPort: number;
-    if (input.hostPort !== undefined) {
-      // 显式端口只查 DB 占用（保持行为可预期，不做 TCP 探测）
-      const used = await this.deps.db.orm
+      const dup = await this.deps.db.orm
         .select({ id: sites.id })
         .from(sites)
-        .where(and(eq(sites.hostPort, input.hostPort), ne(sites.status, 'destroyed')))
+        .where(eq(sites.slug, input.slug))
         .limit(1);
-      if (used.length > 0) throw new ApiError(409, '端口已被其他站点占用');
-      hostPort = input.hostPort;
-    } else {
-      hostPort = await this.allocatePort();
-    }
+      if (dup.length > 0) throw new ApiError(409, '站点标识已存在');
 
-    const inserted = await this.deps.db.orm
-      .insert(sites)
-      .values({
-        operatorId: ctx.operatorId,
-        slug: input.slug,
-        label: input.label,
-        engine: input.engine,
-        version: input.version,
-        hostPort,
-        baseUrl: `http://127.0.0.1:${hostPort}`,
-        status: 'pending',
-        managed: 'compose',
-      })
-      .returning();
-    const site = inserted[0]!;
+      let hostPort: number;
+      if (input.hostPort !== undefined) {
+        // 显式端口只查 DB 占用（保持行为可预期，不做 TCP 探测）
+        const used = await this.deps.db.orm
+          .select({ id: sites.id })
+          .from(sites)
+          .where(and(eq(sites.hostPort, input.hostPort), ne(sites.status, 'destroyed')))
+          .limit(1);
+        if (used.length > 0) throw new ApiError(409, '端口已被其他站点占用');
+        hostPort = input.hostPort;
+      } else {
+        hostPort = await this.allocatePort();
+      }
+
+      try {
+        const inserted = await this.deps.db.orm
+          .insert(sites)
+          .values({
+            operatorId: ctx.operatorId,
+            slug: input.slug,
+            label: input.label,
+            engine: input.engine,
+            version: input.version,
+            hostPort,
+            baseUrl: `http://127.0.0.1:${hostPort}`,
+            status: 'pending',
+            managed: 'compose',
+          })
+          .returning();
+        return inserted[0]!;
+      } catch (err) {
+        // 纵深防御：互斥外若仍撞 host_port 唯一索引，映射为 409（不泄露内部约束细节）
+        if (isHostPortUniqueViolation(err)) throw new ApiError(409, '端口已被占用');
+        throw err;
+      }
+    });
+    const hostPort = site.hostPort;
 
     const payload: Record<string, unknown> = {
       version: input.version,

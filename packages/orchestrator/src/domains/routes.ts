@@ -59,15 +59,44 @@ export function registerDomainsRoutes(app: FastifyInstance, deps: DomainsRoutesD
     return row;
   }
 
-  /** DB 已写 next；配置了 caddy 则下发，失败回滚 DB 并抛 502 */
-  async function syncCaddyOrRollback(site: SiteRow, next: string[], prev: string[]): Promise<void> {
+  /**
+   * DB 已写 next；配置了 caddy 则下发，失败回滚 DB 并抛 502。
+   * applyDomains 是「先按 @id 删旧路由，再追加新路由」——下发失败时旧路由可能已被删除、
+   * 新路由未写成功，该站在 Caddy 上会整个消失（原本正常的旧域名也 502）。因此回滚 DB 后
+   * 必须对 Caddy 做补偿：用回滚后的旧域名集（prev）+ hostPort 再下发一次恢复旧路由。
+   * 补偿也失败则审计标记不一致，并在错误信息提示需人工核对 Caddy。
+   */
+  async function syncCaddyOrRollback(
+    site: SiteRow,
+    next: string[],
+    prev: string[],
+    actor: string,
+  ): Promise<void> {
     if (config.caddyAdminUrl === undefined) return;
     try {
       await applyDomains(config.caddyAdminUrl, site.slug, next, site.hostPort);
     } catch (err) {
       await db.orm.update(sites).set({ domains: prev }).where(eq(sites.id, site.id));
       const msg = err instanceof Error ? err.message : String(err);
-      throw new ApiError(502, `域名下发失败，已回滚: ${msg}`);
+      try {
+        // 补偿：用旧域名列表 + hostPort 重下发，恢复被删掉的旧路由
+        await applyDomains(config.caddyAdminUrl, site.slug, prev, site.hostPort);
+      } catch (restoreErr) {
+        const restoreMsg = restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+        await writeAudit(db, {
+          siteId: site.id,
+          actor,
+          action: 'domain.caddy_inconsistent',
+          payload: { slug: site.slug, prev },
+          ok: false,
+          error: `域名下发失败(${msg})后恢复旧路由亦失败(${restoreMsg})`,
+        });
+        throw new ApiError(
+          502,
+          `域名下发失败且恢复旧路由失败，Caddy 该站路由可能已丢失，请人工核对: ${msg}`,
+        );
+      }
+      throw new ApiError(502, `域名下发失败，已回滚（旧路由已恢复）: ${msg}`);
     }
   }
 
@@ -89,7 +118,7 @@ export function registerDomainsRoutes(app: FastifyInstance, deps: DomainsRoutesD
       .set({ domains: next, updatedAt: toPgTimestamp(new Date()) })
       .where(eq(sites.id, site.id));
     try {
-      await syncCaddyOrRollback(site, next, site.domains);
+      await syncCaddyOrRollback(site, next, site.domains, ctx.email);
     } catch (err) {
       await writeAudit(db, {
         siteId: site.id,
@@ -127,7 +156,7 @@ export function registerDomainsRoutes(app: FastifyInstance, deps: DomainsRoutesD
         .where(eq(sites.id, site.id));
       try {
         // next 为空时 applyDomains 只做删除（等价 removeDomains）
-        await syncCaddyOrRollback(site, next, site.domains);
+        await syncCaddyOrRollback(site, next, site.domains, ctx.email);
       } catch (err) {
         await writeAudit(db, {
           siteId: site.id,

@@ -22,7 +22,8 @@ interface RecordedReq {
 interface FakeCaddy {
   url: string;
   requests: RecordedReq[];
-  state: { fail: boolean; routeExists: boolean };
+  /** fail：DELETE/POST 都注入 500；failPostOnce：仅让下一次 POST 失败一次（模拟删旧成功、写新失败） */
+  state: { fail: boolean; failPostOnce: boolean; routeExists: boolean };
   close(): Promise<void>;
 }
 
@@ -30,7 +31,7 @@ interface FakeCaddy {
 async function makeFakeCaddy(): Promise<FakeCaddy> {
   const app = Fastify();
   const requests: RecordedReq[] = [];
-  const state = { fail: false, routeExists: false };
+  const state = { fail: false, failPostOnce: false, routeExists: false };
 
   app.delete<{ Params: { id: string } }>('/id/:id', async (req, reply) => {
     requests.push({ method: 'DELETE', url: req.url });
@@ -41,7 +42,10 @@ async function makeFakeCaddy(): Promise<FakeCaddy> {
   });
   app.post('/config/apps/http/servers/rp/routes', async (req, reply) => {
     requests.push({ method: 'POST', url: req.url, body: req.body });
-    if (state.fail) return reply.code(500).send({ error: 'injected caddy failure' });
+    if (state.fail || state.failPostOnce) {
+      state.failPostOnce = false; // 只失败一次，后续（补偿下发）放行
+      return reply.code(500).send({ error: 'injected caddy failure' });
+    }
     state.routeExists = true;
     return {};
   });
@@ -347,5 +351,81 @@ describe('配置了 caddy：路由级下发与失败回滚', () => {
       caddy.state.fail = false;
     }
     expect(await domainsInDb('dom-c')).toEqual(['e.example.com']);
+  });
+
+  it('删旧成功但写新失败 → 补偿用旧域名重下发恢复旧路由', async () => {
+    // 基线：dom-c 已有旧域名 e.example.com，caddy 路由存在
+    expect(await domainsInDb('dom-c')).toEqual(['e.example.com']);
+    caddy.requests.length = 0;
+    caddy.state.fail = false;
+    caddy.state.routeExists = true; // 旧路由存在，DELETE 会真正删掉它
+    caddy.state.failPostOnce = true; // 首个 POST（写新路由）失败，补偿 POST 放行
+
+    const inconsistentBefore = (await ts.db.orm.select().from(auditEvents)).filter(
+      (r) => r.action === 'domain.caddy_inconsistent',
+    ).length;
+
+    const res = await tsCaddy.app.inject({
+      method: 'POST',
+      url: '/api/sites/dom-c/domains',
+      cookies: { rp_session: opCookie },
+      payload: { domain: 'f.example.com' },
+    });
+    expect(res.statusCode).toBe(502);
+    // DB 回滚到旧域名集
+    expect(await domainsInDb('dom-c')).toEqual(['e.example.com']);
+
+    // 请求序列：删旧 → 写新(失败) → 删(补偿) → 写旧(补偿恢复)
+    const shapes = caddy.requests.map((r) => `${r.method} ${r.url}`);
+    expect(shapes).toEqual([
+      'DELETE /id/rp-dom-c',
+      'POST /config/apps/http/servers/rp/routes',
+      'DELETE /id/rp-dom-c',
+      'POST /config/apps/http/servers/rp/routes',
+    ]);
+    // 失败的 POST 带新域名；补偿 POST 用旧域名列表 + 原 hostPort 恢复旧路由
+    expect(caddy.requests[1]!.body).toEqual({
+      '@id': 'rp-dom-c',
+      match: [{ host: ['e.example.com', 'f.example.com'] }],
+      handle: [{ handler: 'reverse_proxy', upstreams: [{ dial: '127.0.0.1:18203' }] }],
+    });
+    expect(caddy.requests[3]!.body).toEqual({
+      '@id': 'rp-dom-c',
+      match: [{ host: ['e.example.com'] }],
+      handle: [{ handler: 'reverse_proxy', upstreams: [{ dial: '127.0.0.1:18203' }] }],
+    });
+    // 补偿成功：本次操作不应新增 caddy 不一致审计
+    const inconsistentAfter = (await ts.db.orm.select().from(auditEvents)).filter(
+      (r) => r.action === 'domain.caddy_inconsistent',
+    ).length;
+    expect(inconsistentAfter).toBe(inconsistentBefore);
+    caddy.state.failPostOnce = false;
+  });
+
+  it('删旧成功但写新失败且补偿也失败 → 审计标记不一致', async () => {
+    // 基线：dom-c = e.example.com
+    expect(await domainsInDb('dom-c')).toEqual(['e.example.com']);
+    caddy.requests.length = 0;
+    caddy.state.failPostOnce = false;
+    caddy.state.fail = true; // 全程失败：写新与补偿下发都失败
+
+    try {
+      const res = await tsCaddy.app.inject({
+        method: 'POST',
+        url: '/api/sites/dom-c/domains',
+        cookies: { rp_session: opCookie },
+        payload: { domain: 'g.example.com' },
+      });
+      expect(res.statusCode).toBe(502);
+    } finally {
+      caddy.state.fail = false;
+    }
+    // DB 仍回滚到旧域名集
+    expect(await domainsInDb('dom-c')).toEqual(['e.example.com']);
+    // 补偿失败：应有 caddy 不一致审计，含旧域名集供人工核对
+    const rows = await ts.db.orm.select().from(auditEvents);
+    const bad = rows.filter((r) => r.action === 'domain.caddy_inconsistent' && !r.ok);
+    expect(bad.length).toBeGreaterThan(0);
+    expect(bad[bad.length - 1]!.payload).toMatchObject({ slug: 'dom-c', prev: ['e.example.com'] });
   });
 });

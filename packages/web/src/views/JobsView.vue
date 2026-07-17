@@ -14,6 +14,12 @@ import type { TableColumn } from '../components/ui';
  * 只读视图（无写操作）。
  */
 
+// ---- 生命周期卫兵 ----
+// setTimeout 轮询在 await 之后自我重排；卸载时若有在途请求，
+// 其续体会绕过 onBeforeUnmount 的清理再次挂上定时器，形成永久后台轮询。
+// alive 在 onBeforeUnmount 置 false，重排前一律先判 alive。
+let alive = true;
+
 // ---- 列表状态 ----
 const jobs = ref<JobView[]>([]);
 const loading = ref(true);
@@ -152,12 +158,13 @@ async function refreshList(initial = false): Promise<void> {
 }
 
 function scheduleListPoll(): void {
+  if (!alive) return;
   if (listTimer !== null) window.clearTimeout(listTimer);
   const delay = hasActiveJobs.value ? 5_000 : 30_000;
   listTimer = window.setTimeout(() => {
     void (async () => {
       await refreshList();
-      scheduleListPoll();
+      if (alive) scheduleListPoll();
     })();
   }, delay);
 }
@@ -183,7 +190,7 @@ async function loadDetail(id: number, initial = false): Promise<void> {
       detailError.value = err instanceof Error ? err.message : '加载失败';
     }
   }
-  scheduleDetailPoll(id);
+  if (alive) scheduleDetailPoll(id);
 }
 
 function scheduleDetailPoll(id: number): void {
@@ -191,7 +198,7 @@ function scheduleDetailPoll(id: number): void {
     window.clearTimeout(detailTimer);
     detailTimer = null;
   }
-  if (!drawerOpen.value || activeJobId.value !== id) return;
+  if (!alive || !drawerOpen.value || activeJobId.value !== id) return;
   const st = detail.value?.status;
   if (st === 'queued' || st === 'running') {
     detailTimer = window.setTimeout(() => {
@@ -234,6 +241,7 @@ onMounted(() => {
   })();
 });
 onBeforeUnmount(() => {
+  alive = false;
   if (listTimer !== null) window.clearTimeout(listTimer);
   if (detailTimer !== null) window.clearTimeout(detailTimer);
 });

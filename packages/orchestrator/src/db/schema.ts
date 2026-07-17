@@ -1,14 +1,17 @@
+import { sql } from 'drizzle-orm';
 import {
   bigint,
   boolean,
   integer,
   jsonb,
+  numeric,
   pgTable,
   real,
   serial,
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 /**
@@ -53,29 +56,40 @@ export const invites = pgTable('invites', {
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
 });
 
-export const sites = pgTable('sites', {
-  id: serial('id').primaryKey(),
-  operatorId: integer('operator_id')
-    .notNull()
-    .references(() => operators.id),
-  slug: text('slug').notNull().unique(),
-  label: text('label').notNull(),
-  engine: text('engine').notNull(), // 'sub2api' | 'newapi'
-  version: text('version').notNull(),
-  domains: jsonb('domains').$type<string[]>().notNull().default([]),
-  hostPort: integer('host_port').notNull(),
-  baseUrl: text('base_url').notNull(),
-  dataDir: text('data_dir').notNull().default(''),
-  composeProject: text('compose_project').notNull().default(''),
-  // pending | provisioning | active | stopped | failed:<step> | destroyed
-  status: text('status').notNull().default('pending'),
-  // 'compose'=本面板开的站(可生命周期操作) | 'external'=接管的存量站(只读生命周期)
-  managed: text('managed').notNull().default('compose'),
-  notes: text('notes'),
-  credentialRef: text('credential_ref').notNull().default(''),
-  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
-});
+export const sites = pgTable(
+  'sites',
+  {
+    id: serial('id').primaryKey(),
+    operatorId: integer('operator_id')
+      .notNull()
+      .references(() => operators.id),
+    slug: text('slug').notNull().unique(),
+    label: text('label').notNull(),
+    engine: text('engine').notNull(), // 'sub2api' | 'newapi'
+    version: text('version').notNull(),
+    domains: jsonb('domains').$type<string[]>().notNull().default([]),
+    hostPort: integer('host_port').notNull(),
+    baseUrl: text('base_url').notNull(),
+    dataDir: text('data_dir').notNull().default(''),
+    composeProject: text('compose_project').notNull().default(''),
+    // pending | provisioning | active | stopped | failed:<step> | destroyed
+    status: text('status').notNull().default('pending'),
+    // 'compose'=本面板开的站(可生命周期操作) | 'external'=接管的存量站(只读生命周期)
+    managed: text('managed').notNull().default('compose'),
+    notes: text('notes'),
+    credentialRef: text('credential_ref').notNull().default(''),
+    createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+  },
+  // host_port 唯一仅约束「面板自建的 compose 站」（纵深防御 TOCTOU：即便建站临界区
+  // 互斥失效，两站也不可能同时占用同一 host_port）。external 接管站的 host_port 是
+  // 自报元数据（常为 0，面板不绑定），故排除；destroyed 站不占端口亦排除。
+  (t) => [
+    uniqueIndex('sites_host_port_active_uk')
+      .on(t.hostPort)
+      .where(sql`${t.status} <> 'destroyed' AND ${t.managed} = 'compose'`),
+  ],
+);
 
 /** 引擎 admin 凭据，密文存储（AES-256-GCM，见 secrets.ts），明文只在进程内存 */
 export const credentials = pgTable('credentials', {
@@ -181,8 +195,15 @@ export const usageLedger = pgTable(
     requests: integer('requests').notNull().default(0),
     promptTokens: bigint('prompt_tokens', { mode: 'number' }).notNull().default(0),
     completionTokens: bigint('completion_tokens', { mode: 'number' }).notNull().default(0),
-    upstreamCost: real('upstream_cost').notNull().default(0),
-    billedCost: real('billed_cost').notNull().default(0),
+    // 金额用 numeric 保精度（real=float4 仅 7 位有效数字会舍入漂移）。
+    // mode:'number' → 读出经 mapFromDriverValue=Number 归一（pglite / node-postgres 皆可能回字符串，
+    // 此处统一收敛为 number），写入经 mapToDriverValue=String 精确入库，故下游类型仍是 number。
+    upstreamCost: numeric('upstream_cost', { precision: 14, scale: 6, mode: 'number' })
+      .notNull()
+      .default(0),
+    billedCost: numeric('billed_cost', { precision: 14, scale: 6, mode: 'number' })
+      .notNull()
+      .default(0),
     source: text('source').notNull().default('gateway'), // gateway|manual
     createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
   },
@@ -193,7 +214,10 @@ export const plans = pgTable('plans', {
   id: serial('id').primaryKey(),
   key: text('key').notNull().unique(),
   title: text('title').notNull(),
-  priceMonthly: real('price_monthly').notNull().default(0),
+  // 金额用 numeric（mode:'number' 读出归一为 number，写入精确入库）
+  priceMonthly: numeric('price_monthly', { precision: 10, scale: 2, mode: 'number' })
+    .notNull()
+    .default(0),
   siteQuota: integer('site_quota').notNull(),
   features: jsonb('features').$type<Record<string, unknown>>(),
   active: boolean('active').notNull().default(true),

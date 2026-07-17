@@ -70,6 +70,12 @@ const app = await buildServer(
 
 if (migrated.length > 0) app.log.info(`migrations applied: ${migrated.join(', ')}`);
 
+// 崩溃恢复：起 worker 前先回收上次重启遗留的 running 僵尸任务，否则其占据 enqueue
+// 去重（queued/running）导致对应 slug 一律 409、站点无法升级/启停/销毁而彻底卡死。
+// 显式 await 保证在 app.listen 开始接请求前完成（start() 内部亦有兜底回收，幂等无害）。
+const recovered = await jobs.reconcileOrphans();
+if (recovered > 0) app.log.warn(`reconciled ${recovered} orphaned running job(s) on boot`);
+
 jobs.start();
 
 // G3: 告警监控。monitorIntervalMs=0 时不起轮询定时器；startMonitor 内部把 jobs.onFinish

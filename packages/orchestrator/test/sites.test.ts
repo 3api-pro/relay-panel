@@ -610,3 +610,57 @@ describe('审计流水', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('并发建站 TOCTOU 纵深防御（问题 C/D）', () => {
+  it('同显式端口并发建站：恰好一个成功、另一个 409，端口不被双占', async () => {
+    const port = 18717; // 超出端口池范围，只走显式端口路径，不受自动分配干扰
+    const mk = (slug: string) =>
+      ts.app.inject({
+        method: 'POST',
+        url: '/api/sites',
+        cookies: { rp_session: rootCookie },
+        payload: { slug, label: slug, engine: 'sub2api', version: 'v1.0.0', hostPort: port, adminEmail: 'x@example.com' },
+      });
+    const [r1, r2] = await Promise.all([mk('cc-port-1'), mk('cc-port-2')]);
+    expect([r1.statusCode, r2.statusCode].sort()).toEqual([201, 409]);
+    const conflict = [r1, r2].find((r) => r.statusCode === 409)!;
+    expect((conflict.json() as { message: string }).message).toContain('端口');
+
+    const rows = await ts.db.orm.select().from(sites).where(eq(sites.hostPort, port));
+    expect(rows.filter((r) => r.status !== 'destroyed')).toHaveLength(1);
+  });
+
+  it('free 额度 operator 并发建两站：恰好一个成功、另一个 403 配额（不突破配额）', async () => {
+    const op2 = await ts.seedLogin({ email: 'cc-op2@example.com', password: 'op2-pass-1234', role: 'operator' });
+    const mk = (slug: string) =>
+      ts.app.inject({
+        method: 'POST',
+        url: '/api/sites',
+        cookies: { rp_session: op2.cookie },
+        payload: { slug, label: slug, engine: 'newapi', version: 'v0.9.0', adminEmail: 'op2@example.com' },
+      });
+    const [r1, r2] = await Promise.all([mk('cc-q-1'), mk('cc-q-2')]);
+    expect([r1.statusCode, r2.statusCode].sort()).toEqual([201, 403]);
+    const denied = [r1, r2].find((r) => r.statusCode === 403)!;
+    expect((denied.json() as { message: string }).message).toContain('配额');
+
+    const rows = await ts.db.orm.select().from(sites).where(eq(sites.operatorId, op2.operatorId));
+    expect(rows.filter((r) => r.status !== 'destroyed')).toHaveLength(1);
+  });
+
+  it('自动端口并发建站：分到互不相同的端口', async () => {
+    const mk = (slug: string) =>
+      ts.app.inject({
+        method: 'POST',
+        url: '/api/sites',
+        cookies: { rp_session: rootCookie },
+        payload: { slug, label: slug, engine: 'sub2api', version: 'v1.0.0', adminEmail: 'x@example.com' },
+      });
+    const [r1, r2] = await Promise.all([mk('cc-auto-1'), mk('cc-auto-2')]);
+    expect(r1.statusCode, r1.body).toBe(201);
+    expect(r2.statusCode, r2.body).toBe(201);
+    const p1 = (r1.json() as { hostPort: number }).hostPort;
+    const p2 = (r2.json() as { hostPort: number }).hostPort;
+    expect(p1).not.toBe(p2);
+  });
+});

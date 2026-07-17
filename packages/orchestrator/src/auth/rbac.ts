@@ -32,20 +32,49 @@ export interface AuthRequestLike {
 }
 
 /**
- * 从 cookie 解析会话 → 校验未过期（内部滑动续期）→ 账号必须 active。
- * 任何一环不满足返回 null（由调用方决定 401 还是放行）。
+ * 认证详情：ctx 之外透出本次是否滑动续期（renewed）与原始 token，
+ * 供 server.ts 钩子据此刷新浏览器 cookie 的 maxAge（否则滑动续期对客户端零效果）。
  */
-export async function authenticate(db: Db, req: AuthRequestLike, ttlHours = 168): Promise<SessionCtx | null> {
+export interface AuthResult {
+  ctx: SessionCtx;
+  /** 本次 resolveSession 是否顺延了 DB expiresAt */
+  renewed: boolean;
+  /** cookie 里的原始 token（仅用于回写 Set-Cookie，绝不落库/落日志） */
+  token: string;
+}
+
+/**
+ * 从 cookie 解析会话 → 校验未过期（内部滑动续期）→ 账号必须 active，返回认证详情。
+ * 任何一环不满足返回 null。authenticate() 是它只取 ctx 的薄封装（保持既有调用点兼容）。
+ */
+export async function authenticateDetailed(
+  db: Db,
+  req: AuthRequestLike,
+  ttlHours = 168,
+): Promise<AuthResult | null> {
   const token = req.cookies?.[SESSION_COOKIE];
   if (!token) return null;
   const resolved = await resolveSession(db, token, ttlHours);
   if (!resolved) return null;
   if (resolved.operator.status !== 'active') return null;
   return {
-    operatorId: resolved.operator.id,
-    email: resolved.operator.email,
-    role: resolved.operator.role as OperatorRole,
+    ctx: {
+      operatorId: resolved.operator.id,
+      email: resolved.operator.email,
+      role: resolved.operator.role as OperatorRole,
+    },
+    renewed: resolved.renewed,
+    token,
   };
+}
+
+/**
+ * 从 cookie 解析会话 → 校验未过期（内部滑动续期）→ 账号必须 active。
+ * 任何一环不满足返回 null（由调用方决定 401 还是放行）。
+ */
+export async function authenticate(db: Db, req: AuthRequestLike, ttlHours = 168): Promise<SessionCtx | null> {
+  const result = await authenticateDetailed(db, req, ttlHours);
+  return result === null ? null : result.ctx;
 }
 
 /** viewer 禁写 */

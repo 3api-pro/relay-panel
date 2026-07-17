@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { sites } from '../src/db/schema.js';
+import { eq } from 'drizzle-orm';
+import { sessions, sites } from '../src/db/schema.js';
+import { hashToken, toPgTimestamp } from '../src/auth/sessions.js';
 import { makeTestServer, type TestServer } from './helpers.js';
 
 /**
@@ -83,6 +85,34 @@ describe('认证钩子', () => {
     const res = await ts.app.inject({ method: 'GET', url: '/api/jobs', cookies: { rp_session: operatorCookie } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ jobs: [] });
+  });
+});
+
+describe('滑动续期回写浏览器 cookie', () => {
+  it('剩余寿命<ttl/2 的会话请求后带 Set-Cookie 刷新 rp_session 的 maxAge', async () => {
+    const { cookie } = await ts.seedLogin({ email: 'renew@example.com', password: 'renew-pass-1234', role: 'operator' });
+
+    // 刚登录的活跃会话不触发续期：响应不应回写 rp_session
+    const fresh = await ts.app.inject({ method: 'GET', url: '/api/auth/me', cookies: { rp_session: cookie } });
+    expect(fresh.statusCode).toBe(200);
+    expect(fresh.cookies.find((c) => c.name === 'rp_session')).toBeUndefined();
+
+    // 压到只剩 10h（默认 ttl 168h，阈值 84h）→ 下次认证触发滑动续期
+    await ts.db.orm
+      .update(sessions)
+      .set({ expiresAt: toPgTimestamp(new Date(Date.now() + 10 * 3600_000)) })
+      .where(eq(sessions.tokenHash, hashToken(cookie)));
+
+    const res = await ts.app.inject({ method: 'GET', url: '/api/auth/me', cookies: { rp_session: cookie } });
+    expect(res.statusCode).toBe(200);
+    const set = res.cookies.find((c) => c.name === 'rp_session');
+    expect(set).toBeTruthy();
+    // 回写的仍是原 token，且 maxAge 恢复到完整 ttl（远大于压缩后的剩余寿命）
+    expect(set!.value).toBe(cookie);
+    expect(set!.maxAge).toBe(168 * 3600);
+    expect(set!.path).toBe('/');
+    expect(set!.httpOnly).toBe(true);
+    expect(String(res.headers['set-cookie'])).toContain('rp_session=');
   });
 });
 
@@ -216,10 +246,16 @@ describe('/metrics', () => {
     expect(res.body).toContain('# TYPE rp_alerts_open gauge');
   });
 
-  it('合法 session 也可访问', async () => {
+  it('root session → 200', async () => {
     const res = await ts.app.inject({ method: 'GET', url: '/metrics', cookies: { rp_session: rootCookie } });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('rp_sites_total');
+  });
+
+  it('operator session → 403（禁止跨租户读全局指标）', async () => {
+    const res = await ts.app.inject({ method: 'GET', url: '/metrics', cookies: { rp_session: operatorCookie } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: '无权访问' });
   });
 });
 

@@ -7,7 +7,8 @@ import fastifyStatic from '@fastify/static';
 import type { EngineAdapter, EngineKind, EngineLifecycle } from '@relay-panel/adapter-core';
 import type { Config } from './config.js';
 import type { Db } from './db/client.js';
-import { authenticate, type SessionCtx } from './auth/rbac.js';
+import { authenticateDetailed, type SessionCtx } from './auth/rbac.js';
+import { SESSION_COOKIE, sessionCookieOptions } from './auth/sessions.js';
 import { JobEngine } from './jobs/engine.js';
 import { registerAuthRoutes } from './auth/routes.js';
 import { registerJobsRoutes } from './jobs/routes.js';
@@ -132,10 +133,16 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
     // 非 /api 的静态路径放行；/metrics 也在此解析 session（Bearer 判定在 handler 内）
     if (!isApi && path !== '/metrics') return;
     if (isApi && PUBLIC_API_PATHS.has(path)) return;
-    const ctx = await authenticate(db, req, config.sessionTtlHours);
-    if (ctx) req.ctx = ctx;
+    const auth = await authenticateDetailed(db, req, config.sessionTtlHours);
+    if (auth) {
+      req.ctx = auth.ctx;
+      // 滑动续期发生时回写 Set-Cookie 刷新浏览器 maxAge，否则活跃用户仍按登录时的固定 TTL 被强制登出
+      if (auth.renewed) {
+        reply.setCookie(SESSION_COOKIE, auth.token, sessionCookieOptions(config.sessionTtlHours));
+      }
+    }
     if (!isApi) return;
-    if (!ctx) return reply.code(401).send({ error: '未登录或会话已过期' });
+    if (!auth) return reply.code(401).send({ error: '未登录或会话已过期' });
   });
 
   app.get('/healthz', async () => ({ ok: true, service: 'relay-panel-orchestrator' }));
