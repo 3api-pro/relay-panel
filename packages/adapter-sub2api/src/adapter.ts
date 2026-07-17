@@ -1,0 +1,297 @@
+import type {
+  ChannelRecord,
+  ChannelSpec,
+  ChannelTestResult,
+  CredentialStore,
+  EngineAdapter,
+  EngineAdminClient,
+  EngineCapabilities,
+  GroupRecord,
+  GroupSpec,
+  HealthReport,
+  InstanceInfo,
+  SiteBranding,
+  SiteUserRecord,
+  UsageSummary,
+} from '@relay-panel/adapter-core';
+import { Sub2apiHttp, type PaginatedData } from './http.js';
+import { bootstrapAdminApiKey } from './auth.js';
+
+/**
+ * 概念映射（sub2api 语义与 adapter-core 抽象的对应）：
+ * - adapter-core 的 Channel（上游接入）→ sub2api 的 account（上游凭证）+ group 挂载
+ *   （sub2api 自己的 "channel" 是计费/展示概念，不在此映射内，经 raw 透传可用）
+ * - adapter-core 的 Group → sub2api 的 group（含倍率 rate_multiplier）
+ */
+
+interface S2ARawAccount {
+  id: number;
+  name: string;
+  platform: string;
+  type: string;
+  status: string;
+  priority?: number;
+  group_ids?: number[];
+  credentials?: Record<string, unknown>;
+  extra?: Record<string, unknown>;
+}
+
+interface S2ARawGroup {
+  id: number;
+  name: string;
+  description?: string;
+  rate_multiplier: number;
+  platform?: string;
+}
+
+interface S2ARawUser {
+  id: number;
+  email?: string;
+  username?: string;
+  role: string;
+  balance?: number;
+  status: string;
+}
+
+const PROTOCOL_TO_PLATFORM: Record<ChannelSpec['protocol'], string> = {
+  anthropic: 'anthropic',
+  openai: 'openai',
+  'openai-responses': 'openai',
+  gemini: 'gemini',
+};
+
+function accountToChannelRecord(a: S2ARawAccount): ChannelRecord {
+  return {
+    id: String(a.id),
+    name: a.name,
+    enabled: a.status === 'active',
+    protocol: (a.platform === 'openai' ? 'openai' : a.platform) as ChannelRecord['protocol'],
+    baseUrl: typeof a.credentials?.base_url === 'string' ? (a.credentials.base_url as string) : '',
+    apiKey: '<redacted>',
+    models: [],
+    groups: (a.group_ids ?? []).map(String),
+    ...(a.priority !== undefined ? { priority: a.priority } : {}),
+    raw: { type: a.type, extra: a.extra ?? {} },
+  };
+}
+
+export class Sub2apiAdapter implements EngineAdapter {
+  readonly engine = 'sub2api' as const;
+  readonly dbDirect = false;
+
+  async capabilities(_inst: InstanceInfo): Promise<EngineCapabilities> {
+    return {
+      userAccessTokens: true, // >= 0.1.158
+      multiGroupKeys: false, // 二开特性，官方版无
+      anthropicNative: true,
+      subscriptionBilling: true,
+    };
+  }
+
+  async health(inst: InstanceInfo): Promise<HealthReport> {
+    const started = Date.now();
+    try {
+      const res = await fetch(`${inst.baseUrl}/health`, { signal: AbortSignal.timeout(8000) });
+      return { ok: res.ok, httpOk: res.ok, latencyMs: Date.now() - started };
+    } catch (e) {
+      return { ok: false, httpOk: false, detail: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  async connect(inst: InstanceInfo, credentials: CredentialStore): Promise<EngineAdminClient> {
+    const cred = await credentials.resolve(inst.credentialRef);
+    let apiKey: string;
+    if (cred.kind === 'admin-token') {
+      apiKey = cred.secret;
+    } else if (cred.kind === 'admin-password') {
+      if (!cred.adminEmail) throw new Error('admin-password credential requires adminEmail');
+      // 引导流程：密码 → JWT → 合规 → 长期 Admin API Key。
+      // 上层拿到 client 后应尽快把 key 轮换入凭据库（provision 完成时做一次）。
+      apiKey = await bootstrapAdminApiKey(inst.baseUrl, cred.adminEmail, cred.secret);
+    } else {
+      throw new Error(`unsupported credential kind for sub2api: ${cred.kind}`);
+    }
+    const http = new Sub2apiHttp(inst.baseUrl, { kind: 'api-key', key: apiKey });
+    return new Sub2apiAdminClient(inst, http, apiKey);
+  }
+}
+
+export class Sub2apiAdminClient implements EngineAdminClient {
+  constructor(
+    readonly inst: InstanceInfo,
+    private readonly http: Sub2apiHttp,
+    /** connect() 引导出的长期 key；上层负责加密入库，绝不落日志 */
+    readonly adminApiKey: string,
+  ) {}
+
+  channels = {
+    list: async (): Promise<ChannelRecord[]> => {
+      const accounts = await this.http.listAll<S2ARawAccount>('/api/v1/admin/accounts');
+      return accounts.map(accountToChannelRecord);
+    },
+
+    create: async (spec: ChannelSpec): Promise<ChannelRecord> => {
+      const groupIds = (spec.groups ?? []).map(Number).filter((n) => Number.isFinite(n));
+      const body = {
+        name: spec.name,
+        platform: PROTOCOL_TO_PLATFORM[spec.protocol],
+        type: (spec.raw?.type as string) ?? 'apikey',
+        credentials: { api_key: spec.apiKey, base_url: spec.baseUrl },
+        priority: spec.priority ?? 0,
+        group_ids: groupIds,
+        // openai 相对上游默认探测 /v1/responses；中转上游大多不支持，显式关闭（7/16 事故教训）
+        extra: {
+          ...(spec.protocol === 'openai' ? { openai_responses_supported: false } : {}),
+          ...(spec.modelMapping ? { model_mapping: spec.modelMapping } : {}),
+          ...((spec.raw?.extra as Record<string, unknown>) ?? {}),
+        },
+      };
+      const created = await this.http.post<S2ARawAccount>('/api/v1/admin/accounts', body);
+      return accountToChannelRecord(created);
+    },
+
+    update: async (
+      id: string,
+      patch: Partial<ChannelSpec> & { enabled?: boolean },
+    ): Promise<ChannelRecord> => {
+      const body: Record<string, unknown> = {};
+      if (patch.name !== undefined) body.name = patch.name;
+      if (patch.priority !== undefined) body.priority = patch.priority;
+      if (patch.groups !== undefined) body.group_ids = patch.groups.map(Number);
+      if (patch.enabled !== undefined) body.status = patch.enabled ? 'active' : 'inactive';
+      if (patch.apiKey !== undefined || patch.baseUrl !== undefined) {
+        // sub2api PUT accounts 带 credentials 必须全量（部分更新会清 base_url —— 7/15 事故教训）
+        if (patch.apiKey === undefined || patch.baseUrl === undefined) {
+          throw new Error('sub2api requires full credentials on update: pass both apiKey and baseUrl');
+        }
+        body.credentials = { api_key: patch.apiKey, base_url: patch.baseUrl };
+      }
+      const updated = await this.http.put<S2ARawAccount>(`/api/v1/admin/accounts/${id}`, body);
+      return accountToChannelRecord(updated);
+    },
+
+    remove: async (id: string): Promise<void> => {
+      await this.http.delete(`/api/v1/admin/accounts/${id}`);
+    },
+
+    test: async (id: string, model?: string): Promise<ChannelTestResult> => {
+      const started = Date.now();
+      try {
+        await this.http.post(`/api/v1/admin/accounts/${id}/test`, {
+          model_id: model ?? '',
+          mode: 'simple',
+        });
+        return { ok: true, latencyMs: Date.now() - started, ...(model ? { model } : {}) };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  };
+
+  groups = {
+    list: async (): Promise<GroupRecord[]> => {
+      const groups = await this.http.listAll<S2ARawGroup>('/api/v1/admin/groups');
+      return groups.map((g) => ({
+        id: String(g.id),
+        name: g.name,
+        ratio: g.rate_multiplier,
+        ...(g.description ? { description: g.description } : {}),
+        raw: { platform: g.platform },
+      }));
+    },
+
+    create: async (spec: GroupSpec): Promise<GroupRecord> => {
+      const created = await this.http.post<S2ARawGroup>('/api/v1/admin/groups', {
+        name: spec.name,
+        description: spec.description ?? '',
+        rate_multiplier: spec.ratio,
+        ...(spec.raw ?? {}),
+      });
+      return { id: String(created.id), name: created.name, ratio: created.rate_multiplier };
+    },
+
+    update: async (id: string, patch: Partial<GroupSpec>): Promise<GroupRecord> => {
+      const body: Record<string, unknown> = { ...(patch.raw ?? {}) };
+      if (patch.name !== undefined) body.name = patch.name;
+      if (patch.description !== undefined) body.description = patch.description;
+      if (patch.ratio !== undefined) body.rate_multiplier = patch.ratio;
+      const updated = await this.http.put<S2ARawGroup>(`/api/v1/admin/groups/${id}`, body);
+      return { id: String(updated.id), name: updated.name, ratio: updated.rate_multiplier };
+    },
+  };
+
+  users = {
+    list: async (query?: { search?: string; page?: number }): Promise<SiteUserRecord[]> => {
+      const params = new URLSearchParams();
+      if (query?.search) params.set('search', query.search);
+      params.set('page', String(query?.page ?? 1));
+      params.set('page_size', '100');
+      const data = await this.http.get<PaginatedData<S2ARawUser>>(
+        `/api/v1/admin/users?${params.toString()}`,
+      );
+      return data.items.map((u) => ({
+        id: String(u.id),
+        role: u.role === 'admin' ? 'admin' : 'user',
+        status: u.status === 'active' ? 'active' : 'disabled',
+        ...(u.email ? { email: u.email } : {}),
+        ...(u.username ? { username: u.username } : {}),
+        ...(u.balance !== undefined ? { balance: Number(u.balance) } : {}),
+      }));
+    },
+
+    setStatus: async (id: string, status: 'active' | 'disabled'): Promise<void> => {
+      await this.http.put(`/api/v1/admin/users/${id}`, { status });
+    },
+  };
+
+  settings = {
+    getBranding: async (): Promise<SiteBranding> => {
+      const all = await this.http.get<Record<string, unknown>>('/api/v1/admin/settings');
+      return {
+        siteName: typeof all.site_name === 'string' ? all.site_name : '',
+        ...(typeof all.site_logo === 'string' && all.site_logo ? { logoUrl: all.site_logo } : {}),
+      };
+    },
+
+    setBranding: async (branding: Partial<SiteBranding>): Promise<void> => {
+      const body: Record<string, unknown> = {};
+      if (branding.siteName !== undefined) body.site_name = branding.siteName;
+      if (branding.logoUrl !== undefined) body.site_logo = branding.logoUrl;
+      await this.http.put('/api/v1/admin/settings', body);
+    },
+
+    getRaw: async (key: string): Promise<string | null> => {
+      const all = await this.http.get<Record<string, unknown>>('/api/v1/admin/settings');
+      const v = all[key];
+      return v === undefined || v === null ? null : String(v);
+    },
+
+    setRaw: async (key: string, value: string): Promise<void> => {
+      await this.http.put('/api/v1/admin/settings', { [key]: value });
+    },
+  };
+
+  stats = {
+    usage: async (from: Date, to: Date): Promise<UsageSummary> => {
+      const fmt = (d: Date) => d.toISOString().slice(0, 10);
+      const s = await this.http.get<{
+        total_requests: number;
+        total_input_tokens: number;
+        total_output_tokens: number;
+        total_cost: number;
+        by_model?: unknown;
+      }>(
+        `/api/v1/admin/usage/stats?start_date=${fmt(from)}&end_date=${fmt(to)}&timezone=Asia/Shanghai`,
+      );
+      return {
+        from,
+        to,
+        requests: s.total_requests ?? 0,
+        promptTokens: s.total_input_tokens ?? 0,
+        completionTokens: s.total_output_tokens ?? 0,
+        costUnit: 'USD',
+        cost: s.total_cost ?? 0,
+      };
+    },
+  };
+}
