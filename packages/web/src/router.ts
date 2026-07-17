@@ -1,0 +1,85 @@
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import { setUnauthorizedHandler } from './api/client';
+import { session } from './api/session';
+import Shell from './layouts/Shell.vue';
+import LoginView from './views/LoginView.vue';
+import OverviewView from './views/OverviewView.vue';
+
+/**
+ * 路由表：除 H1 实现的三个视图外，其余全部指向占位视图。
+ * H2 各 agent 替换方式：改对应 route 的 component 为
+ *   () => import('./views/XxxView.vue')
+ * 不要动守卫与其它路由行。
+ */
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** 顶栏与占位页标题 */
+    title?: string;
+    /** 免登录页面 */
+    public?: boolean;
+  }
+}
+
+const placeholder = () => import('./views/PlaceholderView.vue');
+
+const routes: RouteRecordRaw[] = [
+  { path: '/login', component: LoginView, meta: { title: '登录', public: true } },
+  // 组件厨房：仅 dev 构建注册
+  ...(import.meta.env.DEV
+    ? [{ path: '/kitchen', component: () => import('./views/DevKitchenSink.vue'), meta: { title: '组件厨房', public: true } }]
+    : []),
+  {
+    path: '/',
+    component: Shell,
+    children: [
+      { path: '', component: OverviewView, meta: { title: '总览' } },
+      { path: 'sites', component: placeholder, meta: { title: '站点' } },
+      { path: 'sites/:slug', component: placeholder, meta: { title: '站点详情' } },
+      { path: 'marketplace', component: placeholder, meta: { title: '渠道市场' } },
+      { path: 'ledger', component: placeholder, meta: { title: '账本' } },
+      { path: 'alerts', component: placeholder, meta: { title: '告警' } },
+      { path: 'jobs', component: placeholder, meta: { title: '任务' } },
+      { path: 'operators', component: placeholder, meta: { title: '操作员' } },
+      { path: 'billing', component: placeholder, meta: { title: '计费' } },
+      { path: 'settings', component: placeholder, meta: { title: '设置' } },
+    ],
+  },
+  { path: '/:pathMatch(.*)*', redirect: '/' },
+];
+
+export const router = createRouter({
+  history: createWebHistory(),
+  routes,
+});
+
+// 401 统一出口：清会话并带回跳地址去登录页（client.ts 无法 import router，走注册回调）
+setUnauthorizedHandler(() => {
+  session.clear();
+  const current = router.currentRoute.value;
+  if (current.path !== '/login') {
+    void router.push({ path: '/login', query: current.fullPath !== '/' ? { redirect: current.fullPath } : {} });
+  }
+});
+
+// 守卫：boot 时 GET /api/auth/me 缓存到 session store；未登录跳 /login
+router.beforeEach(async (to) => {
+  if (to.meta.public) {
+    // 已登录访问登录页 → 回总览
+    if (to.path === '/login') {
+      const me = await session.ensureLoaded();
+      if (me) return { path: '/' };
+    }
+    return true;
+  }
+  const me = await session.ensureLoaded();
+  if (!me) {
+    return { path: '/login', query: to.fullPath !== '/' ? { redirect: to.fullPath } : {} };
+  }
+  return true;
+});
+
+router.afterEach((to) => {
+  const title = typeof to.meta.title === 'string' ? to.meta.title : '';
+  document.title = title ? `${title} · relay-panel` : 'relay-panel';
+});

@@ -24,11 +24,15 @@ export interface ChannelTemplate {
   /**
    * 上游接入参数来源：
    *  - 'byo'   : 站长自带（授权时传入 baseUrl+apiKey）
-   *  - 'managed': 我方计量网关签发（授权时由编排器向网关申请，本仓库留接口不实现）
+   *  - 'managed': 我方计量网关签发（授权时由编排器向全局网关申请 per-site key）
    */
   source: 'byo' | 'managed';
-  /** managed 模式下计量网关的注入端点（自部署版可为空=功能不可用） */
+  /** managed 模式下计量网关的注入端点（DB 化后未持久化——统一走全局网关配置，字段仅兼容保留） */
   managedGatewayUrl?: string;
+  /** byo 授权参数的 JSON Schema 描述（前端表单渲染提示用） */
+  paramsSchema?: Record<string, unknown>;
+  /** 是否可被启用（DB channel_templates.enabled 同义） */
+  enabled?: boolean;
   /** 引擎私有字段透传（如 sub2api account extra） */
   raw?: Record<string, unknown>;
 }
@@ -46,7 +50,10 @@ export interface GrantInput {
   priority?: number;
 }
 
-/** 授权产物：记录站内渠道 id 与计量 key 引用，供后续撤销与分账 */
+/**
+ * 授权产物（registry 时代的旧形状，保留仅为类型兼容）。
+ * DB 化后授权记录以 channel_grants 表为准，API 视图见 grant.ts 的 GrantView。
+ */
 export interface GrantRecord {
   templateKey: string;
   siteSlug: string;

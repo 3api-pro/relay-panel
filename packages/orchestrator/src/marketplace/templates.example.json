@@ -1,20 +1,32 @@
 [
   {
     "key": "example-claude-byo",
-    "title": "Claude (自带上游)",
-    "description": "示例模板：站长自带 Anthropic 兼容上游 base_url + key",
+    "title": "Claude 系列（自带上游）",
+    "description": "示例模板：站长自带 Anthropic 兼容上游的 baseUrl 与 apiKey，面板负责把渠道注入目标站",
     "protocol": "anthropic",
     "models": ["claude-sonnet-4", "claude-opus-4"],
     "suggestedRatio": 1.0,
-    "source": "byo"
+    "modelMapping": { "claude-sonnet-4": "claude-sonnet-4-latest" },
+    "source": "byo",
+    "paramsSchema": {
+      "type": "object",
+      "required": ["baseUrl", "apiKey"],
+      "properties": {
+        "baseUrl": { "type": "string", "description": "上游接入地址，如 https://upstream.example.com" },
+        "apiKey": { "type": "string", "description": "上游接入密钥（仅注入目标站引擎，不落面板）" }
+      }
+    },
+    "enabled": true
   },
   {
-    "key": "example-openai-byo",
-    "title": "OpenAI 兼容 (自带上游)",
-    "description": "示例模板：OpenAI Chat Completions 协议，自带上游",
+    "key": "example-gpt-managed",
+    "title": "GPT 系列（托管计量）",
+    "description": "示例模板：由平台计量网关按站点签发接入 key，用量自动回传记账分账",
     "protocol": "openai",
     "models": ["gpt-4o", "gpt-4o-mini"],
-    "suggestedRatio": 1.0,
-    "source": "byo"
+    "suggestedRatio": 1.2,
+    "source": "managed",
+    "raw": {},
+    "enabled": true
   }
 ]

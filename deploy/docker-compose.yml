@@ -1,0 +1,104 @@
+# relay-panel 一键部署（docker compose）
+# 使用：
+#   cp .env.example .env    # 按注释填必填项（POSTGRES_PASSWORD / RP_SECRET_KEY / RP_SITES_ROOT / DOCKER_GID）
+#   docker compose up -d --build
+# 启用 Caddy 反代 + 自动 HTTPS：docker compose --profile caddy up -d --build
+# 完整文档见 ../docs/SELF-HOST.md
+
+name: relay-panel
+
+services:
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        # 国内网络可在 .env 换成 https://registry.npmmirror.com
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
+    image: relay-panel-orchestrator:local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # 容器内非 root 用户要读写挂载的 docker.sock：授予宿主 docker 组 gid
+    group_add:
+      - "${DOCKER_GID:-998}"
+    ports:
+      # 默认只绑本机回环；公网请走反代（或启用 caddy profile）
+      - "${RP_BIND:-127.0.0.1}:${RP_PORT:-7100}:7100"
+    environment:
+      # 编排器自身的库：默认用本 compose 内置的 postgres 服务
+      RP_DB: ${RP_DB:-postgres://relay:${POSTGRES_PASSWORD}@postgres:5432/relay_panel}
+      # 凭据加密主密钥（必填；空串会导致 enc: 凭据与面板开站不可用）
+      RP_SECRET_KEY: ${RP_SECRET_KEY:-}
+      # 首启 root 账号（仅 operators 空表时生效）
+      RP_ADMIN_EMAIL: ${RP_ADMIN_EMAIL:-}
+      RP_ADMIN_PASSWORD: ${RP_ADMIN_PASSWORD:-}
+      RP_SIGNUP_MODE: ${RP_SIGNUP_MODE:-closed}
+      RP_SESSION_TTL_HOURS: ${RP_SESSION_TTL_HOURS:-168}
+      # 站点数据根目录：容器内路径必须与宿主路径一致（引擎 compose 文件由宿主 docker 解析）
+      RP_SITES_ROOT: ${RP_SITES_ROOT:?}
+      RP_PORT_RANGE: ${RP_PORT_RANGE:-18100-18999}
+      RP_MONITOR_INTERVAL_MS: ${RP_MONITOR_INTERVAL_MS:-60000}
+      RP_BALANCE_THRESHOLD: ${RP_BALANCE_THRESHOLD:-0}
+      # 渠道市场计量网关（可选；不配则 managed 模板不可启用）
+      RP_METERING_GATEWAY_URL: ${RP_METERING_GATEWAY_URL:-}
+      RP_METERING_GATEWAY_TOKEN: ${RP_METERING_GATEWAY_TOKEN:-}
+      RP_LEDGER_PULL_INTERVAL_MS: ${RP_LEDGER_PULL_INTERVAL_MS:-3600000}
+      # 域名自动化（可选；启用 caddy profile 时设 http://caddy:2019）
+      RP_CADDY_ADMIN_URL: ${RP_CADDY_ADMIN_URL:-}
+      # Prometheus 抓取 token（可选）
+      RP_METRICS_TOKEN: ${RP_METRICS_TOKEN:-}
+    volumes:
+      # 经宿主 docker 编排引擎站点
+      - /var/run/docker.sock:/var/run/docker.sock
+      # 站点数据目录：左右两侧同一路径（铁律，见上）
+      - ${RP_SITES_ROOT:?}:${RP_SITES_ROOT:?}
+      # 编排器本地数据兜底（pglite 模式 / 默认备份目录 ./data/backups）
+      - orchestrator_data:/app/packages/orchestrator/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://127.0.0.1:7100/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: relay
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: relay_panel
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # 不暴露宿主端口：仅 compose 内网可达
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relay -d relay_panel"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # 可选反代：docker compose --profile caddy up -d
+  # 初始路由配置（admin API + 空 server + 自动 TLS）见 ../docs/CADDY.md
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["caddy"]
+    restart: unless-stopped
+    environment:
+      # 把 admin API 绑到容器网卡，编排器容器才能经 http://caddy:2019 下发域名路由；
+      # 该端口不映射到宿主，仅 compose 内网可达
+      CADDY_ADMIN: 0.0.0.0:2019
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  orchestrator_data:
+  postgres_data:
+  caddy_data:
+  caddy_config:

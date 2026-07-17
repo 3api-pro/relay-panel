@@ -24,14 +24,29 @@
 relay-panel 把这些收敛成一个控制面：
 
 ```
-┌────────────────── relay-panel 控制面 ──────────────────┐
-│   站点生命周期    域名 + TLS    统一看板    渠道市场       │
-├────────────────────── 引擎适配层 ──────────────────────┤
-│        sub2api 适配器        │        new-api 适配器      │
-├──────────────────── 数据面（每站独立隔离）──────────────┤
-│   站 A: sub2api + PG   │  站 B: new-api + MySQL  │   …    │
-└─────────────────────────────────────────────────────────┘
+┌───────────────────── relay-panel 控制面 ──────────────────────┐
+│  Web 管理后台(Vue SPA) · 认证/RBAC/审计 · 任务引擎 · 告警      │
+│  站点生命周期 · 渠道市场+账本 · 计费配额 · 域名自动化          │
+├───────────────────────── 引擎适配层 ──────────────────────────┤
+│        sub2api 适配器         │        new-api 适配器          │
+├──────────────────── 数据面（每站独立隔离）────────────────────┤
+│   站 A: sub2api + PG   │   站 B: new-api + DB   │      …       │
+└───────────────────────────────────────────────────────────────┘
 ```
+
+## 功能
+
+- **站点生命周期** —— 一键开站 / 钉版本升级带自动回滚 / 启停 / 销毁，任务引擎驱动、逐步骤时间线。
+- **Web 管理后台** —— Vue 3 SPA：站群总览、单站钻取（渠道 / 用户 / 用量 / 域名 / 审计）、任务时间线，全中文界面。
+- **多引擎、零修改** —— sub2api 与 new-api 收敛到同一套适配接口，引擎始终跑官方发行版。
+- **渠道市场** —— 上游渠道模板一键注入任意站点（站长自带上游，或由计量网关签发 managed key），配套用量/结算账本。
+- **告警** —— 站点不可达 / 任务失败 / 渠道被禁 / 余额过低，webhook 通知。
+- **多租户 RBAC** —— root / operator / viewer 三角色，邀请制注册，session 认证，全部写操作落审计。
+- **计费与配额** —— 套餐/订阅决定站长可开站数（内置手工开通；支付网关为扩展位）。
+- **域名自动化** —— 面板里绑域名，路由经 Caddy admin API 下发，TLS 自动签发。
+- **可观测** —— Prometheus `/metrics`、健康探测、结构化审计流水。
+- **备份/恢复** —— 一条命令导出编排器状态 + 每站数据库。
+- **一键部署** —— `deploy/` 目录 `docker compose up -d`。
 
 ## 核心原则
 
@@ -39,33 +54,18 @@ relay-panel 把这些收敛成一个控制面：
 2. **每站一个独立实例。** 数据层不做共享多租户 —— 隔离干净、升级互不影响、任何站随时可作为标准引擎实例导出迁走。
 3. **托管版与自部署版同一份代码。** 唯一区别是编排器跑在谁的服务器上。
 
-## 两种用法
-
-- **自部署（开源）：** 在自己的服务器上管理自己的站群。
-- **托管 SaaS**（规划中）：注册即得一个站，无需服务器。
-
-## 架构
-
-完整设计与取舍见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。简言之：
-
-- **`packages/adapter-core`** —— 引擎无关的领域类型 + `EngineAdapter` / `EngineLifecycle` 接口。
-- **`packages/adapter-sub2api`** —— sub2api 实现（admin 引导、渠道/分组/用户/设置/用量）。
-- **`packages/orchestrator`** —— Fastify + Drizzle 控制面：站点注册表、开站状态机、聚合看板。
-
-## 状态与路线图
-
-早期开发中。这是 v2 重写，与旧版 relay-panel（自研中继引擎路线）**不兼容**，旧代码完整保留在 [`legacy`](https://github.com/3api-pro/relay-panel/tree/legacy) 分支。
-
-- [x] **P1 站群管家：** 编排器 + sub2api 适配层 + 站点生命周期（一键开站 / 升级带回滚 / 销毁）+ 只读统一看板（多站健康 / 上游 / 用量 / 成本聚合）
-- [ ] **P2 引擎扩展 + 渠道市场：** new-api 适配层；上游渠道模板一键注入 + 分账
-- [ ] **P3 管理后台：** 看板之上的写操作界面（开站 / 配置 / 用户 / 渠道）
-- [ ] **P4 托管 SaaS：** 注册即开站、计费、配额
-
-> 当前只提供**只读看板与命令行编排**，尚无 Web 管理后台。跟随 `main` 分支即可获取更新。
-
-到 v1.0 的完整里程碑计划见 [ROADMAP.md](ROADMAP.md)。
-
 ## 快速开始
+
+```bash
+git clone https://github.com/3api-pro/relay-panel.git
+cd relay-panel/deploy
+cp .env.example .env   # 设置 RP_SECRET_KEY、RP_ADMIN_EMAIL、RP_ADMIN_PASSWORD
+docker compose up -d
+```
+
+打开 `http://<服务器>:7100` 登录。完整指南（env 全表、反代、升级、备份、旧版 Basic Auth 迁移）：**[docs/SELF-HOST.md](docs/SELF-HOST.md)**。
+
+开发态：
 
 ```bash
 npm install
@@ -73,11 +73,40 @@ npm run typecheck
 npm test
 ```
 
-> 面向自部署者的一键 Docker 部署将随 P3 提供。目前编排器通过命令行 + 站点注册表文件驱动。
+## 文档
+
+| 文档 | 内容 |
+|---|---|
+| [docs/SELF-HOST.md](docs/SELF-HOST.md) | 部署、配置、升级、备份 |
+| [docs/API.md](docs/API.md) | HTTP API 全表 |
+| [docs/ADAPTERS.md](docs/ADAPTERS.md) | 适配层接口 + 新引擎接入 |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | 监控、告警、备份恢复、故障排查 |
+| [docs/SECURITY.md](docs/SECURITY.md) | 威胁模型、凭据加密、RBAC、漏洞上报 |
+| [docs/METERING-GATEWAY.md](docs/METERING-GATEWAY.md) | 渠道市场计量网关 HTTP 契约 |
+| [docs/CADDY.md](docs/CADDY.md) | Caddy 域名自动化 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 架构设计与取舍 |
+
+## 架构
+
+- **`packages/adapter-core`** —— 引擎无关的领域类型 + `EngineAdapter` / `EngineLifecycle` 接口。
+- **`packages/adapter-sub2api`** / **`packages/adapter-newapi`** —— 引擎实现（admin 认证、渠道/分组/用户/设置/用量）。
+- **`packages/orchestrator`** —— Fastify + Drizzle 控制面：站点、任务、认证/RBAC、市场+账本、告警、计费、域名、metrics、CLI。
+- **`packages/web`** —— Vue 3 + Vite + Tailwind 管理后台 SPA。
+
+## 状态与路线图
+
+这是 v2 重写，与旧版 relay-panel（自研中继引擎路线）**不兼容**，旧代码完整保留在 [`legacy`](https://github.com/3api-pro/relay-panel/tree/legacy) 分支。
+
+- [x] **P1 站群管家：** 编排器 + sub2api 适配层 + 站点生命周期 + 只读统一看板
+- [x] **P2 引擎扩展 + 渠道市场：** new-api 适配层；渠道模板、授权注入、计量/结算账本
+- [x] **P3 管理后台：** 操作员账号 + RBAC、全量写操作界面、告警、一键 Docker 部署
+- [ ] **P4 托管 SaaS：** 多租户 RBAC、邀请注册、配额计费内核、域名自动化已完成；支付集成与托管运营侧为进行中的扩展位
+
+到 v1.0 的完整里程碑计划见 [ROADMAP.md](ROADMAP.md)。
 
 ## 贡献
 
-见 [CONTRIBUTING.md](CONTRIBUTING.md)。**引擎适配层（`packages/adapter-*`）是外部贡献首选** —— 不含计费、上游路由、凭据逻辑，自包含且可独立测试，改错也不会波及生产计费或租户隔离。当前最有价值的独立任务是实现 **`adapter-newapi`**。
+见 [CONTRIBUTING.md](CONTRIBUTING.md)。**引擎适配层（`packages/adapter-*`）是外部贡献首选** —— 不含计费、上游路由、凭据逻辑，自包含且可独立测试，改错也不会波及生产计费或租户隔离。想接入新引擎？照 [docs/ADAPTERS.md](docs/ADAPTERS.md) 一步步来。
 
 ## 许可证
 

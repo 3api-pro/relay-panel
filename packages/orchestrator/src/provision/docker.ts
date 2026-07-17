@@ -49,4 +49,29 @@ export const dockerCompose = {
   start: (ref: ComposeRef) => compose(ref, ['start']),
   ps: (ref: ComposeRef) => compose(ref, ['ps', '--format', 'json']),
   pull: (ref: ComposeRef) => compose(ref, ['pull']),
+  /**
+   * 在服务容器内执行命令（`docker compose exec -T <service> ...`，-T 关闭 TTY/stdin）。
+   * 备份场景 pg_dump 的 stdout 可能远超 compose() 的 10MB 上限，
+   * 故独立构造命令并放大 maxBuffer，不复用 compose()（保持现有行为零改动）。
+   */
+  exec: async (ref: ComposeRef, service: string, argv: string[]): Promise<string> => {
+    const composeArgs = [
+      'compose',
+      '-p',
+      ref.project,
+      '-f',
+      toDockerPath(ref.file),
+      '--env-file',
+      toDockerPath(ref.envFile),
+      'exec',
+      '-T',
+      service,
+      ...argv,
+    ];
+    const [cmd, args] = viaWsl
+      ? (['wsl', ['-e', 'docker', ...composeArgs]] as const)
+      : (['docker', composeArgs] as const);
+    const { stdout } = await exec(cmd, [...args], { maxBuffer: 512 * 1024 * 1024 });
+    return stdout;
+  },
 };

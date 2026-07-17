@@ -16,3 +16,7 @@ packages/orchestrator/prod-smoke.mjs
 packages/orchestrator/onboard-admin-keys.mjs
 packages/orchestrator/branding-fix.mjs
 packages/orchestrator/*-ops.mjs
+
+# deploy 本地环境文件与备份产物（.env 已被上面通配覆盖，此处显式声明防误提交）
+deploy/.env
+backups/

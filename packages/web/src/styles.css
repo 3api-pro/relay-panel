@@ -1,0 +1,205 @@
+@import 'tailwindcss';
+
+/*
+ * relay-panel 设计系统（规格 §11）
+ * 对标 Linear/Vercel 深色产品站：深场 + 细边框 + 微渐变面板 + 克制动效。
+ * token 延续既有看板调色，全部经 @theme 暴露为 Tailwind 工具类：
+ *   bg-bg / bg-panel / bg-panel-2 / border-border / border-border-2
+ *   text-text / text-muted / text-accent / text-green / text-red / text-amber
+ *   rounded-panel（14px）
+ */
+@theme {
+  --color-bg: #08090c;
+  --color-panel: #101218;
+  --color-panel-2: #151822;
+  --color-border: #1f2430;
+  --color-border-2: #2b3142;
+  --color-text: #e7e9ee;
+  --color-muted: #8b91a1;
+  --color-accent: #6d8bff;
+  --color-accent-dim: #5a78f0;
+  --color-green: #43d17f;
+  --color-red: #ff5c6c;
+  --color-amber: #f0b74a;
+
+  --radius-panel: 14px;
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --animate-fade-up: fade-up 0.18s ease-out both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+}
+
+/* ---- 基座 ---- */
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 深场氛围：极淡的顶部辉光，避免纯平死黑（不可交互，纯背景层） */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1100px 420px at 18% -8%, rgb(109 139 255 / 0.055), transparent 62%),
+    radial-gradient(900px 380px at 92% -12%, rgb(67 209 127 / 0.028), transparent 58%);
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgb(109 139 255 / 0.32);
+}
+
+/* 数字场景一律等宽数字，对齐表格与统计卡 */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* 统一 focus ring（键盘可达性；鼠标点击不闪圈） */
+:focus-visible {
+  outline: 2px solid rgb(109 139 255 / 0.55);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* 细滚动条 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2b3142 transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2b3142;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---- 复用视觉原语（组件内以 class 引用，避免每个 SFC 重复写渐变） ---- */
+
+/* 面板：微渐变 + 细边框，hover 提亮边框 */
+.rp-panel {
+  background: linear-gradient(180deg, #12141c 0%, var(--color-panel) 100%);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  transition: border-color 0.15s ease;
+}
+.rp-panel-hover:hover {
+  border-color: var(--color-border-2);
+}
+
+/* 微标签：大写字距小字，Linear 式分区标题 */
+.rp-microlabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* 页面进场 */
+.rp-page {
+  animation: var(--animate-fade-up);
+}
+
+/* 骨架屏底纹 */
+.rp-shimmer {
+  background: linear-gradient(90deg, #151822 25%, #1b1f2b 50%, #151822 75%);
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+}
+
+/* ---- 过渡（Modal/Drawer/Toast 共用） ---- */
+.rp-fade-enter-active,
+.rp-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.rp-fade-enter-from,
+.rp-fade-leave-to {
+  opacity: 0;
+}
+
+.rp-pop-enter-active,
+.rp-pop-leave-active {
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+.rp-pop-enter-from,
+.rp-pop-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+}
+
+.rp-slide-enter-active,
+.rp-slide-leave-active {
+  transition: transform 0.18s ease;
+}
+.rp-slide-enter-from,
+.rp-slide-leave-to {
+  transform: translateX(100%);
+}
+
+.rp-toast-enter-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+.rp-toast-leave-active {
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+}
+.rp-toast-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.rp-toast-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}

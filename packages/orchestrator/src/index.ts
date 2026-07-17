@@ -1,67 +1,99 @@
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-import { timingSafeEqual } from 'node:crypto';
-import Fastify from 'fastify';
-import { loadRegistry } from './registry.js';
-import { allSnapshots, siteSnapshot } from './dashboard.js';
+import { Sub2apiAdapter } from '@relay-panel/adapter-sub2api';
+import { NewapiAdapter } from '@relay-panel/adapter-newapi';
+import type { EngineAdapter, EngineKind } from '@relay-panel/adapter-core';
+import { loadConfig } from './config.js';
+import { makeDb, runMigrations } from './db/client.js';
+import { operators } from './db/schema.js';
+import { hashPassword } from './auth/passwords.js';
+import { makeLifecycles } from './provision/index.js';
+import { JobEngine } from './jobs/engine.js';
+import { lifecycleStepSink, makeStoreCredential } from './sites/service.js';
+import { startMonitor } from './alerts/engine.js';
+import { WebhookNotifier } from './alerts/notify.js';
+import { HttpMeteringGateway } from './marketplace/gateway.js';
+import { startPullLoop } from './marketplace/ledger.js';
+import { buildServer } from './server.js';
 
-const app = Fastify({ logger: true });
+/**
+ * 服务入口（规格 §1）：loadConfig → makeDb+migrate → bootstrap root → 装配依赖
+ * → buildServer → job worker → listen。
+ * 旧 Basic Auth 与 registry.json 路径已移除（session 认证 + DB sites 取代；
+ * dashboard.ts 已并入 sites/service.ts 删除，registry.ts 仅供 registryImport 使用）。
+ */
 
-// 登录闸：设了 RP_AUTH_USER/RP_AUTH_PASS 则全站要求 HTTP Basic Auth。
-// 看板聚合全站营收/成本，绝不可无认证暴露公网 —— 对外部署必须设置这两个变量。
-const AUTH_USER = process.env.RP_AUTH_USER ?? '';
-const AUTH_PASS = process.env.RP_AUTH_PASS ?? '';
-function safeEq(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  return ab.length === bb.length && timingSafeEqual(ab, bb);
-}
-if (AUTH_USER && AUTH_PASS) {
-  app.addHook('onRequest', async (req, reply) => {
-    if (req.url === '/healthz') return;
-    const hdr = req.headers.authorization ?? '';
-    if (hdr.startsWith('Basic ')) {
-      const [u, p] = Buffer.from(hdr.slice(6), 'base64').toString('utf8').split(':');
-      if (safeEq(u ?? '', AUTH_USER) && safeEq(p ?? '', AUTH_PASS)) return;
-    }
-    reply.header('WWW-Authenticate', 'Basic realm="relay-panel"').code(401).send('auth required');
+const config = loadConfig();
+const db = await makeDb(config.dbUrl);
+const migrated = await runMigrations(db);
+
+// bootstrap root：仅 operators 空表且设置了 RP_ADMIN_EMAIL/RP_ADMIN_PASSWORD 时生效
+const anyOperator = await db.orm.select({ id: operators.id }).from(operators).limit(1);
+if (anyOperator.length === 0 && config.adminEmail !== undefined && config.adminPassword !== undefined) {
+  await db.orm.insert(operators).values({
+    email: config.adminEmail,
+    passwordHash: await hashPassword(config.adminPassword),
+    role: 'root',
+    status: 'active',
   });
-} else {
-  app.log.warn('RP_AUTH_USER/RP_AUTH_PASS unset — dashboard is UNAUTHENTICATED (bind loopback only!)');
+  // 只记邮箱，绝不打印密码
+  console.log(`[bootstrap] 已创建初始 root 账号: ${config.adminEmail}`);
 }
 
-const registryPath = process.env.RP_REGISTRY ?? join(process.cwd(), 'registry.json');
-// UI 是静态资源，从源码树读取（tsc 不搬运非 TS 文件）
-const uiDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'ui');
+const adapters: Record<EngineKind, EngineAdapter> = {
+  sub2api: new Sub2apiAdapter(),
+  newapi: new NewapiAdapter(),
+};
 
-// 简单内存缓存：快照 15s TTL，避免面板刷新连打生产站
-let cache: { at: number; data: unknown } | null = null;
-const TTL_MS = 15_000;
+// G1：凭据字段名原样 JSON 加密入库（credentials 表，ref='enc:<slug>'，upsert）；
+// lifecycle 步骤经 lifecycleStepSink 汇入当前 job 的 steps。
+// 生命周期 job handler 在 buildServer → registerSitesRoutes → new SitesService 时注册进 jobs，boot 即生效。
+const storeCredential = makeStoreCredential(db, config);
 
-app.get('/healthz', async () => ({ ok: true, service: 'relay-panel-orchestrator' }));
-
-app.get('/api/sites', async () => {
-  const now = Date.now();
-  if (cache && now - cache.at < TTL_MS) return cache.data;
-  const reg = await loadRegistry(registryPath);
-  const data = { sites: await allSnapshots(reg), generatedAt: new Date(now).toISOString() };
-  cache = { at: now, data };
-  return data;
+const lifecycles = makeLifecycles({
+  sub2api: { sitesRoot: config.sitesRoot, storeCredential, onStep: lifecycleStepSink },
+  newapi: { sitesRoot: config.sitesRoot, storeCredential, onStep: lifecycleStepSink },
 });
 
-app.get<{ Params: { slug: string } }>('/api/sites/:slug', async (req) => {
-  const reg = await loadRegistry(registryPath);
-  return siteSnapshot(reg, req.params.slug);
-});
+const jobs = new JobEngine(db);
+// G3: webhook 通知器（地址存 app_settings['alert_webhook_url']，未配置时静默跳过）
+const notifier = new WebhookNotifier(db);
 
-app.get('/', async (_req, reply) => {
-  const html = await readFile(join(uiDir, 'dashboard.html'), 'utf8');
-  reply.type('text/html').send(html);
-});
+// G2: 计量网关装配——RP_METERING_GATEWAY_URL 未配置时保持 null（managed 模板不可启用）
+const gateway =
+  config.meteringGatewayUrl !== undefined
+    ? new HttpMeteringGateway(config.meteringGatewayUrl, config.meteringGatewayToken)
+    : null;
 
-const port = Number(process.env.PORT ?? 7100);
-app.listen({ port, host: '127.0.0.1' }).catch((err) => {
+const app = await buildServer(
+  { config, db, adapters, lifecycles, gateway, jobs, notifier },
+  { logger: true },
+);
+
+if (migrated.length > 0) app.log.info(`migrations applied: ${migrated.join(', ')}`);
+
+jobs.start();
+
+// G3: 告警监控。monitorIntervalMs=0 时不起轮询定时器；startMonitor 内部把 jobs.onFinish
+// 挂上 job_failed 告警，故即便巡检关闭，任务失败告警仍生效
+const monitor = startMonitor({ config, db, adapters, notifier, jobs }, config.monitorIntervalMs);
+
+// G2: 账本网关拉取循环（网关已配置且周期 > 0 时启动；启动即先拉一轮）
+const stopLedgerPull =
+  gateway !== null && config.ledgerPullIntervalMs > 0
+    ? startPullLoop(db, gateway, config.ledgerPullIntervalMs)
+    : null;
+
+async function shutdown(): Promise<void> {
+  stopLedgerPull?.();
+  monitor.stop();
+  jobs.stop();
+  await app.close().catch(() => undefined);
+  await db.close().catch(() => undefined);
+  process.exit(0);
+}
+process.on('SIGINT', () => void shutdown());
+process.on('SIGTERM', () => void shutdown());
+
+app.listen({ port: config.port, host: config.host }).catch((err) => {
   app.log.error(err);
   process.exit(1);
 });

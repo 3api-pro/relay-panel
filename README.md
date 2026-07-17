@@ -24,14 +24,29 @@ Running an API relay station on top of an open-source engine (sub2api / new-api)
 relay-panel collapses that into one control plane:
 
 ```
-┌────────────────── relay-panel (control plane) ──────────────────┐
-│   site lifecycle    domains + TLS    unified dashboard    channels │
-├────────────────────── engine adapter layer ────────────────────┤
-│        sub2api adapter        │        new-api adapter           │
-├──────────────────── data plane (isolated per site) ─────────────┤
-│   site A: sub2api + PG   │  site B: new-api + MySQL  │   …        │
-└─────────────────────────────────────────────────────────────────┘
+┌───────────────────── relay-panel (control plane) ─────────────────────┐
+│  web admin (Vue SPA) · auth / RBAC / audit · job engine · alerts      │
+│  site lifecycle · channel marketplace + ledger · billing · domains    │
+├───────────────────────── engine adapter layer ────────────────────────┤
+│         sub2api adapter          │          new-api adapter           │
+├───────────────────── data plane (isolated per site) ──────────────────┤
+│   site A: sub2api + PG   │   site B: new-api + DB   │       …         │
+└───────────────────────────────────────────────────────────────────────┘
 ```
+
+## Features
+
+- **Site lifecycle** — one-click provision / pinned-version upgrade with auto-rollback / start / stop / destroy, driven by a job engine with per-step timelines.
+- **Web admin backend** — Vue 3 SPA: fleet overview, per-site drill-down (channels / users / usage / domains / audit), job timelines. Chinese-first UI.
+- **Multi-engine, zero modification** — sub2api and new-api behind one adapter interface; engines always run official releases.
+- **Channel marketplace** — upstream channel templates, one-click injection into any site (bring-your-own upstream, or managed keys issued by a metering gateway), with a usage/settlement ledger.
+- **Alerting** — site down / job failed / channel disabled / low balance, with webhook notifications.
+- **Multi-tenant RBAC** — root / operator / viewer roles, invite-based signup, session auth, full audit trail on every write.
+- **Billing & quotas** — plans and subscriptions gate how many sites an operator can run (manual provisioning built in; payment gateways are an extension point).
+- **Domain automation** — bind a domain in the panel, routes are pushed to Caddy's admin API, TLS is automatic.
+- **Observability** — Prometheus `/metrics`, health probes, structured audit log.
+- **Backup / restore** — one command dumps orchestrator state plus every site's database.
+- **One-command deploy** — `docker compose up -d` from `deploy/`.
 
 ## Core principles
 
@@ -39,33 +54,18 @@ relay-panel collapses that into one control plane:
 2. **One isolated instance per site.** No shared multi-tenancy at the data layer — clean isolation, independent upgrades, and any site can be exported as a stock engine instance at any time.
 3. **Hosted and self-hosted share one codebase.** The only difference is whose server runs the orchestrator.
 
-## How you run it
-
-- **Self-hosted (open source):** manage your own fleet on your own servers.
-- **Hosted SaaS** *(planned):* sign up and get a station, no server required.
-
-## Architecture
-
-Full design and rationale in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). In short:
-
-- **`packages/adapter-core`** — engine-agnostic domain types + the `EngineAdapter` / `EngineLifecycle` interfaces.
-- **`packages/adapter-sub2api`** — sub2api implementation (admin bootstrap, channels/groups/users/settings/usage).
-- **`packages/orchestrator`** — Fastify + Drizzle control plane: site registry, provisioning state machine, aggregate dashboard.
-
-## Status & roadmap
-
-Early development. This is a v2 rewrite; it is **not** compatible with the original relay-panel (a self-built relay engine), which is preserved on the [`legacy`](https://github.com/3api-pro/relay-panel/tree/legacy) branch.
-
-- [x] **P1 — Fleet manager:** orchestrator + sub2api adapter + site lifecycle (one-click provision / upgrade-with-rollback / destroy) + read-only unified dashboard (health / upstreams / usage / cost across all sites)
-- [ ] **P2 — More engines + channel marketplace:** new-api adapter; one-click upstream-channel injection with revenue split
-- [ ] **P3 — Admin backend:** write operations on top of the dashboard (provision / configure / users / channels)
-- [ ] **P4 — Hosted SaaS:** sign-up provisioning, billing, quotas
-
-> Today the project ships a **read-only dashboard and a CLI orchestrator only** — there is no web admin backend yet. Follow the `main` branch for updates.
-
-Full milestone plan through v1.0: [ROADMAP.md](ROADMAP.md).
-
 ## Quick start
+
+```bash
+git clone https://github.com/3api-pro/relay-panel.git
+cd relay-panel/deploy
+cp .env.example .env   # set RP_SECRET_KEY, RP_ADMIN_EMAIL, RP_ADMIN_PASSWORD
+docker compose up -d
+```
+
+Then open `http://<server>:7100` and log in. Full guide (env reference, reverse proxy, upgrades, backups, migration from the old Basic-Auth setup): **[docs/SELF-HOST.md](docs/SELF-HOST.md)**.
+
+For development:
 
 ```bash
 npm install
@@ -73,11 +73,40 @@ npm run typecheck
 npm test
 ```
 
-> A one-command Docker deployment for self-hosters lands with P3. For now the orchestrator is driven via its CLI and a site registry file.
+## Documentation
+
+| Doc | Contents |
+|---|---|
+| [docs/SELF-HOST.md](docs/SELF-HOST.md) | Deploy, configure, upgrade, back up |
+| [docs/API.md](docs/API.md) | Full HTTP API reference |
+| [docs/ADAPTERS.md](docs/ADAPTERS.md) | Adapter interfaces + how to add a new engine |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Monitoring, alerting, backup/restore, troubleshooting |
+| [docs/SECURITY.md](docs/SECURITY.md) | Threat model, credential encryption, RBAC, disclosure |
+| [docs/METERING-GATEWAY.md](docs/METERING-GATEWAY.md) | HTTP contract for the managed-marketplace metering gateway |
+| [docs/CADDY.md](docs/CADDY.md) | Domain automation with Caddy |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Design and rationale |
+
+## Architecture
+
+- **`packages/adapter-core`** — engine-agnostic domain types + the `EngineAdapter` / `EngineLifecycle` interfaces.
+- **`packages/adapter-sub2api`** / **`packages/adapter-newapi`** — engine implementations (admin auth, channels/groups/users/settings/usage).
+- **`packages/orchestrator`** — Fastify + Drizzle control plane: sites, jobs, auth/RBAC, marketplace + ledger, alerts, billing, domains, metrics, CLI.
+- **`packages/web`** — Vue 3 + Vite + Tailwind admin SPA.
+
+## Status & roadmap
+
+This is a v2 rewrite; it is **not** compatible with the original relay-panel (a self-built relay engine), which is preserved on the [`legacy`](https://github.com/3api-pro/relay-panel/tree/legacy) branch.
+
+- [x] **P1 — Fleet manager:** orchestrator + sub2api adapter + site lifecycle + read-only unified dashboard
+- [x] **P2 — More engines + channel marketplace:** new-api adapter; channel templates, grants, metering/settlement ledger
+- [x] **P3 — Admin backend:** operator accounts + RBAC, full write UI, alerting, one-command Docker deployment
+- [ ] **P4 — Hosted SaaS:** multi-tenant RBAC, invite signup, quota/billing core, and domain automation are done; payment integration and hosted operations are extension points in progress
+
+Full milestone plan through v1.0: [ROADMAP.md](ROADMAP.md).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). The **engine adapter layer (`packages/adapter-*`) is the recommended entry point** for outside contributors — it contains no billing, upstream-routing, or credential logic, is self-contained and independently testable, and breaking it cannot touch production billing or tenant isolation. The highest-value standalone task right now is implementing **`adapter-newapi`**.
+See [CONTRIBUTING.md](CONTRIBUTING.md). The **engine adapter layer (`packages/adapter-*`) is the recommended entry point** for outside contributors — it contains no billing, upstream-routing, or credential logic, is self-contained and independently testable, and breaking it cannot touch production billing or tenant isolation. Want to bring a new engine? Follow [docs/ADAPTERS.md](docs/ADAPTERS.md).
 
 ## License
 
