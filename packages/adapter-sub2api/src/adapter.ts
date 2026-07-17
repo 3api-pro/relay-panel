@@ -255,11 +255,13 @@ export class Sub2apiAdminClient implements EngineAdminClient {
       };
     },
 
+    // ⚠️ PUT /admin/settings 是整体替换（缺省字段以零值写回），必须读-合并-全量写回。
+    // GET 不回显秘密（只回 *_configured 布尔），PUT 空秘密字段=保留旧值 —— 该往返是安全的（与官方前端同模式）。
     setBranding: async (branding: Partial<SiteBranding>): Promise<void> => {
-      const body: Record<string, unknown> = {};
-      if (branding.siteName !== undefined) body.site_name = branding.siteName;
-      if (branding.logoUrl !== undefined) body.site_logo = branding.logoUrl;
-      await this.http.put('/api/v1/admin/settings', body);
+      const all = await this.http.get<Record<string, unknown>>('/api/v1/admin/settings');
+      if (branding.siteName !== undefined) all.site_name = branding.siteName;
+      if (branding.logoUrl !== undefined) all.site_logo = branding.logoUrl;
+      await this.http.put('/api/v1/admin/settings', all);
     },
 
     getRaw: async (key: string): Promise<string | null> => {
@@ -269,7 +271,9 @@ export class Sub2apiAdminClient implements EngineAdminClient {
     },
 
     setRaw: async (key: string, value: string): Promise<void> => {
-      await this.http.put('/api/v1/admin/settings', { [key]: value });
+      const all = await this.http.get<Record<string, unknown>>('/api/v1/admin/settings');
+      all[key] = value;
+      await this.http.put('/api/v1/admin/settings', all);
     },
   };
 
