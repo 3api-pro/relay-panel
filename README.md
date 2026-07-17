@@ -1,55 +1,82 @@
+<div align="center">
+
 # relay-panel
 
-**多站中转站编排框架 —— 一套面板，管理任意多个 sub2api / new-api 中转站实例。**
+**One control plane for many LLM API relay stations.**
 
-> Shopify for API 中转站：开站、升级、域名、支付、上游渠道，全部一键化。
+Provision, upgrade, and monitor any number of self-hosted [sub2api](https://github.com/Wei-Shaw/sub2api) / [new-api](https://github.com/QuantumNous/new-api) instances — engines stay unmodified, everything is driven from a single panel.
 
-## 这是什么
+[![License: MIT](https://img.shields.io/badge/License-MIT-3d5afe.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522-43d17f.svg)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-f0b74a.svg)](CONTRIBUTING.md)
 
-API 中转站（基于 [sub2api](https://github.com/Wei-Shaw/sub2api) / [new-api](https://github.com/QuantumNous/new-api) 等开源引擎）的入行门槛很低：拿到上游渠道、部署引擎、设好倍率就能开张。但**规模化运营**的门槛不低：
+**English** · [简体中文](README.zh-CN.md)
 
-- 一个人运营多个站（不同定位/不同域名/不同客群）时，部署、升级、配置、灾备全是重复手工活
-- 每次引擎发新版，每个实例都要走一遍换包流程
-- 上游渠道的接入、测活、切换散落在每个站的后台里
+</div>
 
-relay-panel 把这些收敛为一个控制面：
+---
+
+## Why
+
+Running an API relay station on top of an open-source engine (sub2api / new-api) has a low barrier: get upstream channels, deploy the engine, set your markup, done. But **running several of them** — different brands, different audiences, different domains — turns into repetitive manual work: deploy, upgrade, configure, fail over, all multiplied by every instance and every engine release.
+
+relay-panel collapses that into one control plane:
 
 ```
-┌────────────── relay-panel 控制面 ──────────────┐
-│ 站点生命周期   域名+TLS   统一看板   渠道市场     │
-├────────────── 引擎适配层 (adapters) ───────────┤
-│   sub2api Adapter    │    new-api Adapter      │
-├────────────── 数据面（每站独立实例）─────────────┤
-│  站A: sub2api+PG │ 站B: newapi+MySQL │ 站C: …  │
-└────────────────────────────────────────────────┘
+┌────────────────── relay-panel (control plane) ──────────────────┐
+│   site lifecycle    domains + TLS    unified dashboard    channels │
+├────────────────────── engine adapter layer ────────────────────┤
+│        sub2api adapter        │        new-api adapter           │
+├──────────────────── data plane (isolated per site) ─────────────┤
+│   site A: sub2api + PG   │  site B: new-api + MySQL  │   …        │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## 核心原则
+## Core principles
 
-1. **引擎零修改**：sub2api / new-api 永远跑原版发行版（或公开 fork）。所有增值逻辑只存在于编排层，通过引擎自身的 admin API 实现。这同时保证了许可证合规（见 [docs/LICENSE-COMPLIANCE.md](docs/LICENSE-COMPLIANCE.md)）和升级跟随成本最小化。
-2. **每站独立实例**：不做共享多租户。隔离干净、升级互不影响、随时可迁出（导出的就是标准引擎实例）。
-3. **托管与自部署同一份代码**：区别只是编排器跑在谁的服务器上。
+1. **Engines are never modified.** sub2api / new-api always run their official releases. All added value lives in the orchestration layer and is applied through each engine's own admin API. This keeps upgrades cheap and licensing clean (see [docs/LICENSE-COMPLIANCE.md](docs/LICENSE-COMPLIANCE.md)).
+2. **One isolated instance per site.** No shared multi-tenancy at the data layer — clean isolation, independent upgrades, and any site can be exported as a stock engine instance at any time.
+3. **Hosted and self-hosted share one codebase.** The only difference is whose server runs the orchestrator.
 
-## 使用方式
+## How you run it
 
-- **自部署（开源）**：`docker compose up`，在自己的服务器上管理自己的站群。
-- **托管 SaaS**（规划中）：注册即得一个站，无需服务器。
+- **Self-hosted (open source):** manage your own fleet on your own servers.
+- **Hosted SaaS** *(planned):* sign up and get a station, no server required.
 
-## 状态与路线图
+## Architecture
 
-早期开发中。v2 重写，与旧版 relay-panel（自研中继引擎路线）不兼容，旧代码见 [`legacy`](https://github.com/3api-pro/relay-panel/tree/legacy) 分支。
+Full design and rationale in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). In short:
 
-- [x] **P1 站群管家**：编排器 + sub2api 适配层 + 站点生命周期（一键开站/升级带回滚/销毁）+ 只读统一看板（多站健康/上游/用量/成本聚合）
-- [ ] **P2 引擎扩展 + 渠道市场**：new-api 适配层；上游渠道模板一键注入 + 分账
-- [ ] **P3 管理后台**：看板之上的写操作界面（开站/配置/用户/渠道）
-- [ ] **P4 托管 SaaS**：注册即开站、计费、配额
+- **`packages/adapter-core`** — engine-agnostic domain types + the `EngineAdapter` / `EngineLifecycle` interfaces.
+- **`packages/adapter-sub2api`** — sub2api implementation (admin bootstrap, channels/groups/users/settings/usage).
+- **`packages/orchestrator`** — Fastify + Drizzle control plane: site registry, provisioning state machine, aggregate dashboard.
 
-> 当前只提供只读看板与命令行编排，尚无 Web 管理后台。跟随 `main` 分支即可获取更新。
+## Status & roadmap
 
-## 贡献
+Early development. This is a v2 rewrite; it is **not** compatible with the original relay-panel (a self-built relay engine), which is preserved on the [`legacy`](https://github.com/3api-pro/relay-panel/tree/legacy) branch.
 
-见 [CONTRIBUTING.md](CONTRIBUTING.md)。**引擎适配层（`packages/adapter-*`）是外部贡献首选** —— 不含计费/上游路由/凭据逻辑，独立可测，改错不波及生产。当前最有价值的独立任务是实现 `adapter-newapi`。
+- [x] **P1 — Fleet manager:** orchestrator + sub2api adapter + site lifecycle (one-click provision / upgrade-with-rollback / destroy) + read-only unified dashboard (health / upstreams / usage / cost across all sites)
+- [ ] **P2 — More engines + channel marketplace:** new-api adapter; one-click upstream-channel injection with revenue split
+- [ ] **P3 — Admin backend:** write operations on top of the dashboard (provision / configure / users / channels)
+- [ ] **P4 — Hosted SaaS:** sign-up provisioning, billing, quotas
+
+> Today the project ships a **read-only dashboard and a CLI orchestrator only** — there is no web admin backend yet. Follow the `main` branch for updates.
+
+## Quick start
+
+```bash
+npm install
+npm run typecheck
+npm test
+```
+
+> A one-command Docker deployment for self-hosters lands with P3. For now the orchestrator is driven via its CLI and a site registry file.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). The **engine adapter layer (`packages/adapter-*`) is the recommended entry point** for outside contributors — it contains no billing, upstream-routing, or credential logic, is self-contained and independently testable, and breaking it cannot touch production billing or tenant isolation. The highest-value standalone task right now is implementing **`adapter-newapi`**.
 
 ## License
 
-MIT（编排器本体）。被编排的引擎遵循各自的许可证：new-api (AGPL-3.0)、sub2api (LGPL-3.0)。
+MIT for the orchestrator itself (see [LICENSE](LICENSE)). Orchestrated engines keep their own licenses — new-api ([AGPL-3.0](https://github.com/QuantumNous/new-api)), sub2api ([LGPL-3.0](https://github.com/Wei-Shaw/sub2api)); relay-panel invokes them only through their public admin APIs and never bundles or modifies them.
