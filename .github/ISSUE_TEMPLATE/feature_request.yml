@@ -1,0 +1,32 @@
+name: Feature request / 功能建议
+description: Suggest an idea — 提出一个想法
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the pain? / 想解决什么痛点？
+      description: The problem or repetitive task you want gone. 你想消除的问题或重复劳动。
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Proposed idea / 设想
+      description: How you imagine it working. 你设想它如何工作。
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / 涉及模块
+      options:
+        - Batch operations / 批量操作
+        - Sites lifecycle / 站点生命周期
+        - Channel marketplace / 渠道市场
+        - Billing / payments / 计费与支付
+        - New engine adapter / 新引擎适配
+        - Web UI / 界面
+        - Other / 其它
+    validations:
+      required: false

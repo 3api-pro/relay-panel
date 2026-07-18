@@ -1,7 +1,7 @@
 {
   "name": "relay-panel",
   "private": true,
-  "version": "2.0.0-alpha.0",
+  "version": "2.0.0-beta.1",
   "description": "Multi-site orchestrator for open-source LLM relay engines (sub2api / new-api)",
   "license": "MIT",
   "type": "module",

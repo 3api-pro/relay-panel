@@ -1,0 +1,58 @@
+name: Bug report / 问题反馈
+description: Report a bug — 报告一个问题
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / 发生了什么？
+      description: Describe the bug and what you expected instead. 描述问题以及你期望的结果。
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce / 复现步骤
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / 涉及模块
+      options:
+        - Deployment / 部署 (docker compose)
+        - Sites — provision or connect / 站点 — 开站或接入
+        - Batch operations / 批量操作
+        - Channel marketplace / 渠道市场
+        - Billing / payments / 计费与支付
+        - Web UI / 界面
+        - Other / 其它
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Version / 版本
+      description: Release tag or commit — 发行版本号或 commit
+      placeholder: v2.0.0-beta.1
+    validations:
+      required: false
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment / 环境
+      description: Engine (sub2api/new-api), OS, deploy mode (compose / bare). 引擎、系统、部署方式。
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / 日志
+      description: Relevant orchestrator logs. **Never paste credentials or API keys.** 相关日志，**切勿粘贴任何密钥/凭据**。
+      render: shell
+    validations:
+      required: false

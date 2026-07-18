@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Live demo / 在线演示
+    url: https://demo.3api.pro
+    about: Try the panel read-only before filing — 先在只读演示里试用
+  - name: Self-host guide / 自部署指南
+    url: https://github.com/3api-pro/relay-panel/blob/main/docs/SELF-HOST.md
+    about: One-command docker compose deployment — 一键 docker compose 部署
