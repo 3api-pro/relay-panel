@@ -78,7 +78,9 @@
     "errLabel": "Enter a display name.",
     "errPort": "Port must be an integer between 1 and 65535.",
     "errEmailRequired": "Enter an admin email.",
-    "errEmailFormat": "Invalid email format."
+    "errEmailFormat": "Invalid email format.",
+    "versionCustom": "Custom version…",
+    "versionHintDropdown": "Official image tag, pinned (never \"latest\"). Pick a known version or enter a custom tag."
   },
   "rowActions": {
     "more": "More actions",
@@ -109,6 +111,9 @@
     "errAdminKey": "Admin API key is required",
     "errAdminPassword": "Admin password is required",
     "submit": "Verify & connect",
-    "success": "Site connected"
+    "success": "Site connected",
+    "slugHint": "A short unique name for this site inside the panel (e.g. prod-cn). Only lowercase letters, digits and hyphens — it labels the site here, it does not have to match anything on the site itself.",
+    "keyHelpSub2api": "sub2api: sign in to the site admin, open Settings → System → API tokens (or reuse an existing admin API key). Alternatively use the admin email + password below.",
+    "keyHelpNewapi": "new-api: sign in as root, open Settings → your profile → generate an access token (system admin token). Alternatively use the admin email + password below."
   }
 }

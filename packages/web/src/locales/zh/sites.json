@@ -78,7 +78,9 @@
     "errLabel": "请填写显示名称",
     "errPort": "端口需为 1–65535 的整数",
     "errEmailRequired": "请填写管理员邮箱",
-    "errEmailFormat": "邮箱格式不正确"
+    "errEmailFormat": "邮箱格式不正确",
+    "versionCustom": "自定义版本…",
+    "versionHintDropdown": "官方镜像 tag，需钉版本（不可用 latest）。选择已知版本或填自定义 tag。"
   },
   "rowActions": {
     "more": "更多操作",
@@ -109,6 +111,9 @@
     "errAdminKey": "请填写 Admin API key",
     "errAdminPassword": "请填写管理员密码",
     "submit": "验证并接入",
-    "success": "站点已接入"
+    "success": "站点已接入",
+    "slugHint": "本站点在面板内的唯一短标识（如 prod-cn）。仅小写字母/数字/连字符——只用于在面板里标记该站，不必与站点本身任何名称一致。",
+    "keyHelpSub2api": "sub2api：登录站点后台，进入 设置 → 系统 → API 令牌（或复用已有的管理员 API key）。也可改用下方管理员邮箱+密码。",
+    "keyHelpNewapi": "new-api：以 root 登录，进入 设置 → 个人资料 → 生成访问令牌（系统管理员令牌）。也可改用下方管理员邮箱+密码。"
   }
 }

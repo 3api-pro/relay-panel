@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { ComputedRef } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
@@ -76,6 +76,7 @@ async function refresh(initial = false): Promise<void> {
 
 onMounted(() => {
   void refresh(true);
+  void loadVersions();
   timer = window.setInterval(() => void refresh(), 30_000);
 });
 onBeforeUnmount(() => {
@@ -235,10 +236,41 @@ const errors = ref<Record<string, string>>({});
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,31}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CUSTOM_VERSION = '__custom__';
+
+// 版本 = 官方镜像 tag（我们不托管 exe，provision 拉官方镜像）。下拉给已知 tag + 自定义兜底
+const engineVersions = ref<{ sub2api: string[]; newapi: string[] }>({ sub2api: [], newapi: [] });
+const fVersionSelect = ref<string | number>('');
+const versionOptions = computed<SelectOption[]>(() => {
+  const list = fEngine.value === 'newapi' ? engineVersions.value.newapi : engineVersions.value.sub2api;
+  return [
+    ...list.map((v) => ({ value: v, label: v })),
+    { value: CUSTOM_VERSION, label: t('sites.create.versionCustom') },
+  ];
+});
+async function loadVersions(): Promise<void> {
+  try {
+    engineVersions.value = await get<{ sub2api: string[]; newapi: string[] }>('/api/engines/versions', { silent: true });
+  } catch {
+    engineVersions.value = { sub2api: [], newapi: [] };
+  }
+}
+// 引擎切换：版本选择重置为该引擎最新
+watch(fEngine, () => {
+  const list = fEngine.value === 'newapi' ? engineVersions.value.newapi : engineVersions.value.sub2api;
+  fVersionSelect.value = list[0] ?? CUSTOM_VERSION;
+  fVersion.value = list[0] ?? '';
+});
+watch(fVersionSelect, (v) => {
+  if (v === CUSTOM_VERSION) fVersion.value = '';
+  else fVersion.value = String(v);
+});
 
 function openCreate(): void {
   fEngine.value = 'sub2api';
-  fVersion.value = '';
+  const list = engineVersions.value.sub2api;
+  fVersionSelect.value = list[0] ?? CUSTOM_VERSION;
+  fVersion.value = list[0] ?? '';
   fSlug.value = '';
   fLabel.value = '';
   fPort.value = '';
@@ -558,9 +590,17 @@ async function submitAdopt(): Promise<void> {
             :label="t('sites.create.versionLabel')"
             required
             :error="errors.version"
-            :hint="t('sites.create.versionHint')"
+            :hint="t('sites.create.versionHintDropdown')"
           >
-            <Input v-model="fVersion" mono placeholder="v0.1.160" :disabled="submitting" />
+            <Select v-model="fVersionSelect" :options="versionOptions" :disabled="submitting" />
+            <Input
+              v-if="fVersionSelect === CUSTOM_VERSION"
+              v-model="fVersion"
+              mono
+              class="mt-2"
+              placeholder="0.1.160"
+              :disabled="submitting"
+            />
           </Field>
         </div>
 
@@ -621,7 +661,7 @@ async function submitAdopt(): Promise<void> {
           <Field :label="t('sites.create.engineLabel')" required :error="aErrors.engine">
             <Select v-model="aEngine" :options="engineOptions" :disabled="adoptSubmitting" />
           </Field>
-          <Field label="slug" required :error="aErrors.slug" :hint="t('sites.create.slugHint')">
+          <Field label="slug" required :error="aErrors.slug" :hint="t('sites.adopt.slugHint')">
             <Input v-model="aSlug" mono placeholder="my-legacy-site" :disabled="adoptSubmitting" />
           </Field>
         </div>
@@ -637,6 +677,9 @@ async function submitAdopt(): Promise<void> {
 
         <div class="border-t border-border/70 pt-4">
           <p class="rp-microlabel mb-3">{{ t('sites.adopt.credSection') }}</p>
+          <p class="mb-3 rounded-lg border border-border bg-panel-2/40 px-3 py-2 text-[11px] leading-relaxed text-muted">
+            {{ aEngine === 'newapi' ? t('sites.adopt.keyHelpNewapi') : t('sites.adopt.keyHelpSub2api') }}
+          </p>
           <div class="space-y-4">
             <Field :label="t('sites.adopt.credModeLabel')">
               <Select v-model="aCredMode" :options="credModeOptions" :disabled="adoptSubmitting" />

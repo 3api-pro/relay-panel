@@ -6,6 +6,7 @@ import {
   Bell,
   BookOpen,
   CreditCard,
+  Layers,
   LayoutDashboard,
   LifeBuoy,
   ListChecks,
@@ -41,6 +42,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/', key: 'overview', icon: LayoutDashboard },
   { to: '/sites', key: 'sites', icon: Server },
+  { to: '/batch', key: 'batch', icon: Layers },
   { to: '/marketplace', key: 'marketplace', icon: Store },
   { to: '/ledger', key: 'ledger', icon: BookOpen },
   { to: '/alerts', key: 'alerts', icon: Bell },

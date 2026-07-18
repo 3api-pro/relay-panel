@@ -51,7 +51,7 @@ onBeforeUnmount(() => {
     <Transition name="rp-pop">
       <div
         v-if="open"
-        class="rp-glass rp-glass-strong absolute right-0 top-[calc(100%+8px)] z-50 min-w-[152px] overflow-hidden p-1"
+        class="rp-glass rp-glass-strong absolute right-0 top-[calc(100%+8px)] z-50 max-h-[min(70vh,420px)] min-w-[152px] overflow-y-auto overscroll-contain p-1"
         role="menu"
       >
         <button

@@ -12,5 +12,6 @@
   "roleRoot": "Admin",
   "roleOperator": "Operator",
   "roleViewer": "Read-only",
-  "help": "Help & Support"
+  "help": "Help & Support",
+  "batch": "Batch ops"
 }

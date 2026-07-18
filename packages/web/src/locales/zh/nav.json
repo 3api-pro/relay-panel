@@ -12,5 +12,6 @@
   "roleRoot": "管理员",
   "roleOperator": "操作员",
   "roleViewer": "只读",
-  "help": "帮助与支持"
+  "help": "帮助与支持",
+  "batch": "批量操作"
 }
