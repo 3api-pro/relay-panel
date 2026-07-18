@@ -40,6 +40,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'jobs', component: () => import('./views/JobsView.vue'), meta: { title: '任务' } },
       { path: 'operators', component: () => import('./views/OperatorsView.vue'), meta: { title: '操作员' } },
       { path: 'billing', component: () => import('./views/BillingView.vue'), meta: { title: '计费' } },
+      { path: 'help', component: () => import('./views/HelpView.vue'), meta: { title: '帮助与支持' } },
       { path: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: '设置' } },
     ],
   },

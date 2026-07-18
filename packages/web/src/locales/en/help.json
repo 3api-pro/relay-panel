@@ -1,0 +1,39 @@
+{
+  "gettingStarted": "Getting started",
+  "pathNew": {
+    "title": "Launch a new site",
+    "desc": "Provision a fresh relay site in one click — pick an engine and version, and the panel brings it up with an isolated database and admin account. No server access needed.",
+    "action": "Go to Sites → New site"
+  },
+  "pathAdopt": {
+    "title": "Connect an existing site",
+    "desc": "Already running a relay site? Connect it with its URL and an admin credential. The panel manages it through the admin API only — nothing is migrated or modified, and you can keep it read-only.",
+    "action": "Go to Sites → Connect"
+  },
+  "pathBilling": {
+    "title": "Pick a plan",
+    "desc": "Your plan sets how many sites you can run or connect. Subscribe or renew any time — payment is self-serve and the quota applies immediately.",
+    "action": "Go to Billing"
+  },
+  "supportSection": "Support",
+  "supportIntro": "Questions, billing issues, or something not working? Reach us through any channel below.",
+  "supportPortal": "Support portal",
+  "docs": "Documentation",
+  "noSupportConfigured": "Support contact has not been configured yet.",
+  "supportEmail": "Support email",
+  "supportUrl": "Support portal URL",
+  "supportUrlHint": "Ticketing or contact page shown to operators",
+  "docsUrl": "Documentation URL",
+  "supportSaved": "Support contact saved",
+  "faqSection": "FAQ",
+  "faq": {
+    "q1": "Does connecting an existing site change it in any way?",
+    "a1": "No. Connect only verifies the URL and admin credential, then stores the credential encrypted. The panel talks to your site exclusively through its public admin API; enable read-only mode and it will not perform any write at all.",
+    "q2": "What counts toward my site quota?",
+    "a2": "Every non-destroyed site you own — both sites provisioned by the panel and existing sites you connected.",
+    "q3": "How is a payment confirmed?",
+    "a3": "After you pay, the panel verifies the order directly with the payment channel and activates the subscription automatically, usually within seconds. If a paid order does not activate, contact support with the order number.",
+    "q4": "Can I move a connected site to full management later?",
+    "a4": "Yes. Turn off read-only in the site's settings to allow channel, user and branding management from the panel. Container lifecycle (start/stop/upgrade) remains available only for panel-provisioned sites."
+  }
+}

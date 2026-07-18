@@ -7,6 +7,7 @@ import {
   BookOpen,
   CreditCard,
   LayoutDashboard,
+  LifeBuoy,
   ListChecks,
   LogOut,
   Server,
@@ -47,6 +48,7 @@ const NAV: NavItem[] = [
   { to: '/operators', key: 'operators', icon: Users, rootOnly: true },
   { to: '/billing', key: 'billing', icon: CreditCard },
   { to: '/settings', key: 'settings', icon: Settings },
+  { to: '/help', key: 'help', icon: LifeBuoy },
 ];
 
 const navItems = computed(() => NAV.filter((n) => !n.rootOnly || session.isRoot.value));

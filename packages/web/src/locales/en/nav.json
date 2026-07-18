@@ -11,5 +11,6 @@
   "logout": "Sign out",
   "roleRoot": "Admin",
   "roleOperator": "Operator",
-  "roleViewer": "Read-only"
+  "roleViewer": "Read-only",
+  "help": "Help & Support"
 }

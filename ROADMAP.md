@@ -64,18 +64,19 @@ Turn the read-only dashboard into a real control panel.
 
 ---
 
-## 🚧 P4 — Hosted SaaS
+## ✅ P4 — Hosted SaaS · shipped
 
-The managed offering. Same codebase, orchestrator runs on our infra. The platform core is done; payments and hosted operations remain.
+The managed offering. Same codebase, orchestrator runs on our infra.
 
 - [x] Multi-operator tenancy: RBAC + per-operator site ownership on top of per-site container/data isolation
 - [x] Sign-up (open / invite modes) → operators provision their own sites from the panel within quota
 - [x] Billing core: plans, subscriptions, per-operator site quotas (manual provisioning by root; `PaymentProvider` interface as the extension point)
 - [x] Custom domain automation (add domain → routes pushed to Caddy admin API → auto TLS, see [docs/CADDY.md](docs/CADDY.md))
-- [ ] Payment integration (Stripe / other gateways) on the `PaymentProvider` extension point
-- [ ] Operator-facing onboarding, docs, support surfaces for the hosted offering
+- [x] Payment integration: Alipay / WeChat Pay / USDT self-serve checkout with zero-trust webhooks (crediting only via channel re-query; see [docs/PAYMENTS.md](docs/PAYMENTS.md))
+- [x] Self-serve **connect existing site** (`POST /api/sites/adopt` + wizard): credential verified live, encrypted at rest, per-site read-only fuse; counts toward quota
+- [x] Operator-facing onboarding (Help page + empty-state dual-path), docs ([docs/HOSTED.md](docs/HOSTED.md)), support surface (configurable contact via `app_settings`)
 
-**Acceptance:** a new user signs up and has a branded, custom-domain relay station live without ever touching a server.
+**Acceptance:** ✅ a new user signs up, subscribes self-serve, and has a relay station live (new or connected) without ever touching a server.
 
 ---
 
