@@ -15,7 +15,7 @@
 
 <br/>
 
-<img src="docs/media/overview-dark.png" alt="relay-panel 站群总览" width="880" />
+<img src="docs/media/overview-dark.jpg" alt="relay-panel 站群总览" width="880" />
 
 </div>
 
@@ -58,16 +58,16 @@ relay-panel 把这些收敛成一个控制面：
 
 <table>
 <tr>
-<td width="50%"><img src="docs/media/site-detail.png" alt="单站钻取与用量趋势" /><br/><sub>单站钻取 —— 渠道、用户、用量趋势、域名、审计</sub></td>
-<td width="50%"><img src="docs/media/marketplace.png" alt="渠道市场" /><br/><sub>渠道市场 —— 模板、授权、结算</sub></td>
+<td width="50%"><img src="docs/media/site-detail.jpg" alt="单站钻取与用量趋势" /><br/><sub>单站钻取 —— 渠道、用户、用量趋势、域名、审计</sub></td>
+<td width="50%"><img src="docs/media/marketplace.jpg" alt="渠道市场" /><br/><sub>渠道市场 —— 模板、授权、结算</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/media/ledger.png" alt="分账账本" /><br/><sub>分账账本 —— 用量、上游成本、毛利</sub></td>
-<td width="50%"><img src="docs/media/alerts.png" alt="告警" /><br/><sub>告警 —— 站点不可达 / 任务失败 / 渠道被禁 / 余额过低</sub></td>
+<td width="50%"><img src="docs/media/ledger.jpg" alt="分账账本" /><br/><sub>分账账本 —— 用量、上游成本、毛利</sub></td>
+<td width="50%"><img src="docs/media/alerts.jpg" alt="告警" /><br/><sub>告警 —— 站点不可达 / 任务失败 / 渠道被禁 / 余额过低</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/media/overview-light.png" alt="浅色主题" /><br/><sub>浅色主题</sub></td>
-<td width="50%"><img src="docs/media/billing-light.png" alt="计费与配额" /><br/><sub>计费与配额 · 套餐与订阅</sub></td>
+<td width="50%"><img src="docs/media/overview-light.jpg" alt="浅色主题" /><br/><sub>浅色主题</sub></td>
+<td width="50%"><img src="docs/media/billing-light.jpg" alt="计费与配额" /><br/><sub>计费与配额 · 套餐与订阅</sub></td>
 </tr>
 </table>
 

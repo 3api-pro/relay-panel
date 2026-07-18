@@ -15,7 +15,7 @@ Provision, upgrade, and monitor any number of self-hosted [sub2api](https://gith
 
 <br/>
 
-<img src="docs/media/overview-dark.png" alt="relay-panel — fleet overview" width="880" />
+<img src="docs/media/overview-dark.jpg" alt="relay-panel — fleet overview" width="880" />
 
 </div>
 
@@ -58,16 +58,16 @@ relay-panel collapses that into one control plane:
 
 <table>
 <tr>
-<td width="50%"><img src="docs/media/site-detail.png" alt="Per-site drill-down with usage trends" /><br/><sub>Per-site drill-down — channels, users, usage trends, domains, audit</sub></td>
-<td width="50%"><img src="docs/media/marketplace.png" alt="Channel marketplace" /><br/><sub>Channel marketplace — templates, grants, settlement</sub></td>
+<td width="50%"><img src="docs/media/site-detail.jpg" alt="Per-site drill-down with usage trends" /><br/><sub>Per-site drill-down — channels, users, usage trends, domains, audit</sub></td>
+<td width="50%"><img src="docs/media/marketplace.jpg" alt="Channel marketplace" /><br/><sub>Channel marketplace — templates, grants, settlement</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/media/ledger.png" alt="Settlement ledger" /><br/><sub>Settlement ledger — usage, upstream cost, margin</sub></td>
-<td width="50%"><img src="docs/media/alerts.png" alt="Alerting" /><br/><sub>Alerting — site down / job failed / channel disabled / low balance</sub></td>
+<td width="50%"><img src="docs/media/ledger.jpg" alt="Settlement ledger" /><br/><sub>Settlement ledger — usage, upstream cost, margin</sub></td>
+<td width="50%"><img src="docs/media/alerts.jpg" alt="Alerting" /><br/><sub>Alerting — site down / job failed / channel disabled / low balance</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/media/overview-light.png" alt="Light theme" /><br/><sub>Light theme</sub></td>
-<td width="50%"><img src="docs/media/billing-light.png" alt="Billing and quotas" /><br/><sub>Billing &amp; quotas · plans and subscriptions</sub></td>
+<td width="50%"><img src="docs/media/overview-light.jpg" alt="Light theme" /><br/><sub>Light theme</sub></td>
+<td width="50%"><img src="docs/media/billing-light.jpg" alt="Billing and quotas" /><br/><sub>Billing &amp; quotas · plans and subscriptions</sub></td>
 </tr>
 </table>
 
