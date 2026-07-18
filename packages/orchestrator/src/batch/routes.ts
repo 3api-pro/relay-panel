@@ -44,12 +44,34 @@ const batchBody = z.discriminatedUnion('kind', [
   }),
   z.object({
     slugs: slugsField,
+    kind: z.literal('channel.update'),
+    channelName: z.string().min(1).max(64),
+    patch: z
+      .object({
+        baseUrl: z.string().url().optional(),
+        apiKey: z.string().min(1).optional(),
+        models: z.array(z.string().min(1)).min(1).optional(),
+        priority: z.number().int().optional(),
+        weight: z.number().int().optional(),
+        enabled: z.boolean().optional(),
+      })
+      .refine((p) => Object.keys(p).length > 0, '至少提供一个要更新的字段'),
+  }),
+  z.object({ slugs: slugsField, kind: z.literal('channel.delete'), channelName: z.string().min(1).max(64) }),
+  z.object({
+    slugs: slugsField,
     kind: z.literal('grant'),
     templateKey: z.string().min(1),
     channelName: z.string().min(1).max(64).optional(),
     byo: z.object({ baseUrl: z.string().url(), apiKey: z.string().min(1) }).optional(),
     groupIds: z.array(z.string().min(1)).optional(),
     priority: z.number().int().optional(),
+  }),
+  z.object({
+    slugs: slugsField,
+    kind: z.literal('lifecycle'),
+    op: z.enum(['upgrade', 'start', 'stop']),
+    toVersion: z.string().min(1).refine((v) => v !== 'latest', '版本必须钉住，不允许 latest').optional(),
   }),
 ]);
 
@@ -84,6 +106,29 @@ function toAction(body: z.infer<typeof batchBody>): BatchAction {
       return { kind: 'channel.create', channel: body.channel as ChannelSpec };
     case 'channel.toggle':
       return { kind: 'channel.toggle', channelName: body.channelName, enabled: body.enabled };
+    case 'channel.update': {
+      const p = body.patch;
+      return {
+        kind: 'channel.update',
+        channelName: body.channelName,
+        patch: {
+          ...(p.baseUrl !== undefined ? { baseUrl: p.baseUrl } : {}),
+          ...(p.apiKey !== undefined ? { apiKey: p.apiKey } : {}),
+          ...(p.models !== undefined ? { models: p.models } : {}),
+          ...(p.priority !== undefined ? { priority: p.priority } : {}),
+          ...(p.weight !== undefined ? { weight: p.weight } : {}),
+          ...(p.enabled !== undefined ? { enabled: p.enabled } : {}),
+        },
+      };
+    }
+    case 'channel.delete':
+      return { kind: 'channel.delete', channelName: body.channelName };
+    case 'lifecycle':
+      return {
+        kind: 'lifecycle',
+        op: body.op,
+        ...(body.toVersion !== undefined ? { toVersion: body.toVersion } : {}),
+      };
     case 'grant':
       return {
         kind: 'grant',
@@ -105,5 +150,11 @@ export function registerBatchRoutes(app: FastifyInstance, deps: BatchServiceDeps
     const results = await service.run(ctx, body.slugs, toAction(body));
     const okCount = results.filter((r) => r.ok).length;
     return { total: results.length, ok: okCount, failed: results.length - okCount, results };
+  });
+
+  // 跨站渠道矩阵：谁有/缺某渠道、某 key 还在哪启用
+  app.get('/api/sites/channel-matrix', async (req) => {
+    const ctx = requireCtx(req);
+    return service.channelMatrix(ctx);
   });
 }

@@ -149,6 +149,59 @@ describe('批量建渠道 + 启停', () => {
   });
 });
 
+describe('批量渠道更新 / 删除', () => {
+  it('批量按名更新渠道（轮换 key / 改模型）', async () => {
+    await batch(rootCookie, {
+      kind: 'channel.create',
+      slugs: ['b-a', 'b-b'],
+      channel: { name: 'up-rotate', protocol: 'openai', baseUrl: 'https://old.example.com', apiKey: 'sk-old', models: ['m1'] },
+    });
+    const { json } = await batch(rootCookie, {
+      kind: 'channel.update',
+      slugs: ['b-a', 'b-b'],
+      channelName: 'up-rotate',
+      patch: { baseUrl: 'https://new.example.com', apiKey: 'sk-new', models: ['m1', 'm2'] },
+    });
+    expect(json.ok).toBe(2);
+    for (const slug of ['b-a', 'b-b']) {
+      const c = ts.adapters.sub2api.stateFor(slug).channels.find((x) => x.name === 'up-rotate')!;
+      expect(c.baseUrl).toBe('https://new.example.com');
+      expect(c.models).toEqual(['m1', 'm2']);
+    }
+  });
+
+  it('批量按名删除渠道', async () => {
+    const { json } = await batch(rootCookie, {
+      kind: 'channel.delete',
+      slugs: ['b-a', 'b-b'],
+      channelName: 'up-rotate',
+    });
+    expect(json.ok).toBe(2);
+    for (const slug of ['b-a', 'b-b']) {
+      expect(ts.adapters.sub2api.stateFor(slug).channels.some((c) => c.name === 'up-rotate')).toBe(false);
+    }
+  });
+});
+
+describe('跨站渠道矩阵', () => {
+  it('矩阵反映每站 enabled/disabled/absent', async () => {
+    // b-a 有 mx-ch(启用)，b-b 有 mx-ch(停用)，b-c 无
+    await batch(rootCookie, {
+      kind: 'channel.create',
+      slugs: ['b-a', 'b-b'],
+      channel: { name: 'mx-ch', protocol: 'openai', baseUrl: 'https://mx.example.com', apiKey: 'sk-mx', models: ['m1'] },
+    });
+    await batch(rootCookie, { kind: 'channel.toggle', slugs: ['b-b'], channelName: 'mx-ch', enabled: false });
+
+    const res = await ts.app.inject({ method: 'GET', url: '/api/sites/channel-matrix', cookies: { rp_session: rootCookie } });
+    const m = res.json() as { sites: Array<{ slug: string }>; channels: Array<{ name: string; presence: Record<string, string> }> };
+    const row = m.channels.find((c) => c.name === 'mx-ch')!;
+    expect(row.presence['b-a']).toBe('enabled');
+    expect(row.presence['b-b']).toBe('disabled');
+    expect(row.presence['b-c']).toBe('absent');
+  });
+});
+
 describe('权限与只读保险丝', () => {
   it('readonly 站在批量里返回 403 error，其它站照常', async () => {
     await ts.db.orm.update(sites).set({ readonly: true }).where(eq(sites.slug, 'b-c'));
