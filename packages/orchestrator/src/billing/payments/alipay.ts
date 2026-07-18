@@ -26,7 +26,17 @@ function beijingTimestamp(): string {
   return d.toISOString().slice(0, 19).replace('T', ' ');
 }
 
-function signContent(params: Record<string, string>): string {
+/** 请求签名内容：只排除 sign（sign_type 必须参与签名，排掉会被网关判坏签） */
+function requestSignContent(params: Record<string, string>): string {
+  return Object.keys(params)
+    .filter((k) => params[k] !== '' && k !== 'sign')
+    .sort()
+    .map((k) => `${k}=${params[k]}`)
+    .join('&');
+}
+
+/** 异步通知验签内容：按支付宝规则排除 sign 与 sign_type */
+function notifySignContent(params: Record<string, string>): string {
   return Object.keys(params)
     .filter((k) => params[k] !== '' && k !== 'sign' && k !== 'sign_type')
     .sort()
@@ -79,7 +89,7 @@ export class AlipayGateway implements PaymentGateway {
   /** openapi 调用：POST 表单，返回 <method>_response 节点；网关错误抛中文摘要（不含凭据） */
   private async call(method: string, bizContent: Record<string, unknown>): Promise<Record<string, unknown>> {
     const params = this.commonParams(method, bizContent);
-    params.sign = this.sign(signContent(params));
+    params.sign = this.sign(requestSignContent(params));
     const body = new URLSearchParams(params).toString();
     const resp = await this.fetchFn(ALIPAY_GATEWAY, {
       method: 'POST',
@@ -132,7 +142,7 @@ export class AlipayGateway implements PaymentGateway {
       product_code: 'FAST_INSTANT_TRADE_PAY',
     });
     if (this.config.returnUrl) params.return_url = this.config.returnUrl;
-    params.sign = this.sign(signContent(params));
+    params.sign = this.sign(requestSignContent(params));
     return `${ALIPAY_GATEWAY}?${new URLSearchParams(params).toString()}`;
   }
 
@@ -158,7 +168,7 @@ export class AlipayGateway implements PaymentGateway {
     const params: Record<string, string> = {};
     for (const [k, v] of new URLSearchParams(rawBody.toString('utf8'))) params[k] = v;
     const sign = params.sign ?? '';
-    if (!sign || !this.verify(signContent(params), sign)) {
+    if (!sign || !this.verify(notifySignContent(params), sign)) {
       throw new Error('支付宝通知验签失败');
     }
     if (params.app_id !== this.config.appId) throw new Error('支付宝通知 app_id 不匹配');

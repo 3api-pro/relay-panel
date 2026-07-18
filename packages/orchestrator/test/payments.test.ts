@@ -77,6 +77,22 @@ describe('AlipayGateway', () => {
     expect(out.payUrl).toContain('sign=');
   });
 
+  it('请求签名把 sign_type 计入签名内容（7/18 生产回落根因，防回归）', async () => {
+    const gw = new AlipayGateway(config, 'redirect');
+    const out = await gw.create({ orderNo: 'RP4', amountCny: 29, subject: 'pro x1' });
+    const qs = new URL(out.payUrl!).searchParams;
+    const params: Record<string, string> = {};
+    for (const [k, v] of qs) params[k] = v;
+    const content = Object.keys(params)
+      .filter((k) => params[k] !== '' && k !== 'sign') // 请求签名规则：只排 sign
+      .sort()
+      .map((k) => `${k}=${params[k]}`)
+      .join('&');
+    const { createVerify } = await import('node:crypto');
+    expect(content).toContain('sign_type=RSA2');
+    expect(createVerify('RSA-SHA256').update(content, 'utf8').verify(merchantPubPem, params.sign!, 'base64')).toBe(true);
+  });
+
   it('查单状态映射', async () => {
     const byStatus = (s: string): typeof fetch =>
       mockFetch(() => ({
