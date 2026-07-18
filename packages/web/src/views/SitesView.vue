@@ -3,7 +3,7 @@ import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue';
 import type { ComputedRef } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { Plus, Server } from 'lucide-vue-next';
+import { Link2, Lock, Plus, Server } from 'lucide-vue-next';
 import { del, get, post } from '../api/client';
 import type { SitesResponse, SiteView } from '../api/types';
 import {
@@ -296,6 +296,85 @@ async function submitCreate(): Promise<void> {
     submitting.value = false;
   }
 }
+
+// ---- 接入已有站点（adopt）----
+const adoptOpen = ref(false);
+const adoptSubmitting = ref(false);
+const aEngine = ref<string | number | null>('sub2api');
+const aSlug = ref('');
+const aLabel = ref('');
+const aBaseUrl = ref('');
+const aCredMode = ref<string | number>('key');
+const aAdminKey = ref('');
+const aAdminEmail = ref('');
+const aAdminPassword = ref('');
+const aReadonly = ref(true);
+const aErrors = ref<Record<string, string>>({});
+
+const credModeOptions = computed<SelectOption[]>(() => [
+  { value: 'key', label: t('sites.adopt.credKey') },
+  { value: 'password', label: t('sites.adopt.credPassword') },
+]);
+
+function openAdopt(): void {
+  aEngine.value = 'sub2api';
+  aSlug.value = '';
+  aLabel.value = '';
+  aBaseUrl.value = '';
+  aCredMode.value = 'key';
+  aAdminKey.value = '';
+  aAdminEmail.value = '';
+  aAdminPassword.value = '';
+  aReadonly.value = true;
+  aErrors.value = {};
+  adoptOpen.value = true;
+}
+
+function validateAdopt(): boolean {
+  const e: Record<string, string> = {};
+  if (!aEngine.value) e.engine = t('sites.create.errEngine');
+  const slug = aSlug.value.trim();
+  if (!slug) e.slug = t('sites.create.errSlugRequired');
+  else if (!SLUG_RE.test(slug)) e.slug = t('sites.create.errSlugFormat');
+  const url = aBaseUrl.value.trim();
+  if (!url || !/^https?:\/\//.test(url)) e.baseUrl = t('sites.adopt.errBaseUrl');
+  if (aCredMode.value === 'key') {
+    if (!aAdminKey.value.trim()) e.adminKey = t('sites.adopt.errAdminKey');
+  } else {
+    if (!EMAIL_RE.test(aAdminEmail.value.trim())) e.adminEmail = t('sites.create.errEmailFormat');
+    if (!aAdminPassword.value) e.adminPassword = t('sites.adopt.errAdminPassword');
+  }
+  aErrors.value = e;
+  return Object.keys(e).length === 0;
+}
+
+async function submitAdopt(): Promise<void> {
+  if (!validateAdopt()) return;
+  adoptSubmitting.value = true;
+  try {
+    const body: Record<string, unknown> = {
+      slug: aSlug.value.trim(),
+      baseUrl: aBaseUrl.value.trim().replace(/\/+$/, ''),
+      engine: String(aEngine.value),
+      readonly: aReadonly.value,
+    };
+    const label = aLabel.value.trim();
+    if (label) body.label = label;
+    if (aCredMode.value === 'key') body.adminApiKey = aAdminKey.value.trim();
+    else {
+      body.adminEmail = aAdminEmail.value.trim();
+      body.adminPassword = aAdminPassword.value;
+    }
+    const res = await post<{ slug: string }>('/api/sites/adopt', body);
+    toast.success(t('sites.adopt.success'));
+    adoptOpen.value = false;
+    void router.push(`/sites/${res.slug}`);
+  } catch {
+    /* client 已弹错误 toast */
+  } finally {
+    adoptSubmitting.value = false;
+  }
+}
 </script>
 
 <template>
@@ -310,10 +389,16 @@ async function submitCreate(): Promise<void> {
           ><span v-if="refreshing" class="ml-1 text-muted/50">· {{ t('sites.updating') }}</span>
         </p>
       </div>
-      <Button v-if="canWrite" variant="primary" @click="openCreate">
-        <Plus :size="14" />
-        {{ t('sites.new') }}
-      </Button>
+      <div v-if="canWrite" class="flex items-center gap-2">
+        <Button variant="outline" @click="openAdopt">
+          <Link2 :size="14" />
+          {{ t('sites.adopt.button') }}
+        </Button>
+        <Button variant="primary" @click="openCreate">
+          <Plus :size="14" />
+          {{ t('sites.new') }}
+        </Button>
+      </div>
     </div>
 
     <!-- 列表 -->
@@ -330,10 +415,16 @@ async function submitCreate(): Promise<void> {
           :description="t('sites.empty.desc')"
           :icon="Server"
         >
-          <Button v-if="canWrite" variant="primary" @click="openCreate">
-            <Plus :size="14" />
-            {{ t('sites.new') }}
-          </Button>
+          <div v-if="canWrite" class="flex items-center justify-center gap-2">
+            <Button variant="outline" @click="openAdopt">
+              <Link2 :size="14" />
+              {{ t('sites.adopt.button') }}
+            </Button>
+            <Button variant="primary" @click="openCreate">
+              <Plus :size="14" />
+              {{ t('sites.new') }}
+            </Button>
+          </div>
         </EmptyState>
       </div>
 
@@ -358,6 +449,9 @@ async function submitCreate(): Promise<void> {
                   asSite(row).label
                 }}</span>
                 <Badge v-if="asSite(row).managed === 'external'" tone="amber" size="sm">{{ t('sites.externalManaged') }}</Badge>
+                <Badge v-if="asSite(row).readonly" tone="muted" size="sm">
+                  <Lock :size="10" /> {{ t('sites.readonlyBadge') }}
+                </Badge>
               </div>
               <span class="truncate font-mono text-[11px] text-muted">{{ asSite(row).slug }}</span>
             </div>
@@ -513,6 +607,71 @@ async function submitCreate(): Promise<void> {
       <template #footer>
         <Button variant="ghost" :disabled="submitting" @click="createOpen = false">{{ t('common.cancel') }}</Button>
         <Button variant="primary" :loading="submitting" @click="submitCreate">{{ t('sites.create.submit') }}</Button>
+      </template>
+    </Modal>
+
+    <!-- 接入已有站点（adopt） -->
+    <Modal v-model:open="adoptOpen" :title="t('sites.adopt.title')" width="560px">
+      <div class="space-y-4">
+        <p class="rounded-lg border border-border bg-panel-2/50 px-3 py-2 text-xs leading-relaxed text-muted">
+          {{ t('sites.adopt.intro') }}
+        </p>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field :label="t('sites.create.engineLabel')" required :error="aErrors.engine">
+            <Select v-model="aEngine" :options="engineOptions" :disabled="adoptSubmitting" />
+          </Field>
+          <Field label="slug" required :error="aErrors.slug" :hint="t('sites.create.slugHint')">
+            <Input v-model="aSlug" mono placeholder="my-legacy-site" :disabled="adoptSubmitting" />
+          </Field>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field :label="t('sites.adopt.baseUrlLabel')" required :error="aErrors.baseUrl" :hint="t('sites.adopt.baseUrlHint')">
+            <Input v-model="aBaseUrl" mono placeholder="https://api.example.com" :disabled="adoptSubmitting" />
+          </Field>
+          <Field :label="t('sites.create.labelLabel')">
+            <Input v-model="aLabel" :placeholder="t('sites.create.labelPlaceholder')" :disabled="adoptSubmitting" />
+          </Field>
+        </div>
+
+        <div class="border-t border-border/70 pt-4">
+          <p class="rp-microlabel mb-3">{{ t('sites.adopt.credSection') }}</p>
+          <div class="space-y-4">
+            <Field :label="t('sites.adopt.credModeLabel')">
+              <Select v-model="aCredMode" :options="credModeOptions" :disabled="adoptSubmitting" />
+            </Field>
+            <Field
+              v-if="aCredMode === 'key'"
+              :label="t('sites.adopt.adminKeyLabel')"
+              required
+              :error="aErrors.adminKey"
+              :hint="t('sites.adopt.adminKeyHint')"
+            >
+              <Input v-model="aAdminKey" type="password" mono :disabled="adoptSubmitting" autocomplete="off" />
+            </Field>
+            <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field :label="t('sites.adopt.adminEmailLabel')" required :error="aErrors.adminEmail">
+                <Input v-model="aAdminEmail" type="email" placeholder="admin@example.com" :disabled="adoptSubmitting" />
+              </Field>
+              <Field :label="t('sites.adopt.adminPasswordLabel')" required :error="aErrors.adminPassword">
+                <Input v-model="aAdminPassword" type="password" :disabled="adoptSubmitting" autocomplete="off" />
+              </Field>
+            </div>
+          </div>
+        </div>
+
+        <label class="flex items-start gap-2 rounded-lg border border-border bg-panel-2/50 px-3 py-2.5 text-xs text-muted">
+          <input v-model="aReadonly" type="checkbox" class="mt-0.5 accent-[var(--color-accent)]" />
+          <span>
+            <span class="font-medium text-text">{{ t('sites.adopt.readonlyLabel') }}</span><br />
+            {{ t('sites.adopt.readonlyHint') }}
+          </span>
+        </label>
+      </div>
+      <template #footer>
+        <Button variant="ghost" :disabled="adoptSubmitting" @click="adoptOpen = false">{{ t('common.cancel') }}</Button>
+        <Button variant="primary" :loading="adoptSubmitting" @click="submitAdopt">{{ t('sites.adopt.submit') }}</Button>
       </template>
     </Modal>
   </div>

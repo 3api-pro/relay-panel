@@ -176,6 +176,7 @@ export interface SiteView extends SiteProbe {
   version: string;
   status: string;
   managed: string;
+  readonly: boolean;
   hostPort: number;
   domains: string[];
   notes: string | null;
@@ -206,6 +207,19 @@ export interface CreateSiteInput {
   hostPort?: number;
   adminEmail: string;
   branding?: SiteBranding;
+}
+
+/** 自助接管存量站（SaaS 面板版 adopt；凭据二选一：admin key 或 admin 邮箱+密码） */
+export interface AdoptSiteInput {
+  slug: string;
+  label?: string;
+  baseUrl: string;
+  engine: EngineKind;
+  adminApiKey?: string;
+  adminEmail?: string;
+  adminPassword?: string;
+  /** 缺省 false；true 时面板对该站只读（引擎写操作全拒），生产站 dogfood 保险丝 */
+  readonly?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -430,6 +444,137 @@ export class SitesService {
       hostPort,
     });
     return { slug: site.slug, jobId, hostPort };
+  }
+
+  /**
+   * 接管存量站（面板自助版；CLI adopt 的带凭据校验加强版）：
+   * 配额检查 → 凭据加密入库 → 健康探测 + admin 凭据实连验证 → 插 managed='external' 行。
+   * 存量站接入即计入配额（activeSites 不区分 managed），统一管理本身是订阅的一部分。
+   */
+  async adoptSite(ctx: SessionCtx, input: AdoptSiteInput): Promise<{ slug: string; siteId: number }> {
+    requireWrite(ctx);
+
+    let parsed: URL;
+    try {
+      parsed = new URL(input.baseUrl);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('bad protocol');
+    } catch {
+      throw new ApiError(400, 'baseUrl 无效：需要 http(s) 地址');
+    }
+    const baseUrl = input.baseUrl.replace(/\/+$/, '');
+    const hostPort = parsed.port !== '' ? Number(parsed.port) : parsed.protocol === 'https:' ? 443 : 80;
+
+    const hasKey = typeof input.adminApiKey === 'string' && input.adminApiKey.length > 0;
+    const hasPassword =
+      typeof input.adminEmail === 'string' &&
+      input.adminEmail.length > 0 &&
+      typeof input.adminPassword === 'string' &&
+      input.adminPassword.length > 0;
+    if (!hasKey && !hasPassword) {
+      throw new ApiError(400, '需要提供站点 admin API key，或 admin 邮箱+密码');
+    }
+
+    const site = await runExclusive(async () => {
+      await this.checkQuota(ctx);
+      const dup = await this.deps.db.orm
+        .select({ id: sites.id })
+        .from(sites)
+        .where(eq(sites.slug, input.slug))
+        .limit(1);
+      if (dup.length > 0) throw new ApiError(409, '站点标识已存在');
+
+      // 凭据先入库（enc:<slug>），验证走统一 credstore 路径 —— 与运行期同一条解析链
+      const secrets: Record<string, string> = hasKey
+        ? { adminApiKey: input.adminApiKey! }
+        : { adminEmail: input.adminEmail!, adminPassword: input.adminPassword! };
+      const credentialRef = await makeStoreCredential(this.deps.db, this.deps.config)(input.slug, secrets);
+
+      const inserted = await this.deps.db.orm
+        .insert(sites)
+        .values({
+          operatorId: ctx.operatorId,
+          slug: input.slug,
+          label: input.label ?? input.slug,
+          engine: input.engine,
+          version: 'prod', // 存量站版本未知（探测成功后回填）
+          hostPort,
+          baseUrl,
+          credentialRef,
+          managed: 'external',
+          readonly: input.readonly === true,
+          status: 'active',
+        })
+        .returning();
+      return inserted[0]!;
+    });
+
+    // 健康探测 + admin 凭据实连验证；失败回滚（删行+删凭据），不留半接入状态
+    try {
+      const adapter = this.deps.adapters[input.engine];
+      if (!adapter) throw new ApiError(500, `没有引擎 ${input.engine} 的 adapter`);
+      const inst = instOf(site);
+      const health = await adapter.health(inst);
+      if (!health.ok) {
+        throw new ApiError(409, `站点健康探测未通过: ${redactText(health.detail ?? 'unhealthy')}`);
+      }
+      const client = await adapter.connect(inst, this.credstore);
+      await client.settings.getBranding(); // admin 凭据无效在这里暴露
+      if (health.version !== undefined && health.version !== '') {
+        await this.deps.db.orm
+          .update(sites)
+          .set({ version: health.version, updatedAt: nowPg() })
+          .where(eq(sites.id, site.id));
+      }
+    } catch (err) {
+      await this.deps.db.orm.delete(sites).where(eq(sites.id, site.id));
+      await this.deps.db.orm.delete(credentials).where(eq(credentials.ref, site.credentialRef));
+      await writeAudit(this.deps.db, {
+        actor: ctx.email,
+        action: 'site.adopt',
+        payload: { slug: input.slug, engine: input.engine },
+        ok: false,
+        error: redactText(errMsg(err)),
+      });
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(409, `站点验证失败: ${redactText(errMsg(err))}`);
+    }
+
+    probeCache.delete(site.slug);
+    await writeAudit(this.deps.db, {
+      siteId: site.id,
+      actor: ctx.email,
+      action: 'site.adopt',
+      payload: {
+        slug: site.slug,
+        engine: input.engine,
+        label: site.label,
+        readonly: input.readonly === true,
+      },
+      ok: true,
+    });
+    return { slug: site.slug, siteId: site.id };
+  }
+
+  /** 站点标记更新（readonly 保险丝 / 展示名）；owner 或 root */
+  async setSiteFlags(
+    ctx: SessionCtx,
+    slug: string,
+    patch: { readonly?: boolean; label?: string; notes?: string },
+  ): Promise<void> {
+    requireWrite(ctx);
+    const site = await this.requireSite(ctx, slug);
+    const fields: Record<string, unknown> = { updatedAt: nowPg() };
+    if (patch.readonly !== undefined) fields.readonly = patch.readonly;
+    if (patch.label !== undefined) fields.label = patch.label;
+    if (patch.notes !== undefined) fields.notes = patch.notes;
+    await this.deps.db.orm.update(sites).set(fields).where(eq(sites.id, site.id));
+    await writeAudit(this.deps.db, {
+      siteId: site.id,
+      actor: ctx.email,
+      action: 'site.flags',
+      payload: { slug: site.slug, ...patch },
+      ok: true,
+    });
   }
 
   async upgradeSite(ctx: SessionCtx, slug: string, toVersion: string): Promise<{ slug: string; jobId: number }> {
@@ -868,7 +1013,7 @@ export class SitesService {
     }
   }
 
-  /** 引擎写操作：成功/失败都写审计（payload 过 redact；错误文本脱敏后 502） */
+  /** 引擎写操作：readonly 保险丝前置；成功/失败都写审计（payload 过 redact；错误文本脱敏后 502） */
   private async adapterWrite<T>(
     ctx: SessionCtx,
     site: SiteRow,
@@ -876,6 +1021,9 @@ export class SitesService {
     payload: Record<string, unknown>,
     fn: () => Promise<T>,
   ): Promise<T> {
+    if (site.readonly) {
+      throw new ApiError(403, '该站点已设为只读，面板拒绝引擎写操作（可在站点设置中关闭只读）');
+    }
     try {
       const out = await fn();
       await writeAudit(this.deps.db, {
@@ -962,6 +1110,7 @@ export class SitesService {
       version: site.version,
       status: site.status,
       managed: site.managed,
+      readonly: site.readonly,
       hostPort: site.hostPort,
       domains: site.domains,
       notes: site.notes,

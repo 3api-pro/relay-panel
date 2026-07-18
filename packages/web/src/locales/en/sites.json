@@ -87,5 +87,28 @@
     "start": "Start site",
     "keepData": "Keep data volumes",
     "destroy": "Destroy site…"
+  },
+  "readonlyBadge": "Read-only",
+  "adopt": {
+    "button": "Connect existing site",
+    "title": "Connect an existing site",
+    "intro": "Bring a site you already run under unified management. The panel talks to it only through its admin API — nothing is migrated or modified during connect, and it counts toward your site quota.",
+    "baseUrlLabel": "Site URL",
+    "baseUrlHint": "The http(s) address the panel can reach the site at",
+    "credSection": "Admin credential",
+    "credModeLabel": "Credential type",
+    "credKey": "Admin API key",
+    "credPassword": "Admin email + password",
+    "adminKeyLabel": "Admin API key",
+    "adminKeyHint": "Stored encrypted; verified against the site before connecting",
+    "adminEmailLabel": "Admin email",
+    "adminPasswordLabel": "Admin password",
+    "readonlyLabel": "Connect as read-only (recommended)",
+    "readonlyHint": "The panel will only monitor and aggregate this site. You can disable read-only later in site settings to allow channel/user management.",
+    "errBaseUrl": "Enter a valid http(s) URL",
+    "errAdminKey": "Admin API key is required",
+    "errAdminPassword": "Admin password is required",
+    "submit": "Verify & connect",
+    "success": "Site connected"
   }
 }

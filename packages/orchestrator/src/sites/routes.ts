@@ -31,6 +31,30 @@ const createSiteBody = z.object({
     .optional(),
 });
 
+const adoptSiteBody = z
+  .object({
+    slug: z.string().regex(SLUG_RE, '需为 2-32 位小写字母/数字/连字符，且以字母或数字开头'),
+    label: z.string().min(1).max(64).optional(),
+    baseUrl: z.string().url(),
+    engine: z.enum(['sub2api', 'newapi']),
+    adminApiKey: z.string().min(1).optional(),
+    adminEmail: z.string().email().optional(),
+    adminPassword: z.string().min(1).optional(),
+    readonly: z.boolean().optional(),
+  })
+  .refine(
+    (v) => Boolean(v.adminApiKey) || (Boolean(v.adminEmail) && Boolean(v.adminPassword)),
+    '需要提供 admin API key，或 admin 邮箱+密码',
+  );
+
+const siteFlagsBody = z
+  .object({
+    readonly: z.boolean().optional(),
+    label: z.string().min(1).max(64).optional(),
+    notes: z.string().max(500).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, '至少提供一个字段');
+
 const upgradeBody = z.object({
   toVersion: z.string().min(1).refine(notLatest, '版本必须钉住，不允许 latest'),
 });
@@ -164,6 +188,35 @@ export function registerSitesRoutes(app: FastifyInstance, deps: SitesServiceDeps
       ...(body.branding !== undefined ? { branding: body.branding as SiteBranding } : {}),
     });
     return reply.code(201).send(out);
+  });
+
+  // 接管存量站（自助 adopt）：凭据入 body（TLS 内传输，绝不回显）
+  app.post('/api/sites/adopt', async (req, reply) => {
+    const ctx = requireCtx(req);
+    const body = parseBody(adoptSiteBody, req.body);
+    const out = await service.adoptSite(ctx, {
+      slug: body.slug,
+      baseUrl: body.baseUrl,
+      engine: body.engine,
+      ...(body.label !== undefined ? { label: body.label } : {}),
+      ...(body.adminApiKey !== undefined ? { adminApiKey: body.adminApiKey } : {}),
+      ...(body.adminEmail !== undefined ? { adminEmail: body.adminEmail } : {}),
+      ...(body.adminPassword !== undefined ? { adminPassword: body.adminPassword } : {}),
+      ...(body.readonly !== undefined ? { readonly: body.readonly } : {}),
+    });
+    return reply.code(201).send(out);
+  });
+
+  // 站点标记（readonly 保险丝 / 展示名 / 备注）
+  app.patch<SlugParams>('/api/sites/:slug', async (req) => {
+    const ctx = requireCtx(req);
+    const body = parseBody(siteFlagsBody, req.body);
+    await service.setSiteFlags(ctx, req.params.slug, {
+      ...(body.readonly !== undefined ? { readonly: body.readonly } : {}),
+      ...(body.label !== undefined ? { label: body.label } : {}),
+      ...(body.notes !== undefined ? { notes: body.notes } : {}),
+    });
+    return { ok: true };
   });
 
   app.post<SlugParams>('/api/sites/:slug/upgrade', async (req) => {

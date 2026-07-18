@@ -31,6 +31,8 @@ export interface SiteView {
   version: string;
   status: string;
   managed: 'compose' | 'external' | string;
+  /** 只读保险丝：true 时面板拒绝对该站的引擎写操作 */
+  readonly?: boolean;
   hostPort: number;
   baseUrl: string;
   domains: string[];

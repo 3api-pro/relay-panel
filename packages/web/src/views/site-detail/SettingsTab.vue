@@ -1,15 +1,31 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, ref, type ComputedRef } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { get, put } from '../../api/client';
+import { get, patch, put } from '../../api/client';
 import { toast } from '../../components/ui/toast';
 import { Button, EmptyState, Field, Input, Skeleton } from '../../components/ui';
 import type { SiteBrandingResponse } from './types';
 
-/** 设置页：站点品牌（siteName / logoUrl / announcement）读写。 */
-const props = defineProps<{ slug: string }>();
+/** 设置页：站点品牌（siteName / logoUrl / announcement）读写 + 只读保险丝开关。 */
+const props = defineProps<{ slug: string; readonlyFlag?: boolean }>();
+const emit = defineEmits<{ 'flags-changed': [] }>();
 const { t } = useI18n();
 const canWrite = inject<ComputedRef<boolean>>('canWrite', computed(() => false));
+
+// ---- 只读保险丝 ----
+const flagSaving = ref(false);
+async function toggleReadonly(): Promise<void> {
+  flagSaving.value = true;
+  try {
+    await patch(`/api/sites/${props.slug}`, { readonly: !(props.readonlyFlag === true) });
+    toast.success(t('siteDetail.settings.readonlyToggled'));
+    emit('flags-changed');
+  } catch {
+    /* toast 已弹 */
+  } finally {
+    flagSaving.value = false;
+  }
+}
 
 const siteName = ref('');
 const logoUrl = ref('');
@@ -83,6 +99,25 @@ async function save(): Promise<void> {
         <Button variant="primary" :loading="saving" @click="save">{{ t('siteDetail.settings.save') }}</Button>
       </div>
       <p v-else class="border-t border-border/60 pt-4 text-xs text-muted/70">{{ t('siteDetail.settings.readonlyNote') }}</p>
+    </div>
+
+    <!-- 只读保险丝 -->
+    <div v-if="!loading && !loadError" class="rp-panel mt-5 flex items-center justify-between gap-4 p-5">
+      <div class="min-w-0">
+        <p class="text-[13px] font-medium">{{ t('siteDetail.settings.readonlyTitle') }}</p>
+        <p class="mt-1 text-xs leading-relaxed text-muted">
+          {{ props.readonlyFlag ? t('siteDetail.settings.readonlyOnDesc') : t('siteDetail.settings.readonlyOffDesc') }}
+        </p>
+      </div>
+      <Button
+        v-if="canWrite"
+        size="sm"
+        :variant="props.readonlyFlag ? 'primary' : 'outline'"
+        :loading="flagSaving"
+        @click="toggleReadonly"
+      >
+        {{ props.readonlyFlag ? t('siteDetail.settings.readonlyDisable') : t('siteDetail.settings.readonlyEnable') }}
+      </Button>
     </div>
   </div>
 </template>

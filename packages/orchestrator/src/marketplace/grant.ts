@@ -229,6 +229,7 @@ export async function applyGrant(deps: GrantDeps, ctx: SessionCtx, input: GrantI
 
   const site = await loadAccessibleSite(db, ctx, input.siteSlug);
   if (site.status === 'destroyed') throw new ApiError(400, '站点已销毁，无法启用渠道');
+  if (site.readonly) throw new ApiError(403, '该站点已设为只读，无法注入渠道（可在站点设置中关闭只读）');
   const adapter = adapterFor(deps, site);
 
   const auditFail = async (error: string): Promise<void> => {
@@ -332,6 +333,10 @@ export async function revokeGrant(
   const row = rows[0];
   if (!row || !canAccessSite(ctx, row.site)) throw new ApiError(404, '授权不存在');
   if (row.grant.status !== 'active') throw new ApiError(400, '授权已撤销');
+  // readonly 站不动引擎；确需撤销可 force（仅撤记录不碰站内渠道）或先关只读
+  if (row.site.readonly && !opts.force) {
+    throw new ApiError(403, '该站点已设为只读（可加 ?force=1 仅撤销记录，或先关闭只读）');
+  }
 
   const auditFail = async (error: string): Promise<void> => {
     await writeAudit(db, {
@@ -345,14 +350,17 @@ export async function revokeGrant(
   };
 
   const adapter = adapterFor(deps, row.site);
-  try {
-    const client = await adapter.connect(instanceInfoOf(row.site), makeCredentialStoreV2(db, deps.config));
-    await client.channels.remove(row.grant.engineChannelId);
-  } catch (err) {
-    if (!opts.force) {
-      const msg = redactText(messageOf(err));
-      await auditFail(msg);
-      throw new ApiError(502, `站点渠道删除失败: ${msg}（站点不可达时可加 ?force=1 仅撤销记录）`);
+  if (!row.site.readonly) {
+    // readonly+force 时跳过引擎删除（只撤记录），其余情况照常删站内渠道
+    try {
+      const client = await adapter.connect(instanceInfoOf(row.site), makeCredentialStoreV2(db, deps.config));
+      await client.channels.remove(row.grant.engineChannelId);
+    } catch (err) {
+      if (!opts.force) {
+        const msg = redactText(messageOf(err));
+        await auditFail(msg);
+        throw new ApiError(502, `站点渠道删除失败: ${msg}（站点不可达时可加 ?force=1 仅撤销记录）`);
+      }
     }
   }
 

@@ -87,5 +87,28 @@
     "start": "启动站点",
     "keepData": "保留数据卷",
     "destroy": "销毁站点…"
+  },
+  "readonlyBadge": "只读",
+  "adopt": {
+    "button": "接入已有站点",
+    "title": "接入已有站点",
+    "intro": "把你已在运行的站点纳入统一管理。面板只通过站点的 admin API 通信——接入过程不迁移、不修改任何数据，接入的站点计入站点配额。",
+    "baseUrlLabel": "站点地址",
+    "baseUrlHint": "面板可访问到该站点的 http(s) 地址",
+    "credSection": "管理凭据",
+    "credModeLabel": "凭据类型",
+    "credKey": "Admin API key",
+    "credPassword": "管理员邮箱 + 密码",
+    "adminKeyLabel": "Admin API key",
+    "adminKeyHint": "加密存储；接入前会先连站点验证有效性",
+    "adminEmailLabel": "管理员邮箱",
+    "adminPasswordLabel": "管理员密码",
+    "readonlyLabel": "以只读方式接入（推荐）",
+    "readonlyHint": "面板将只做监控与数据聚合。之后可在站点设置中关闭只读，开放渠道/用户管理。",
+    "errBaseUrl": "请输入合法的 http(s) 地址",
+    "errAdminKey": "请填写 Admin API key",
+    "errAdminPassword": "请填写管理员密码",
+    "submit": "验证并接入",
+    "success": "站点已接入"
   }
 }

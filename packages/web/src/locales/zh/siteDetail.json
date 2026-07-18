@@ -152,7 +152,13 @@
     "announcePlaceholder": "输入公告内容…",
     "save": "保存设置",
     "readonlyNote": "当前角色为只读，无法修改设置。",
-    "toastSaved": "设置已保存"
+    "toastSaved": "设置已保存",
+    "readonlyToggled": "站点只读设置已更新",
+    "readonlyTitle": "面板只读保险丝",
+    "readonlyOnDesc": "只读已开启：面板拒绝对该站的一切引擎写操作（渠道/用户/品牌/市场授权），监控与数据聚合不受影响。",
+    "readonlyOffDesc": "只读已关闭：拥有写权限的面板成员可管理该站的渠道、用户与品牌。",
+    "readonlyEnable": "开启只读",
+    "readonlyDisable": "关闭只读"
   },
   "jobs": {
     "count": "共 {n} 条任务",

@@ -180,6 +180,7 @@ async function doDestroy(): Promise<void> {
               <h1 class="truncate text-lg font-semibold tracking-tight">{{ site.label }}</h1>
               <Badge tone="muted" size="sm" mono>{{ site.engine }} · {{ site.version }}</Badge>
               <Badge v-if="isExternal" tone="amber" size="sm">{{ t('siteDetail.header.external') }}</Badge>
+              <Badge v-if="site.readonly" tone="muted" size="sm">{{ t('sites.readonlyBadge') }}</Badge>
             </div>
             <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
               <span class="font-mono">{{ site.slug }}</span>
@@ -225,7 +226,12 @@ async function doDestroy(): Promise<void> {
           <ChannelsTab v-else-if="tabKey === 'channels'" :slug="slug" />
           <UsersTab v-else-if="tabKey === 'users'" :slug="slug" />
           <DomainsTab v-else-if="tabKey === 'domains'" :slug="slug" />
-          <SettingsTab v-else-if="tabKey === 'settings'" :slug="slug" />
+          <SettingsTab
+            v-else-if="tabKey === 'settings'"
+            :slug="slug"
+            :readonly-flag="site.readonly === true"
+            @flags-changed="loadSite(true)"
+          />
           <JobsTab v-else-if="tabKey === 'jobs'" :slug="slug" />
           <AuditTab v-else-if="tabKey === 'audit'" :slug="slug" />
         </div>

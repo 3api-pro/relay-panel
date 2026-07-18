@@ -152,7 +152,13 @@
     "announcePlaceholder": "Enter announcement…",
     "save": "Save settings",
     "readonlyNote": "Your role is read-only; settings cannot be changed.",
-    "toastSaved": "Settings saved"
+    "toastSaved": "Settings saved",
+    "readonlyToggled": "Site read-only setting updated",
+    "readonlyTitle": "Panel read-only fuse",
+    "readonlyOnDesc": "Read-only is ON: the panel refuses all engine writes (channels, users, branding, marketplace) for this site. Monitoring and aggregation keep working.",
+    "readonlyOffDesc": "Read-only is OFF: panel operators with write access can manage channels, users and branding on this site.",
+    "readonlyEnable": "Enable read-only",
+    "readonlyDisable": "Disable read-only"
   },
   "jobs": {
     "count": "{n} jobs",
