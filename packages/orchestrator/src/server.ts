@@ -16,8 +16,10 @@ import { registerSitesRoutes } from './sites/routes.js';
 import { registerMarketplaceRoutes } from './marketplace/routes.js';
 import { registerAlertsRoutes } from './alerts/routes.js';
 import { registerBillingRoutes } from './billing/routes.js';
+import { registerPaymentRoutes, registerPaymentWebhooks } from './billing/payments/routes.js';
 import { registerDomainsRoutes } from './domains/routes.js';
 import { registerMetricsRoutes } from './metrics.js';
+import { registerSupportRoutes } from './support/routes.js';
 import { registerDemoRoutes } from './demo/routes.js';
 
 /**
@@ -157,8 +159,11 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
   registerMarketplaceRoutes(app, deps);
   registerAlertsRoutes(app, deps);
   registerBillingRoutes(app, deps);
+  registerPaymentRoutes(app, deps);
+  registerPaymentWebhooks(app, deps); // /webhooks/*：免认证 + 原始 body（验签）
   registerDomainsRoutes(app, deps);
   registerMetricsRoutes(app, deps);
+  registerSupportRoutes(app, deps);
   // 演示路由仅在 demo 模式挂载（GET /api/demo 一键账号 + POST /api/demo/login）
   if (config.demo) registerDemoRoutes(app, deps);
 

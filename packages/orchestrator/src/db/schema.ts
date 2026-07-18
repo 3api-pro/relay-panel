@@ -76,6 +76,8 @@ export const sites = pgTable(
     status: text('status').notNull().default('pending'),
     // 'compose'=本面板开的站(可生命周期操作) | 'external'=接管的存量站(只读生命周期)
     managed: text('managed').notNull().default('compose'),
+    // true 时面板拒绝一切引擎写操作（渠道/用户/品牌/市场授权），生产存量站 dogfood 保险丝
+    readonly: boolean('readonly').notNull().default(false),
     notes: text('notes'),
     credentialRef: text('credential_ref').notNull().default(''),
     createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
@@ -235,7 +237,43 @@ export const subscriptions = pgTable('subscriptions', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
 });
 
-/** 全局键值设置。已知 key: 'credential_db'(registry 导入的 credentialDb 原样 JSON)、'alert_webhook_url'({url:string}) */
+/** 收款渠道实例；config 密文存 credentials 表（enc:payment:<key>），此处只存引用 */
+export const paymentProviders = pgTable('payment_providers', {
+  id: serial('id').primaryKey(),
+  key: text('key').notNull().unique(), // 'alipay' | 'wxpay' | 'usdt'
+  name: text('name').notNull(),
+  enabled: boolean('enabled').notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  paymentMode: text('payment_mode').notNull().default(''), // ''|'redirect'
+  configRef: text('config_ref').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+});
+
+/** 订阅购买订单。状态机：pending -> paid -> completed；终态 expired|failed|cancelled */
+export const paymentOrders = pgTable('payment_orders', {
+  id: serial('id').primaryKey(),
+  orderNo: text('order_no').notNull().unique(),
+  operatorId: integer('operator_id')
+    .notNull()
+    .references(() => operators.id),
+  planKey: text('plan_key').notNull(),
+  months: integer('months').notNull(),
+  amount: numeric('amount', { precision: 10, scale: 2, mode: 'number' }).notNull(),
+  providerKey: text('provider_key').notNull(),
+  providerTradeNo: text('provider_trade_no'),
+  status: text('status').notNull().default('pending'),
+  payUrl: text('pay_url'),
+  qrCode: text('qr_code'),
+  expiresAt: timestamp('expires_at', { mode: 'string' }),
+  paidAt: timestamp('paid_at', { mode: 'string' }),
+  completedAt: timestamp('completed_at', { mode: 'string' }),
+  detail: jsonb('detail').$type<Record<string, unknown>>(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+});
+
+/** 全局键值设置。已知 key: 'credential_db'(registry 导入的 credentialDb 原样 JSON)、'alert_webhook_url'({url:string})、'support_contact'({email?,url?,docsUrl?}) */
 export const appSettings = pgTable('app_settings', {
   key: text('key').primaryKey(),
   value: jsonb('value').$type<Record<string, unknown>>().notNull(),
@@ -262,3 +300,5 @@ export type ChannelGrantRow = typeof channelGrants.$inferSelect;
 export type UsageLedgerRow = typeof usageLedger.$inferSelect;
 export type PlanRow = typeof plans.$inferSelect;
 export type SubscriptionRow = typeof subscriptions.$inferSelect;
+export type PaymentProviderRow = typeof paymentProviders.$inferSelect;
+export type PaymentOrderRow = typeof paymentOrders.$inferSelect;

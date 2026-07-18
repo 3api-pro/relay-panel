@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, ref, type ComputedRef } from 'vue';
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch, type ComputedRef } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { Check, CreditCard, Plus } from 'lucide-vue-next';
+import QRCode from 'qrcode';
+import { Check, CreditCard, ExternalLink, Plus, QrCode, Wallet } from 'lucide-vue-next';
 import { del, get, post } from '../api/client';
 import { session } from '../api/session';
 import {
@@ -57,6 +58,33 @@ interface SubscriptionRow {
 interface SubscriptionsResponse {
   subscriptions: SubscriptionRow[];
 }
+interface PaymentMethod {
+  key: string;
+  name: string;
+  paymentMode: string;
+}
+interface OrderView {
+  orderNo: string;
+  planKey: string;
+  months: number;
+  amount: number;
+  providerKey: string;
+  status: string;
+  payUrl: string | null;
+  qrCode: string | null;
+  expiresAt: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  operatorEmail?: string;
+}
+interface ProviderView {
+  key: string;
+  name: string;
+  enabled: boolean;
+  sortOrder: number;
+  paymentMode: string;
+  configKeys: string[];
+}
 
 const { t } = useI18n();
 const canWrite = inject<ComputedRef<boolean>>('canWrite');
@@ -99,7 +127,12 @@ async function refresh(initial = false): Promise<void> {
   loadError.value = '';
   try {
     await loadCore();
-    if (isRoot.value) void loadSubscriptions();
+    void loadMethods();
+    void loadMyOrders();
+    if (isRoot.value) {
+      void loadSubscriptions();
+      void loadProviders();
+    }
   } catch (err) {
     if (initial) loadError.value = err instanceof Error ? err.message : t('billing.loadFailed');
   } finally {
@@ -231,6 +264,244 @@ async function submitGrant(): Promise<void> {
   }
 }
 
+// ---- 自助购买（operator）----
+const methods = ref<PaymentMethod[]>([]);
+const myOrders = ref<OrderView[]>([]);
+const showBuy = ref(false);
+const buyPlan = ref<BillingPlan | null>(null);
+const buyMonths = ref<number | string>(1);
+const buyMethod = ref<string | number>('');
+const buySubmitting = ref(false);
+const activeOrder = ref<OrderView | null>(null);
+const qrDataUrl = ref('');
+let pollTimer: number | null = null;
+
+const buyMonthsNum = computed(() => Number(buyMonths.value));
+const buyMonthsValid = computed(
+  () => Number.isInteger(buyMonthsNum.value) && buyMonthsNum.value >= 1 && buyMonthsNum.value <= 120,
+);
+const buyTotal = computed(() => {
+  if (!buyPlan.value || !buyMonthsValid.value) return null;
+  return Math.round(buyPlan.value.priceMonthly * buyMonthsNum.value * 100) / 100;
+});
+const canSubmitBuy = computed(() => buyPlan.value !== null && buyMethod.value !== '' && buyMonthsValid.value);
+const methodOptions = computed<SelectOption[]>(() => methods.value.map((m) => ({ value: m.key, label: m.name })));
+/** 自助购买入口：operator（root/viewer 不限额，无购买语义） */
+const selfServe = computed(() => canWrite?.value === true && !isRoot.value);
+
+async function loadMethods(): Promise<void> {
+  try {
+    const r = await get<{ methods: PaymentMethod[] }>('/api/billing/payment-methods', { silent: true });
+    methods.value = Array.isArray(r?.methods) ? r.methods : [];
+  } catch {
+    methods.value = [];
+  }
+}
+
+async function loadMyOrders(): Promise<void> {
+  try {
+    const r = await get<{ orders: OrderView[] }>('/api/billing/orders', { silent: true });
+    myOrders.value = Array.isArray(r?.orders) ? r.orders : [];
+  } catch {
+    myOrders.value = [];
+  }
+}
+
+function openBuy(p: BillingPlan): void {
+  buyPlan.value = p;
+  buyMonths.value = 1;
+  buyMethod.value = methods.value[0]?.key ?? '';
+  showBuy.value = true;
+}
+
+async function submitBuy(): Promise<void> {
+  if (!canSubmitBuy.value || !buyPlan.value) return;
+  buySubmitting.value = true;
+  try {
+    const r = await post<{ order: OrderView }>('/api/billing/checkout', {
+      planKey: buyPlan.value.key,
+      months: buyMonthsNum.value,
+      providerKey: buyMethod.value,
+    });
+    showBuy.value = false;
+    activeOrder.value = r.order;
+  } catch {
+    // client 已弹错误 toast
+  } finally {
+    buySubmitting.value = false;
+  }
+}
+
+// 支付弹窗：二维码渲染 + 3s 轮询
+watch(activeOrder, async (order) => {
+  stopPolling();
+  qrDataUrl.value = '';
+  if (!order) return;
+  if (order.qrCode) {
+    try {
+      qrDataUrl.value = await QRCode.toDataURL(order.qrCode, { width: 220, margin: 1 });
+    } catch {
+      qrDataUrl.value = '';
+    }
+  }
+  if (order.status === 'pending') startPolling(order.orderNo);
+});
+
+function startPolling(orderNo: string): void {
+  pollTimer = window.setInterval(() => void pollOrder(orderNo), 3000);
+}
+function stopPolling(): void {
+  if (pollTimer !== null) {
+    window.clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+async function pollOrder(orderNo: string): Promise<void> {
+  try {
+    const r = await get<{ order: OrderView }>(`/api/billing/orders/${orderNo}`, { silent: true });
+    if (activeOrder.value?.orderNo !== orderNo) return;
+    const prevQr = activeOrder.value.qrCode;
+    activeOrder.value = { ...r.order, qrCode: prevQr ?? r.order.qrCode };
+    if (r.order.status !== 'pending') {
+      stopPolling();
+      if (r.order.status === 'completed') {
+        toast.success(t('billing.paySuccess'));
+        await Promise.all([loadCore(), loadMyOrders()]);
+      }
+    }
+  } catch {
+    // 轮询失败下轮重试
+  }
+}
+
+async function cancelActiveOrder(): Promise<void> {
+  const order = activeOrder.value;
+  if (!order) return;
+  try {
+    await post(`/api/billing/orders/${order.orderNo}/cancel`);
+  } catch {
+    // client 已弹错误 toast
+  }
+  closePayModal();
+  void loadMyOrders();
+}
+
+function closePayModal(): void {
+  stopPolling();
+  activeOrder.value = null;
+}
+
+onBeforeUnmount(stopPolling);
+
+const orderColumns = computed<TableColumn[]>(() => [
+  { key: 'orderNo', label: t('billing.colOrderNo'), mono: true },
+  { key: 'planKey', label: t('billing.plan') },
+  { key: 'months', label: t('billing.durationMonths'), align: 'right', width: '80px' },
+  { key: 'amount', label: t('billing.colAmount'), align: 'right', width: '100px' },
+  { key: 'providerKey', label: t('billing.colProvider'), width: '110px' },
+  { key: 'status', label: t('billing.colStatus'), width: '110px' },
+  { key: 'createdAt', label: t('billing.colCreated'), align: 'right', width: '120px' },
+]);
+const orderRows = computed<Record<string, unknown>[]>(() => myOrders.value as unknown as Record<string, unknown>[]);
+function asOrder(r: Record<string, unknown>): OrderView {
+  return r as unknown as OrderView;
+}
+function methodName(key: string): string {
+  return methods.value.find((m) => m.key === key)?.name ?? key;
+}
+function orderStatusText(s: string): string {
+  const known = ['pending', 'paid', 'completed', 'expired', 'failed', 'cancelled'];
+  return known.includes(s) ? t(`billing.orderStatus.${s}`) : s;
+}
+
+// ---- root：收款渠道配置 ----
+const providers = ref<ProviderView[]>([]);
+const showProvider = ref(false);
+const pKey = ref<string | number>('alipay');
+const pName = ref('');
+const pMode = ref<string | number>('');
+const pEnabled = ref(true);
+const pConfigText = ref('');
+const pSubmitting = ref(false);
+
+const PROVIDER_KEYS: Record<string, string[]> = {
+  alipay: ['appId', 'privateKey', 'alipayPublicKey', 'notifyUrl'],
+  wxpay: ['appId', 'mchId', 'privateKey', 'apiV3Key', 'certSerial', 'notifyUrl'],
+  usdt: ['apiKey', 'appId', 'webhookSecret'],
+};
+const providerKeyOptions: SelectOption[] = [
+  { value: 'alipay', label: 'Alipay' },
+  { value: 'wxpay', label: 'WeChat Pay' },
+  { value: 'usdt', label: 'USDT' },
+];
+const providerModeOptions = computed<SelectOption[]>(() => [
+  { value: '', label: t('billing.modeQr') },
+  { value: 'redirect', label: t('billing.modeRedirect') },
+]);
+const pRequiredKeys = computed(() => PROVIDER_KEYS[String(pKey.value)] ?? []);
+const existingProvider = computed(() => providers.value.find((p) => p.key === String(pKey.value)) ?? null);
+
+async function loadProviders(): Promise<void> {
+  try {
+    const r = await get<{ providers: ProviderView[] }>('/api/billing/providers', { silent: true });
+    providers.value = Array.isArray(r?.providers) ? r.providers : [];
+  } catch {
+    providers.value = [];
+  }
+}
+
+function openProvider(key?: string): void {
+  const existing = key !== undefined ? providers.value.find((p) => p.key === key) : undefined;
+  pKey.value = existing?.key ?? 'alipay';
+  pName.value = existing?.name ?? '';
+  pMode.value = existing?.paymentMode ?? '';
+  pEnabled.value = existing?.enabled ?? true;
+  pConfigText.value = '';
+  showProvider.value = true;
+}
+
+async function submitProvider(): Promise<void> {
+  let config: Record<string, string> | undefined;
+  if (pConfigText.value.trim() !== '') {
+    try {
+      const parsed = JSON.parse(pConfigText.value) as Record<string, unknown>;
+      config = Object.fromEntries(Object.entries(parsed).map(([k, v]) => [k, String(v)]));
+    } catch {
+      toast.error(t('billing.providerConfigInvalid'));
+      return;
+    }
+  }
+  pSubmitting.value = true;
+  try {
+    await post('/api/billing/providers', {
+      key: pKey.value,
+      name: pName.value.trim() || String(pKey.value),
+      enabled: pEnabled.value,
+      sortOrder: existingProvider.value?.sortOrder ?? providers.value.length,
+      paymentMode: pMode.value,
+      ...(config !== undefined ? { config } : {}),
+    });
+    toast.success(t('billing.providerSaved'));
+    showProvider.value = false;
+    await Promise.all([loadProviders(), loadMethods()]);
+  } catch {
+    // client 已弹错误 toast
+  } finally {
+    pSubmitting.value = false;
+  }
+}
+
+async function removeProvider(key: string): Promise<void> {
+  try {
+    await del(`/api/billing/providers/${key}`);
+    toast.success(t('billing.providerDeleted'));
+    await Promise.all([loadProviders(), loadMethods()]);
+  } catch {
+    // client 已弹错误 toast
+  }
+}
+
 // 取消订阅
 const cancelTarget = ref<SubscriptionRow | null>(null);
 const cancelling = ref(false);
@@ -345,9 +616,88 @@ async function doCancel(): Promise<void> {
               <span class="min-w-0">{{ f }}</span>
             </li>
           </ul>
+
+          <div v-if="selfServe && p.priceMonthly > 0" class="mt-auto pt-4">
+            <Button
+              block
+              :variant="isCurrentPlan(p.key) ? 'outline' : 'primary'"
+              :disabled="methods.length === 0"
+              @click="openBuy(p)"
+            >
+              <Wallet :size="14" />
+              {{ isCurrentPlan(p.key) ? t('billing.renew') : t('billing.buy') }}
+            </Button>
+            <p v-if="methods.length === 0" class="mt-1.5 text-center text-[11px] text-muted/80">
+              {{ t('billing.noPayMethods') }}
+            </p>
+          </div>
         </article>
       </div>
     </section>
+
+    <!-- 我的订单 -->
+    <Card v-if="selfServe && myOrders.length > 0" :padded="false">
+      <template #title>{{ t('billing.myOrders') }}</template>
+      <Table :columns="orderColumns" :rows="orderRows" row-key="orderNo" :empty="t('billing.noOrders')">
+        <template #cell-planKey="{ row }">{{ planTitle(String(row.planKey)) }}</template>
+        <template #cell-amount="{ row }">
+          <span class="tnum">¥{{ asOrder(row).amount.toFixed(2) }}</span>
+        </template>
+        <template #cell-providerKey="{ row }">{{ methodName(String(row.providerKey)) }}</template>
+        <template #cell-status="{ row }">
+          <Badge
+            :tone="
+              asOrder(row).status === 'completed'
+                ? 'green'
+                : asOrder(row).status === 'pending'
+                  ? 'amber'
+                  : 'muted'
+            "
+            size="sm"
+          >
+            {{ orderStatusText(asOrder(row).status) }}
+          </Badge>
+        </template>
+        <template #cell-createdAt="{ row }">{{ fmtDate(asOrder(row).createdAt) }}</template>
+      </Table>
+    </Card>
+
+    <!-- root：收款渠道 -->
+    <Card v-if="isRoot" :padded="false">
+      <template #title>{{ t('billing.providersSection') }}</template>
+      <template #actions>
+        <Button v-if="canWrite" size="sm" variant="primary" @click="openProvider()">
+          <Plus :size="14" /> {{ t('billing.addProvider') }}
+        </Button>
+      </template>
+      <div v-if="providers.length === 0" class="p-8">
+        <EmptyState :title="t('billing.noProviders')" :description="t('billing.noProvidersDesc')" />
+      </div>
+      <div v-else class="divide-y divide-border/60">
+        <div v-for="p in providers" :key="p.key" class="flex items-center justify-between gap-3 px-4 py-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-[13px] font-medium">{{ p.name }}</span>
+              <Badge tone="muted" size="sm" mono>{{ p.key }}</Badge>
+              <Badge :tone="p.enabled ? 'green' : 'muted'" size="sm">
+                {{ p.enabled ? t('billing.providerEnabled') : t('billing.providerDisabled') }}
+              </Badge>
+            </div>
+            <p class="mt-1 truncate text-[11px] text-muted/80">
+              {{ t('billing.configuredKeys') }}: {{ p.configKeys.length > 0 ? p.configKeys.join(', ') : '—' }}
+            </p>
+          </div>
+          <div class="flex shrink-0 items-center gap-1">
+            <Button v-if="canWrite" size="sm" variant="ghost" @click="openProvider(p.key)">
+              {{ t('common.edit') }}
+            </Button>
+            <Button v-if="canWrite" size="sm" variant="ghost" @click="removeProvider(p.key)">
+              {{ t('common.delete') }}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Card>
 
     <!-- root：订阅管理 -->
     <Card v-if="isRoot" :padded="false">
@@ -415,6 +765,117 @@ async function doCancel(): Promise<void> {
         <Button variant="primary" :disabled="!canSubmitGrant" :loading="submitting" @click="submitGrant">
           {{ t('billing.confirmGrant') }}
         </Button>
+      </template>
+    </Modal>
+
+    <!-- 购买 Modal -->
+    <Modal v-model:open="showBuy" :title="t('billing.buyModalTitle', { plan: buyPlan?.title ?? '' })" width="460px">
+      <div class="space-y-4">
+        <Field :label="t('billing.durationMonths')" required :hint="t('billing.durationHint')">
+          <Input v-model="buyMonths" type="number" placeholder="1" autofocus />
+        </Field>
+        <Field :label="t('billing.payMethod')" required>
+          <Select v-model="buyMethod" :options="methodOptions" :placeholder="t('billing.selectPayMethod')" />
+        </Field>
+        <div class="flex items-baseline justify-between rounded-lg border border-border bg-panel-2/50 px-3 py-2.5">
+          <span class="text-xs text-muted">{{ t('billing.totalAmount') }}</span>
+          <span class="tnum text-lg font-semibold">{{ buyTotal !== null ? `¥${buyTotal.toFixed(2)}` : '—' }}</span>
+        </div>
+      </div>
+      <template #footer>
+        <Button variant="ghost" :disabled="buySubmitting" @click="showBuy = false">{{ t('common.cancel') }}</Button>
+        <Button variant="primary" :disabled="!canSubmitBuy" :loading="buySubmitting" @click="submitBuy">
+          {{ t('billing.createOrder') }}
+        </Button>
+      </template>
+    </Modal>
+
+    <!-- 支付 Modal（二维码 / 跳转 + 轮询） -->
+    <Modal
+      :open="activeOrder !== null"
+      :title="t('billing.payModalTitle')"
+      width="400px"
+      @update:open="(v: boolean) => { if (!v) closePayModal(); }"
+    >
+      <div v-if="activeOrder" class="space-y-4 text-center">
+        <p class="text-xs text-muted">
+          <span class="font-mono">{{ activeOrder.orderNo }}</span>
+          · {{ planTitle(activeOrder.planKey) }} × {{ activeOrder.months }}
+        </p>
+        <p class="tnum text-2xl font-semibold">¥{{ activeOrder.amount.toFixed(2) }}</p>
+
+        <template v-if="activeOrder.status === 'pending'">
+          <div v-if="qrDataUrl" class="flex flex-col items-center gap-2">
+            <img :src="qrDataUrl" alt="QR" class="rounded-xl border border-border bg-white p-2" width="220" height="220" />
+            <p class="flex items-center gap-1.5 text-xs text-muted">
+              <QrCode :size="13" /> {{ t('billing.scanToPay', { method: methodName(activeOrder.providerKey) }) }}
+            </p>
+          </div>
+          <div v-else-if="activeOrder.payUrl" class="py-2">
+            <a :href="activeOrder.payUrl" target="_blank" rel="noopener">
+              <Button variant="primary" block>
+                <ExternalLink :size="14" /> {{ t('billing.openPayPage') }}
+              </Button>
+            </a>
+            <p class="mt-2 text-xs text-muted">{{ t('billing.payPageNote') }}</p>
+          </div>
+          <p class="text-[11px] text-muted/80">{{ t('billing.waitingPayment') }}</p>
+        </template>
+
+        <div v-else-if="activeOrder.status === 'completed'" class="py-3">
+          <p class="flex items-center justify-center gap-1.5 text-sm font-medium text-green">
+            <Check :size="16" /> {{ t('billing.paySuccess') }}
+          </p>
+        </div>
+
+        <div v-else class="py-3">
+          <p class="text-sm text-muted">{{ orderStatusText(activeOrder.status) }}</p>
+        </div>
+      </div>
+      <template #footer>
+        <Button
+          v-if="activeOrder?.status === 'pending'"
+          variant="ghost"
+          @click="cancelActiveOrder"
+        >
+          {{ t('billing.cancelOrder') }}
+        </Button>
+        <Button variant="outline" @click="closePayModal">{{ t('common.close') }}</Button>
+      </template>
+    </Modal>
+
+    <!-- 收款渠道 Modal（root） -->
+    <Modal v-model:open="showProvider" :title="t('billing.providerModalTitle')" width="520px">
+      <div class="space-y-4">
+        <Field :label="t('billing.providerKey')" required>
+          <Select v-model="pKey" :options="providerKeyOptions" />
+        </Field>
+        <Field :label="t('billing.providerName')" required>
+          <Input v-model="pName" :placeholder="String(pKey)" />
+        </Field>
+        <Field :label="t('billing.providerMode')">
+          <Select v-model="pMode" :options="providerModeOptions" />
+        </Field>
+        <Field
+          :label="t('billing.providerConfig')"
+          :hint="t('billing.providerConfigHint', { keys: pRequiredKeys.join(', ') })"
+          :required="existingProvider === null"
+        >
+          <textarea
+            v-model="pConfigText"
+            rows="6"
+            class="w-full rounded-lg border border-border bg-panel-2/50 px-3 py-2 font-mono text-xs outline-none focus:border-accent/60"
+            :placeholder="existingProvider !== null ? t('billing.providerConfigKeep') : `{\n  &quot;${pRequiredKeys[0] ?? 'key'}&quot;: &quot;...&quot;\n}`"
+          ></textarea>
+        </Field>
+        <label class="flex items-center gap-2 text-xs text-muted">
+          <input v-model="pEnabled" type="checkbox" class="accent-[var(--color-accent)]" />
+          {{ t('billing.providerEnabled') }}
+        </label>
+      </div>
+      <template #footer>
+        <Button variant="ghost" :disabled="pSubmitting" @click="showProvider = false">{{ t('common.cancel') }}</Button>
+        <Button variant="primary" :loading="pSubmitting" @click="submitProvider">{{ t('common.save') }}</Button>
       </template>
     </Modal>
 
