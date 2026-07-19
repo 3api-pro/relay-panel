@@ -77,9 +77,14 @@ export interface PullResult {
 
 /**
  * 增量拉取一轮：对全部 active 且带 meter_key_ref 的授权，
- * from = 该 grant 最新 gateway 行的 period_end（首拉退化为 grant.created_at），to = now。
+ * from = 该 grant 最新 gateway 行的 period_end（首拉用 epoch 全量拉），to = now。
  * 只看 gateway 源的水位——manual 补账不推进网关拉取窗口（手工行是修正，不代表网关已出账）。
+ * 🔴 首拉不用 grant.createdAt：①defaultNow 列存的是 PG 会话时区（生产=Asia/Shanghai）的
+ * 墙钟时间，当 UTC 解析会把 from 推到未来、永远拉空（7/19 真机事故）；②首个桶的
+ * periodStart 会早于授权创建时刻，按 createdAt 过滤会漏掉授权当桶。网关按 keyRef
+ * 只存本授权的行 + upsert 幂等，epoch 全量首拉零风险。
  */
+const EPOCH = new Date(0);
 export async function pullOnce(db: Db, gateway: MeteringGateway, now: Date = new Date()): Promise<PullResult> {
   const grants = await db.orm
     .select()
@@ -95,8 +100,7 @@ export async function pullOnce(db: Db, gateway: MeteringGateway, now: Date = new
         .where(and(eq(usageLedger.grantId, grant.id), eq(usageLedger.source, 'gateway')))
         .orderBy(desc(usageLedger.periodEnd))
         .limit(1);
-      const from =
-        latest[0] !== undefined ? fromPgTimestamp(latest[0].periodEnd) : fromPgTimestamp(grant.createdAt);
+      const from = latest[0] !== undefined ? fromPgTimestamp(latest[0].periodEnd) : EPOCH;
       const rows = await gateway.pullUsage(grant.meterKeyRef!, from, now);
       result.rows += await upsertRows(db, grant.id, rows, 'gateway');
       result.grants += 1;

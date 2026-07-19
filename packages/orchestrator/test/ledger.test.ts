@@ -168,7 +168,7 @@ describe('pullOnce 增量窗口', () => {
   const j2 = row(6, 2, { requests: 20, upstreamCost: 0.2, billedCost: 0.6 });
   const j3 = row(6, 3, { requests: 30, upstreamCost: 0.3, billedCost: 0.9 });
 
-  it('首拉 from=grant.created_at；byo 授权不拉取', async () => {
+  it('首拉 from=epoch（不信 createdAt：defaultNow 是会话时区墙钟且授权当桶 periodStart 早于创建时刻）；byo 授权不拉取', async () => {
     gw.setUsage('meter-b', [j1, j2]);
     const now = new Date('2026-06-10T00:00:00.000Z');
     const result = await pullOnce(ts.db, gw, now);
@@ -178,7 +178,7 @@ describe('pullOnce 增量窗口', () => {
     expect(rows).toHaveLength(2);
 
     const call = calls.find((c) => c.keyRef === 'meter-b');
-    expect(call!.from.getTime()).toBe(new Date('2026-06-01T00:00:00.000Z').getTime());
+    expect(call!.from.getTime()).toBe(0);
     expect(call!.to.getTime()).toBe(now.getTime());
     // g3 无 meterKeyRef，绝不出现在拉取里
     expect(calls.some((c) => c.keyRef === '13' || c.keyRef === '')).toBe(false);
