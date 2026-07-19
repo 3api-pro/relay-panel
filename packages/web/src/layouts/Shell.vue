@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, provide, type Component } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import {
   Bell,
@@ -27,7 +27,6 @@ import LanguageSwitcher from '../components/LanguageSwitcher.vue';
  * 导航文案走 i18n t('nav.*')。
  */
 const route = useRoute();
-const router = useRouter();
 const { t } = useI18n();
 
 provide('canWrite', session.canWrite);
@@ -82,7 +81,8 @@ const pageTitle = computed(() => {
 
 async function onLogout(): Promise<void> {
   await session.logout();
-  await router.push('/login');
+  // 硬跳转而非 SPA 路由：彻底重置内存态并绕过浏览器 bfcache（后退键复现已登录页）
+  window.location.assign('/login');
 }
 </script>
 

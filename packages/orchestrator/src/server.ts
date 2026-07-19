@@ -112,6 +112,15 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
 
   await app.register(fastifyCookie);
 
+  // ---- 防缓存：/api/* 响应一律 no-store，杜绝浏览器/中间层缓存鉴权响应 ----
+  // （否则 GET /api/auth/me 的"已登录"响应会被浏览器缓存，登出后访问首页守卫拿到旧响应 → 误进后台）
+  app.addHook('onSend', async (req, reply) => {
+    if (pathOf(req.url).startsWith('/api/')) {
+      reply.header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      reply.header('Pragma', 'no-cache');
+    }
+  });
+
   // ---- CSRF 钩子：非 GET 的 /api/* 若带 Origin 且 host 部分 != 请求 Host → 403 ----
   app.addHook('onRequest', async (req, reply) => {
     if (req.method === 'GET') return;
