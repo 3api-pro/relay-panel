@@ -24,7 +24,19 @@
 - 行为：告警 open / resolve 时 POST 一条 JSON（含事件类型、告警、站点概要），5s 超时，失败只记 warn 日志不重试——webhook 是尽力而为的通知面，**告警的事实以面板/DB 为准**。
 - 接飞书/钉钉/Slack 等需要特定报文格式时，中间加一层转换服务即可。
 
-### 1.3 Prometheus 抓取
+### 1.3 邮件通知
+
+告警 open / resolve 也可发到真人邮箱，与 webhook 相互独立、同时生效。
+
+- **服务端配置（一次性）**：设 SMTP 出信环境变量（详见 [SELF-HOST.md](SELF-HOST.md) §3）：
+  - `RP_SMTP_HOST` / `RP_SMTP_PORT` / `RP_SMTP_FROM` 三者必填才启用；
+  - `RP_SMTP_PORT=465` 走隐式 TLS，`587`/`25` 走 STARTTLS（上游通告 STARTTLS 时自动升级）；
+  - `RP_SMTP_USER` / `RP_SMTP_PASS` 可选，填了走 AUTH LOGIN。**凭据只在内存，绝不入库/日志/告警内容**。
+- **收件人（可随时改）**：面板 设置 → 告警 → 通知设置 里填「告警邮箱」，或 `PUT /api/settings/alerts {"alertEmailTo":"ops@example.com"}`（root）。存 `app_settings['alert_email_to']`，每次告警现读、即时生效；留空即停用邮件。
+- **行为**：主题形如 `[relay-panel 告警] <站点> <类型>`（恢复时 `[relay-panel 恢复]`），正文中文纯文本，含站点 slug/label、类型、详情（上游文本已脱敏）、open/resolve、UTC 时间。连接与命令各自超时；发信失败只记 warn 日志、不重试、不反噬监控循环——**告警事实仍以面板/DB 为准**。
+- SMTP 未配或收件人为空 → 静默跳过，不影响 webhook 与告警落库。
+
+### 1.4 Prometheus 抓取
 
 `GET /metrics`（`Authorization: Bearer <RP_METRICS_TOKEN>`）暴露：
 

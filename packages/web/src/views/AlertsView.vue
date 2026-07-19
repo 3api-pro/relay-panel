@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, onMounted, ref, type ComputedRef } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { BellRing, Check, CircleCheck, RefreshCw, ShieldCheck, TriangleAlert, Webhook } from 'lucide-vue-next';
+import { BellRing, Check, CircleCheck, Mail, RefreshCw, ShieldCheck, TriangleAlert, Webhook } from 'lucide-vue-next';
 import { get, post, put, ApiError } from '../api/client';
 import { session } from '../api/session';
 import type { AlertSettings, AlertsResponse, AlertResolveResponse, AlertView } from '../api/types';
@@ -134,16 +134,23 @@ const settingsLoading = ref(false);
 const settingsSaving = ref(false);
 const webhookUrl = ref('');
 const webhookError = ref('');
+const alertEmailTo = ref('');
+const emailError = ref('');
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 async function openSettings(): Promise<void> {
   settingsOpen.value = true;
   webhookError.value = '';
+  emailError.value = '';
   settingsLoading.value = true;
   try {
     const res = await get<AlertSettings>('/api/settings/alerts', { silent: true });
     webhookUrl.value = res?.webhookUrl ?? '';
+    alertEmailTo.value = res?.alertEmailTo ?? '';
   } catch (err) {
     webhookUrl.value = '';
+    alertEmailTo.value = '';
     toast.error(err instanceof ApiError ? err.message : t('alerts.settingsLoadFailed'));
     settingsOpen.value = false;
   } finally {
@@ -152,17 +159,26 @@ async function openSettings(): Promise<void> {
 }
 
 async function saveSettings(): Promise<void> {
-  const trimmed = webhookUrl.value.trim();
-  if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+  const trimmedUrl = webhookUrl.value.trim();
+  const trimmedEmail = alertEmailTo.value.trim();
+  if (trimmedUrl && !/^https?:\/\//i.test(trimmedUrl)) {
     webhookError.value = t('alerts.webhookInvalid');
     return;
   }
+  if (trimmedEmail && !EMAIL_RE.test(trimmedEmail)) {
+    emailError.value = t('alerts.emailInvalid');
+    return;
+  }
   webhookError.value = '';
+  emailError.value = '';
   settingsSaving.value = true;
   try {
-    // 清空 = 停用推送
-    await put<AlertSettings>('/api/settings/alerts', { webhookUrl: trimmed || null });
-    toast.success(trimmed ? t('alerts.webhookSaved') : t('alerts.pushDisabled'));
+    // 清空 = 停用对应渠道
+    await put<AlertSettings>('/api/settings/alerts', {
+      webhookUrl: trimmedUrl || null,
+      alertEmailTo: trimmedEmail || null,
+    });
+    toast.success(t('alerts.settingsSaved'));
     settingsOpen.value = false;
   } catch {
     // client 已弹错误
@@ -310,21 +326,45 @@ async function saveSettings(): Promise<void> {
         <div v-if="settingsLoading" class="py-2">
           <Skeleton :lines="2" />
         </div>
-        <Field
-          v-else
-          :label="t('alerts.webhookLabel')"
-          :error="webhookError"
-          :hint="t('alerts.webhookHint')"
-        >
-          <Input
-            v-model="webhookUrl"
-            type="url"
-            mono
-            placeholder="https://example.com/webhook"
-            :disabled="settingsSaving"
-            autocomplete="off"
-          />
-        </Field>
+        <template v-else>
+          <Field
+            :label="t('alerts.webhookLabel')"
+            :error="webhookError"
+            :hint="t('alerts.webhookHint')"
+          >
+            <Input
+              v-model="webhookUrl"
+              type="url"
+              mono
+              placeholder="https://example.com/webhook"
+              :disabled="settingsSaving"
+              autocomplete="off"
+            />
+          </Field>
+
+          <div class="flex items-start gap-3 border-t border-border/60 pt-4">
+            <div class="mt-0.5 rounded-lg border border-accent/25 bg-accent/10 p-2 text-accent">
+              <Mail :size="16" />
+            </div>
+            <p class="text-[13px] leading-relaxed text-muted">
+              {{ t('alerts.emailDesc') }}
+            </p>
+          </div>
+          <Field
+            :label="t('alerts.emailLabel')"
+            :error="emailError"
+            :hint="t('alerts.emailHint')"
+          >
+            <Input
+              v-model="alertEmailTo"
+              type="email"
+              mono
+              placeholder="alerts@example.com"
+              :disabled="settingsSaving"
+              autocomplete="off"
+            />
+          </Field>
+        </template>
       </div>
 
       <template #footer>

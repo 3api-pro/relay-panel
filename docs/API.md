@@ -419,8 +419,8 @@ relay-panel 编排器（orchestrator）的 HTTP API 全表。默认监听 `http:
 |---|---|---|---|
 | GET | `/api/alerts?status=open|resolved|all` | 所有 | 默认 open；operator 只看 own 站 |
 | POST | `/api/alerts/:id/resolve` | 写 | 手动关闭 |
-| GET | `/api/settings/alerts` | root | 读 webhook 配置 |
-| PUT | `/api/settings/alerts` | root | `{ "webhookUrl": "https://hook.example.com/alerts" }` |
+| GET | `/api/settings/alerts` | root | 读通知配置 → `{ "webhookUrl": …, "alertEmailTo": … }`（未配置为 null） |
+| PUT | `/api/settings/alerts` | root | `{ "webhookUrl"?: "https://hook.example.com/alerts", "alertEmailTo"?: "ops@example.com" }`；字段可选（未传不改），`""`/`null` 清除。邮件另需服务端 `RP_SMTP_*`（见 [SELF-HOST.md](SELF-HOST.md)） |
 
 ```json
 // GET /api/alerts → 200

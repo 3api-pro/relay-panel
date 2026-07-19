@@ -22,6 +22,11 @@
   "webhookInvalid": "仅支持 http:// 或 https:// 开头的地址",
   "webhookSaved": "通知 webhook 已保存",
   "pushDisabled": "已停用告警推送",
+  "settingsSaved": "通知设置已保存",
+  "emailDesc": "把告警同时发送到指定邮箱。仅在服务端配置 SMTP 后生效。",
+  "emailLabel": "告警邮箱",
+  "emailHint": "接收告警的邮箱地址；须在服务端配置 RP_SMTP_* 环境变量后方可实际发信，留空则停用邮件。",
+  "emailInvalid": "请输入合法的邮箱地址",
   "settingsLoadFailed": "读取通知设置失败",
   "severity": {
     "critical": "严重",

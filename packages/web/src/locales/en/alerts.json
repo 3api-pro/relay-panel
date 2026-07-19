@@ -22,6 +22,11 @@
   "webhookInvalid": "Only addresses starting with http:// or https:// are supported",
   "webhookSaved": "Notification webhook saved",
   "pushDisabled": "Alert push disabled",
+  "settingsSaved": "Notification settings saved",
+  "emailDesc": "Also deliver alerts to a mailbox. Takes effect only after SMTP is configured on the server.",
+  "emailLabel": "Alert email",
+  "emailHint": "Recipient address for alert emails. Requires RP_SMTP_* environment variables on the server; leave empty to disable email.",
+  "emailInvalid": "Please enter a valid email address",
   "settingsLoadFailed": "Failed to load notification settings",
   "severity": {
     "critical": "Critical",
