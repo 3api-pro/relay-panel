@@ -73,19 +73,26 @@ groups:
 ### 2.2 一键备份
 
 ```bash
+# 生产（已构建）：
+node packages/orchestrator/dist/cli.js backup --out /backup/relay-panel
+# 开发（源码直跑）：
 node --experimental-strip-types packages/orchestrator/src/cli.ts backup --out /backup/relay-panel
 ```
+
+前置：pg 模式需要 `pg_dump` 在 `PATH` 上（Windows 加 PostgreSQL 安装目录的 `bin`）。
 
 产物按时间戳分目录：
 
 ```
 /backup/relay-panel/<ts>/
-  orchestrator.dump          # 编排器 DB（pg）或 pglite 目录拷贝
+  orchestrator.sql           # 编排器 DB（pg）；pglite 模式则是目录拷贝 orchestrator-db/
+  manifest.json              # 清单（不含凭据）
   site-site-a.sql            # 每个 managed compose 站的引擎库 dump
   site-site-b.sql
 ```
 
 - 输出不含任何明文凭据（编排器 dump 里凭据本来就是密文）。
+- 备份结束默认向源库写一条 `backup.run` 审计（尽力而为，失败不影响备份本身）；用只读账号跑或要求对源库零写入时加 `--no-audit`。
 - 建议 cron 每日执行 + 异地同步；备份文件与 `RP_SECRET_KEY` 分开存放（同处即等于明文备份）。
 - docker 部署时在 orchestrator 容器内执行同命令（compose exec），备份目录挂宿主卷。
 
@@ -94,10 +101,17 @@ node --experimental-strip-types packages/orchestrator/src/cli.ts backup --out /b
 ```bash
 # 1. 停面板（docker compose stop orchestrator 或停进程）
 # 2. 恢复 DB
-node --experimental-strip-types packages/orchestrator/src/cli.ts restore --db /backup/relay-panel/<ts>/orchestrator.dump
+node packages/orchestrator/dist/cli.js restore --db /backup/relay-panel/<ts>/orchestrator.sql
 #    pg: 经 psql 灌入；pglite: 目录替换（必须停机状态）
 # 3. 起面板；确认 RP_SECRET_KEY 与备份时一致，否则 enc: 凭据不可解
 ```
+
+前置与限制（2026-07 真机演练结论）：
+
+- **恢复引擎必须与备份引擎一致**：`orchestrator.sql`（pg 备份）只能恢复进 pg，pglite 目录备份只能恢复进 pglite；跨引擎迁移暂不支持。
+- pg 恢复要求 **目标库已存在且为空**——restore 只做 `psql` 灌入、不建库。应用角色通常无 `CREATEDB`，请由 DBA 预建空库（或临时授予权限）。
+- pg 模式需要 `psql` 在 `PATH` 上。
+- 恢复成功后会向**恢复后的库**补一条 `db.restore` 审计（尽力而为）；与备份时点做逐表对账时注意扣除这一行。
 
 ### 2.4 恢复：单站数据（站点级）
 

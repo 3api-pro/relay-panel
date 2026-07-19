@@ -247,6 +247,25 @@ describe('performBackup', () => {
     expect(audits[audits.length - 1]!.ok).toBe(true);
   });
 
+  it('noAudit：备份完成且对源库零写入（不落 backup.run 审计）', async () => {
+    const orchDir = await tempDir('rp-backup-orch-na-');
+    await writeFile(join(orchDir, 'marker.bin'), 'x', 'utf8');
+    const out = await tempDir('rp-backup-out-na-');
+    const { deps } = makeFakeDeps();
+    const config = makeTestConfig({ dbUrl: `pglite:${orchDir}`, sitesRoot });
+
+    const before = (await db.orm.select().from(auditEvents).where(eq(auditEvents.action, 'backup.run'))).length;
+    const result = await performBackup(
+      db,
+      config,
+      { out, now: new Date(Date.UTC(2026, 0, 3, 4, 5, 6)), noAudit: true },
+      deps,
+    );
+    expect(result.manifest.orchestratorDb.kind).toBe('pglite');
+    const after = (await db.orm.select().from(auditEvents).where(eq(auditEvents.action, 'backup.run'))).length;
+    expect(after).toBe(before);
+  });
+
   it('pg 编排器库：pg_dump 命令构造，口令只在 env 不在 argv', async () => {
     const out = await tempDir('rp-backup-out-pg-');
     const { deps, calls } = makeFakeDeps();

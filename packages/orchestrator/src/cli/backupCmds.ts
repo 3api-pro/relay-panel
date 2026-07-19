@@ -16,7 +16,7 @@ import { dockerCompose, type ComposeRef } from '../provision/docker.js';
 
 /**
  * 备份/恢复/接管子命令（规格 §10）：
- *   backup [--out <dir>]     — 编排器 DB（pg→pg_dump / pglite→目录拷贝）
+ *   backup [--out <dir>] [--no-audit] — 编排器 DB（pg→pg_dump / pglite→目录拷贝）
  *                              + 每个 managed='compose' 且非 destroyed 站的引擎 PG dump
  *   restore --db <dump>      — 仅恢复编排器 DB（pg→psql / pglite→目录替换，须停机）
  *   adopt <slug> <baseUrl> --engine <e> --credential-ref <ref> [--label <l>] [--force]
@@ -207,7 +207,7 @@ export interface BackupResult {
 export async function performBackup(
   db: Db,
   config: Config,
-  opts: { out?: string; now?: Date } = {},
+  opts: { out?: string; now?: Date; noAudit?: boolean } = {},
   deps: BackupDeps = defaultBackupDeps,
 ): Promise<BackupResult> {
   const now = opts.now ?? new Date();
@@ -306,17 +306,25 @@ export async function performBackup(
   };
   await writeFile(join(dir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 
-  await writeAudit(db, {
-    actor: 'cli',
-    action: 'backup.run',
-    payload: {
-      stamp,
-      ok: entries.filter((e) => e.status === 'ok').length,
-      skipped: entries.filter((e) => e.status === 'skipped').length,
-      failed: entries.filter((e) => e.status === 'failed').length,
-    },
-    ok: true,
-  });
+  // 尽力而为：备份是读操作，审计写失败（如只读账号/只读生产库）不得让备份本身失败；
+  // --no-audit 可显式跳过，保证对源库零写入。
+  if (opts.noAudit !== true) {
+    try {
+      await writeAudit(db, {
+        actor: 'cli',
+        action: 'backup.run',
+        payload: {
+          stamp,
+          ok: entries.filter((e) => e.status === 'ok').length,
+          skipped: entries.filter((e) => e.status === 'skipped').length,
+          failed: entries.filter((e) => e.status === 'failed').length,
+        },
+        ok: true,
+      });
+    } catch {
+      console.warn('备份完成，但写入审计事件失败（可用 --no-audit 显式跳过）');
+    }
+  }
 
   return { dir, manifest };
 }
@@ -526,7 +534,10 @@ async function cmdBackup(rest: string[]): Promise<number> {
   const db = await makeDb(config.dbUrl);
   try {
     const out = typeof flags['out'] === 'string' ? flags['out'] : undefined;
-    const result = await performBackup(db, config, out !== undefined ? { out } : {});
+    const result = await performBackup(db, config, {
+      ...(out !== undefined ? { out } : {}),
+      ...(flags['no-audit'] === true ? { noAudit: true } : {}),
+    });
     console.log(`备份完成: ${result.dir}`);
     console.log(`  编排器 DB: ${result.manifest.orchestratorDb.kind} → ${result.manifest.orchestratorDb.target}`);
     for (const e of result.manifest.sites) {
@@ -618,7 +629,7 @@ export async function runBackupCommand(argv: string[]): Promise<number> {
     return 1;
   }
   console.log(
-    'usage: backup [--out <dir>] | restore --db <dump> | adopt <slug> <baseUrl> --engine <e> --credential-ref <ref> [--label <label>] [--force]',
+    'usage: backup [--out <dir>] [--no-audit] | restore --db <dump> | adopt <slug> <baseUrl> --engine <e> --credential-ref <ref> [--label <label>] [--force]',
   );
   return 1;
 }

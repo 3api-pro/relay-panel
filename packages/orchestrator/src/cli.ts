@@ -29,7 +29,7 @@ function usage(): void {
       '  import-templates <path>         (渠道市场模板 JSON → DB，按 key 幂等)',
       '',
       '备份/接管:',
-      '  backup [--out <dir>]',
+      '  backup [--out <dir>] [--no-audit]',
       '  restore --db <dump>',
       '  adopt <slug> <baseUrl> --engine <e> --credential-ref <ref> [--label <label>] [--force]',
     ].join('\n'),
