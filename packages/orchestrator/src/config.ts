@@ -11,6 +11,20 @@ export interface PortRange {
   max: number;
 }
 
+/**
+ * 告警邮件通知的 SMTP 出信设置（全部来自 RP_SMTP_* 环境变量）。
+ * 🔴 user/pass 只在内存，绝不入 DB/日志/错误。host+port+from 齐备才算"已配置"。
+ */
+export interface SmtpSettings {
+  host: string;
+  port: number;
+  user?: string;
+  pass?: string;
+  from: string;
+  /** 465 隐式 TLS；587/25 走 STARTTLS/明文（按 port===465 推断） */
+  secure: boolean;
+}
+
 export interface Config {
   /** 监听端口 */
   port: number;
@@ -44,6 +58,8 @@ export interface Config {
   webDist: string;
   /** 设置后 /metrics 可用 Bearer token 免 session 访问 */
   metricsToken?: string;
+  /** 告警邮件出信设置；未配齐（host/port/from）时为 undefined，EmailNotifier 静默跳过 */
+  smtp?: SmtpSettings;
   /** RP_DEMO==='1' 时进入演示模式：纯罐装数据、不连生产、不起容器、公开一键登录（见 src/demo/*） */
   demo: boolean;
 }
@@ -71,6 +87,11 @@ const envSchema = z.object({
   RP_CADDY_ADMIN_URL: z.string().url().optional(),
   RP_WEB_DIST: z.string().default('../web/dist'),
   RP_METRICS_TOKEN: z.string().min(1).optional(),
+  RP_SMTP_HOST: z.string().min(1).optional(),
+  RP_SMTP_PORT: z.coerce.number().int().min(1).max(65535).optional(),
+  RP_SMTP_USER: z.string().min(1).optional(),
+  RP_SMTP_PASS: z.string().min(1).optional(),
+  RP_SMTP_FROM: z.string().email('RP_SMTP_FROM 须为合法邮箱地址').optional(),
   RP_DEMO: z.enum(['0', '1']).default('0'),
 });
 
@@ -94,6 +115,19 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     throw new Error(`RP_PORT_RANGE 无效: ${e.RP_PORT_RANGE}`);
   }
 
+  // SMTP：host/port/from 三者齐备才算已配置；user/pass 可选（有则 AUTH LOGIN）
+  const smtp: SmtpSettings | undefined =
+    e.RP_SMTP_HOST !== undefined && e.RP_SMTP_PORT !== undefined && e.RP_SMTP_FROM !== undefined
+      ? {
+          host: e.RP_SMTP_HOST,
+          port: e.RP_SMTP_PORT,
+          from: e.RP_SMTP_FROM,
+          secure: e.RP_SMTP_PORT === 465,
+          ...(e.RP_SMTP_USER !== undefined ? { user: e.RP_SMTP_USER } : {}),
+          ...(e.RP_SMTP_PASS !== undefined ? { pass: e.RP_SMTP_PASS } : {}),
+        }
+      : undefined;
+
   return {
     port: e.PORT,
     host: e.RP_HOST,
@@ -116,6 +150,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     ...(e.RP_CADDY_ADMIN_URL !== undefined ? { caddyAdminUrl: e.RP_CADDY_ADMIN_URL } : {}),
     webDist: e.RP_WEB_DIST,
     ...(e.RP_METRICS_TOKEN !== undefined ? { metricsToken: e.RP_METRICS_TOKEN } : {}),
+    ...(smtp !== undefined ? { smtp } : {}),
     demo: e.RP_DEMO === '1',
   };
 }

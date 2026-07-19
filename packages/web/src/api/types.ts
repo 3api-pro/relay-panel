@@ -308,6 +308,8 @@ export interface InviteCreatedResponse {
 export interface AlertSettings {
   /** webhook 地址；null/'' 表示未配置（停用推送） */
   webhookUrl: string | null;
+  /** 告警邮箱收件人；null/'' 表示未配置（停用邮件）。需服务端配置 RP_SMTP_* 才实际发信 */
+  alertEmailTo: string | null;
 }
 
 /** POST /api/alerts/:id/resolve 响应（G3） */

@@ -8,14 +8,15 @@ import { ApiError, canAccessSite, requireRoot, requireWrite, type SessionCtx } f
 import { toPgTimestamp } from '../auth/sessions.js';
 import { writeAudit } from '../audit.js';
 import { resolveAlert } from './engine.js';
-import { WEBHOOK_SETTINGS_KEY, type Notifier } from './notify.js';
+import { ALERT_EMAIL_SETTINGS_KEY, WEBHOOK_SETTINGS_KEY, type Notifier } from './notify.js';
 
 /**
  * 告警路由（规格 §8）：
  *  - GET  /api/alerts?status=open|resolved|all（默认 open；operator 只见 own 站，
  *    site_id null 的全局告警仅 root/viewer 可见）
  *  - POST /api/alerts/:id/resolve（requireWrite + 站点归属校验；resolve 触发通知事件）
- *  - GET/PUT /api/settings/alerts（root；webhook 地址存 app_settings['alert_webhook_url']）
+ *  - GET/PUT /api/settings/alerts（root；webhook 地址存 app_settings['alert_webhook_url']，
+ *    告警邮箱存 app_settings['alert_email_to']；两者独立、可分别设置/清除）
  * deps 是 buildServer 完整 deps 的结构化子集，直接传全量对象即可。
  */
 
@@ -27,17 +28,25 @@ export interface AlertsRoutesDeps {
 
 const statusQuery = z.enum(['open', 'resolved', 'all']);
 
-/** webhook 地址：http/https 且长度受限；'' 与 null 均表示清除 */
+/**
+ * 告警通知设置：webhookUrl / alertEmailTo 均可选（未传则不改动该项），
+ * '' 与 null 表示清除该项。webhook 限 http/https；邮箱须合法。
+ */
 const settingsBody = z.object({
-  webhookUrl: z.union([
-    z
-      .string()
-      .url('无效的 webhook 地址')
-      .max(500, 'webhook 地址过长')
-      .refine((u) => u.startsWith('http://') || u.startsWith('https://'), '仅支持 http/https 地址'),
-    z.literal(''),
-    z.null(),
-  ]),
+  webhookUrl: z
+    .union([
+      z
+        .string()
+        .url('无效的 webhook 地址')
+        .max(500, 'webhook 地址过长')
+        .refine((u) => u.startsWith('http://') || u.startsWith('https://'), '仅支持 http/https 地址'),
+      z.literal(''),
+      z.null(),
+    ])
+    .optional(),
+  alertEmailTo: z
+    .union([z.string().email('无效的邮箱地址').max(320, '邮箱地址过长'), z.literal(''), z.null()])
+    .optional(),
 });
 
 const DEFAULT_LIMIT = 100;
@@ -143,16 +152,32 @@ export function registerAlertsRoutes(app: FastifyInstance, deps: AlertsRoutesDep
     return { ok: true, alert: updated ?? row.alert };
   });
 
-  app.get('/api/settings/alerts', async (req) => {
-    const ctx = requireCtx(req);
-    requireRoot(ctx);
+  /** 读某设置行的单字段字符串值（缺失/空串归一为 null） */
+  async function readStringSetting(key: string, field: string): Promise<string | null> {
     const rows = await db.orm
       .select({ value: appSettings.value })
       .from(appSettings)
-      .where(eq(appSettings.key, WEBHOOK_SETTINGS_KEY))
+      .where(eq(appSettings.key, key))
       .limit(1);
-    const url = (rows[0]?.value as { url?: unknown } | undefined)?.url;
-    return { webhookUrl: typeof url === 'string' && url !== '' ? url : null };
+    const v = (rows[0]?.value as Record<string, unknown> | undefined)?.[field];
+    return typeof v === 'string' && v !== '' ? v : null;
+  }
+
+  /** upsert 单字段设置行 */
+  async function writeStringSetting(key: string, field: string, value: string, now: string): Promise<void> {
+    await db.orm
+      .insert(appSettings)
+      .values({ key, value: { [field]: value }, updatedAt: now })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value: { [field]: value }, updatedAt: now } });
+  }
+
+  app.get('/api/settings/alerts', async (req) => {
+    const ctx = requireCtx(req);
+    requireRoot(ctx);
+    return {
+      webhookUrl: await readStringSetting(WEBHOOK_SETTINGS_KEY, 'url'),
+      alertEmailTo: await readStringSetting(ALERT_EMAIL_SETTINGS_KEY, 'email'),
+    };
   });
 
   app.put('/api/settings/alerts', async (req) => {
@@ -164,21 +189,26 @@ export function registerAlertsRoutes(app: FastifyInstance, deps: AlertsRoutesDep
       const issues = parsed.error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`).join('; ');
       throw new ApiError(400, `请求参数无效: ${issues}`);
     }
-    const url = parsed.data.webhookUrl ?? '';
+    const { webhookUrl, alertEmailTo } = parsed.data;
 
     const now = toPgTimestamp(new Date());
-    await db.orm
-      .insert(appSettings)
-      .values({ key: WEBHOOK_SETTINGS_KEY, value: { url }, updatedAt: now })
-      .onConflictDoUpdate({ target: appSettings.key, set: { value: { url }, updatedAt: now } });
+    // 只更新请求里显式给出的项（undefined=不动；'' 或 null=清除）
+    if (webhookUrl !== undefined) {
+      await writeStringSetting(WEBHOOK_SETTINGS_KEY, 'url', webhookUrl ?? '', now);
+    }
+    if (alertEmailTo !== undefined) {
+      await writeStringSetting(ALERT_EMAIL_SETTINGS_KEY, 'email', alertEmailTo ?? '', now);
+    }
 
-    // webhook 地址可能内嵌调用凭据（如带 token 的回调路径），审计只记"是否配置"不记原值
+    const nextWebhook = await readStringSetting(WEBHOOK_SETTINGS_KEY, 'url');
+    const nextEmail = await readStringSetting(ALERT_EMAIL_SETTINGS_KEY, 'email');
+    // webhook 地址可能内嵌调用凭据、邮箱属 PII——审计只记"是否配置"不记原值
     await writeAudit(db, {
       actor: ctx.email,
       action: 'settings.alerts',
-      payload: { hasWebhook: url !== '' },
+      payload: { hasWebhook: nextWebhook !== null, hasEmail: nextEmail !== null },
       ok: true,
     });
-    return { ok: true, webhookUrl: url === '' ? null : url };
+    return { ok: true, webhookUrl: nextWebhook, alertEmailTo: nextEmail };
   });
 }

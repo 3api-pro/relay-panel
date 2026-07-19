@@ -9,7 +9,7 @@ import { makeLifecycles } from './provision/index.js';
 import { JobEngine } from './jobs/engine.js';
 import { lifecycleStepSink, makeStoreCredential } from './sites/service.js';
 import { startMonitor } from './alerts/engine.js';
-import { WebhookNotifier } from './alerts/notify.js';
+import { EmailNotifier, FanoutNotifier, WebhookNotifier } from './alerts/notify.js';
 import { HttpMeteringGateway } from './marketplace/gateway.js';
 import { startPullLoop } from './marketplace/ledger.js';
 import { buildServer, type Notifier } from './server.js';
@@ -72,8 +72,14 @@ if (config.demo) {
     newapi: { sitesRoot: config.sitesRoot, storeCredential, onStep: lifecycleStepSink },
   });
 
-  // G3: webhook 通知器（地址存 app_settings['alert_webhook_url']，未配置时静默跳过）
-  notifier = new WebhookNotifier(db);
+  // G3: 组合通知器 = webhook + email 扇出，两者各自现读设置、各自失败互不影响。
+  //   webhook 地址存 app_settings['alert_webhook_url']；
+  //   email 收件人存 app_settings['alert_email_to']，SMTP 出信凭据来自 RP_SMTP_*（config.smtp，仅内存）；
+  //   任一未配置即静默跳过。
+  notifier = new FanoutNotifier([
+    new WebhookNotifier(db),
+    new EmailNotifier(db, config.smtp ?? null),
+  ]);
 
   // G2: 计量网关装配——RP_METERING_GATEWAY_URL 未配置时保持 null（managed 模板不可启用）
   gateway =

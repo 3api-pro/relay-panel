@@ -604,7 +604,7 @@ describe('告警路由: 权限矩阵与设置', () => {
       cookies: { rp_session: rootCookie },
     });
     expect(initial.statusCode).toBe(200);
-    expect(initial.json()).toEqual({ webhookUrl: null });
+    expect(initial.json()).toEqual({ webhookUrl: null, alertEmailTo: null });
 
     const put = await ts.app.inject({
       method: 'PUT',
@@ -620,7 +620,7 @@ describe('告警路由: 权限矩阵与设置', () => {
       url: '/api/settings/alerts',
       cookies: { rp_session: rootCookie },
     });
-    expect(readBack.json()).toEqual({ webhookUrl: 'https://hooks.example.com/alert' });
+    expect(readBack.json()).toEqual({ webhookUrl: 'https://hooks.example.com/alert', alertEmailTo: null });
 
     // 审计只记"是否配置"，不落地址原值（地址可能内嵌调用凭据）
     const audits = await ts.db.orm
@@ -644,7 +644,7 @@ describe('告警路由: 权限矩阵与设置', () => {
       url: '/api/settings/alerts',
       cookies: { rp_session: rootCookie },
     });
-    expect(cleared.json()).toEqual({ webhookUrl: null });
+    expect(cleared.json()).toEqual({ webhookUrl: null, alertEmailTo: null });
 
     // 非法地址与非 http/https 协议
     for (const badUrl of ['not-a-url', 'ftp://x.example.com/hook']) {
@@ -656,5 +656,68 @@ describe('告警路由: 权限矩阵与设置', () => {
       });
       expect(bad.statusCode, badUrl).toBe(400);
     }
+  });
+
+  it('告警邮箱设置：仅 root 读写 alert_email_to，独立于 webhook，非法邮箱 400，审计不落原值', async () => {
+    // operator/viewer 无权（GET/PUT 均 403）
+    for (const cookie of [opCookie, viewerCookie]) {
+      const p = await ts.app.inject({
+        method: 'PUT',
+        url: '/api/settings/alerts',
+        cookies: { rp_session: cookie },
+        payload: { alertEmailTo: 'ops@example.com' },
+      });
+      expect(p.statusCode).toBe(403);
+    }
+
+    // 设置邮箱（不带 webhookUrl → webhook 不受影响）
+    const put = await ts.app.inject({
+      method: 'PUT',
+      url: '/api/settings/alerts',
+      cookies: { rp_session: rootCookie },
+      payload: { alertEmailTo: 'oncall@example.com' },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(put.json()).toMatchObject({ ok: true, alertEmailTo: 'oncall@example.com', webhookUrl: null });
+
+    const readBack = await ts.app.inject({
+      method: 'GET',
+      url: '/api/settings/alerts',
+      cookies: { rp_session: rootCookie },
+    });
+    expect(readBack.json()).toEqual({ webhookUrl: null, alertEmailTo: 'oncall@example.com' });
+
+    // 审计不落邮箱原值，只记 hasEmail
+    const audits = await ts.db.orm
+      .select()
+      .from(auditEvents)
+      .where(eq(auditEvents.action, 'settings.alerts'));
+    expect(JSON.stringify(audits)).not.toContain('oncall@example.com');
+    expect(audits[audits.length - 1]!.payload).toMatchObject({ hasEmail: true });
+
+    // 非法邮箱 400，且不改动已存值
+    const bad = await ts.app.inject({
+      method: 'PUT',
+      url: '/api/settings/alerts',
+      cookies: { rp_session: rootCookie },
+      payload: { alertEmailTo: 'not-an-email' },
+    });
+    expect(bad.statusCode).toBe(400);
+    const stillSet = await ts.app.inject({
+      method: 'GET',
+      url: '/api/settings/alerts',
+      cookies: { rp_session: rootCookie },
+    });
+    expect((stillSet.json() as { alertEmailTo: string | null }).alertEmailTo).toBe('oncall@example.com');
+
+    // 清空邮箱
+    const clear = await ts.app.inject({
+      method: 'PUT',
+      url: '/api/settings/alerts',
+      cookies: { rp_session: rootCookie },
+      payload: { alertEmailTo: '' },
+    });
+    expect(clear.statusCode).toBe(200);
+    expect(clear.json()).toMatchObject({ alertEmailTo: null });
   });
 });

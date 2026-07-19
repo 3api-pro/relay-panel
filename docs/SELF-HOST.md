@@ -60,6 +60,12 @@ docker compose up -d
 | `RP_CADDY_ADMIN_URL` | 无 | 如 `http://127.0.0.1:2019`；未配置时域名只记 DB 不下发 |
 | `RP_WEB_DIST` | ../web/dist | SPA 构建产物目录（相对 orchestrator 包根；容器镜像内已就位，无需改） |
 | `RP_METRICS_TOKEN` | 无 | 设置后 `/metrics` 可用 `Authorization: Bearer` 免 session 抓取 |
+| `RP_SMTP_HOST` | 无 | 告警邮件 SMTP 服务器主机名。与 `RP_SMTP_PORT`/`RP_SMTP_FROM` 三者齐备才启用邮件通知 |
+| `RP_SMTP_PORT` | 无 | SMTP 端口：`465`=隐式 TLS，`587`/`25`=STARTTLS/明文（自动按端口推断） |
+| `RP_SMTP_USER` / `RP_SMTP_PASS` | 无 | SMTP AUTH LOGIN 账号口令（可选；两者留空则不做认证）。**凭据只在内存，绝不入库/日志** |
+| `RP_SMTP_FROM` | 无 | 告警邮件发件地址（须为合法邮箱） |
+
+> 邮件通知还需在面板「告警 → 通知设置」里填收件人（存 `app_settings['alert_email_to']`，可随时改，即时生效）。SMTP 环境变量与收件人任一缺失即静默不发信。见 [OPERATIONS.md](OPERATIONS.md) §1.3。
 
 空字符串等同未设置（compose 里 `VAR=` 的形态安全）。
 
