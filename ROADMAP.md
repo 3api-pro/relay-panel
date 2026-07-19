@@ -43,12 +43,12 @@ Two tracks. The marketplace is the commercial core; the second engine is the eco
 
 **Acceptance:** enable a channel from the marketplace onto a test site, drive real traffic through the metering key, and see attributed usage + margin in the ledger.
 
-### 🚧 P2.3 — Dogfood
+### ✅ P2.3 — Dogfood · shipped
 - [x] Own fleet (4 production sites) adopted; read-only fuse lifted site-by-site after per-site write smoke (same-value branding round-trip, engine untouched)
 - [x] Panel-driven fleet ops: cross-site channel matrix + batch operations with dry-run preview (preview/execute parity enforced)
 - [x] Alert notifications reach a human: email notifier (SES) live, recipient configured
 - [x] First real backup/restore drill executed against production state (2026-07-19; tooling gaps fixed: best-effort audit, `--no-audit`, restore prerequisites documented)
-- [ ] Validate marketplace settlement math on real traffic (requires metering gateway hookup)
+- [x] Validate marketplace settlement math on real traffic: managed template granted to a production site, real upstream calls metered per-request through the (closed-source) metering gateway, hourly UTC buckets pulled into the ledger — upstream/billed/margin reconciled exactly against hand-computed token costs (2026-07-19)
 
 ---
 
