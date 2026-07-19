@@ -19,6 +19,7 @@ import {
   type SessionMeta,
 } from './sessions.js';
 import { ApiError, authenticate, requireRoot, type OperatorRole, type SessionCtx } from './rbac.js';
+import { SlidingWindowLimiter, clientIp, normalizeEmail } from './ratelimit.js';
 
 /**
  * 认证/账号路由（规格 §4）：/api/auth/*、/api/invites、/api/operators。
@@ -33,6 +34,10 @@ export interface AuthRoutesDeps {
 }
 
 const INVITE_DEFAULT_TTL_HOURS = 168;
+
+/** 限速滑窗（开放注册前置闸 §3）：signup 1 小时窗、login 失败 10 分钟窗 */
+const SIGNUP_WINDOW_MS = 3_600_000;
+const LOGIN_WINDOW_MS = 600_000;
 
 const roleEnum = z.enum(['root', 'operator', 'viewer']);
 
@@ -99,6 +104,8 @@ function isUniqueViolation(err: unknown): boolean {
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): void {
   const { config, db } = deps;
+  // 内存滑窗限速器（单实例进程内共享；本 app 生命周期内有效）
+  const rateLimiter = new SlidingWindowLimiter();
 
   async function getCtx(req: FastifyRequest): Promise<SessionCtx> {
     const preset = (req as FastifyRequest & { ctx?: SessionCtx }).ctx;
@@ -112,8 +119,26 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
 
   app.post('/api/auth/login', async (req, reply) => {
     const body = parseBody(loginBody, req.body);
-    const rows = await db.orm.select().from(operators).where(eq(operators.email, body.email)).limit(1);
-    const op = rows[0];
+    const email = normalizeEmail(body.email);
+    // 限速：单 (真实IP, 账号) 失败次数滑窗；超限退避 429（成功即清零，失败才计数）
+    const loginKey = `login:${clientIp(req)}:${email}`;
+    if (rateLimiter.tooMany(loginKey, LOGIN_WINDOW_MS, config.loginMaxFails)) {
+      await writeAudit(db, {
+        actor: email,
+        action: 'auth.login',
+        payload: { email },
+        ok: false,
+        error: 'rate limited',
+      });
+      throw new ApiError(429, '操作过于频繁，请稍后再试');
+    }
+
+    // 归一化查找；兼容历史未归一化行：归一化未命中时回落原样(小写)再查一次
+    const rawLower = body.email.trim().toLowerCase();
+    let op = (await db.orm.select().from(operators).where(eq(operators.email, email)).limit(1))[0];
+    if (!op && rawLower !== email) {
+      op = (await db.orm.select().from(operators).where(eq(operators.email, rawLower)).limit(1))[0];
+    }
 
     let ok = false;
     let reason = '';
@@ -128,10 +153,11 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
     }
 
     if (!ok || !op) {
+      rateLimiter.record(loginKey); // 失败计数
       await writeAudit(db, {
-        actor: body.email,
+        actor: email,
         action: 'auth.login',
-        payload: { email: body.email },
+        payload: { email },
         ok: false,
         error: reason,
       });
@@ -139,6 +165,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
       throw new ApiError(401, '邮箱或密码错误');
     }
 
+    rateLimiter.clear(loginKey); // 成功清零失败计数
     const { token } = await createSession(db, op.id, config.sessionTtlHours, requestMeta(req));
     await db.orm.update(operators).set({ lastLoginAt: toPgTimestamp(new Date()) }).where(eq(operators.id, op.id));
     await writeAudit(db, { actor: op.email, action: 'auth.login', payload: { email: op.email }, ok: true });
@@ -169,7 +196,29 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
     const body = parseBody(signupBody, req.body);
     if (config.signupMode === 'closed') throw new ApiError(403, '注册已关闭');
 
-    const dup = await db.orm.select({ id: operators.id }).from(operators).where(eq(operators.email, body.email)).limit(1);
+    // 邮箱归一化：gmail 别名(点/+tag)收敛到同一账号，杜绝派生海量小号
+    const email = normalizeEmail(body.email);
+
+    // 限速：单 IP + 单邮箱双维度滑窗（超任一即拒），CF-Connecting-IP 取真实 IP
+    const ipKey = `signup:ip:${clientIp(req)}`;
+    const emailKey = `signup:email:${email}`;
+    if (
+      rateLimiter.tooMany(ipKey, SIGNUP_WINDOW_MS, config.signupMaxPerIp) ||
+      rateLimiter.tooMany(emailKey, SIGNUP_WINDOW_MS, config.signupMaxPerEmail)
+    ) {
+      await writeAudit(db, {
+        actor: email,
+        action: 'auth.signup',
+        payload: { email, mode: config.signupMode },
+        ok: false,
+        error: 'rate limited',
+      });
+      throw new ApiError(429, '操作过于频繁，请稍后再试');
+    }
+    rateLimiter.record(ipKey);
+    rateLimiter.record(emailKey);
+
+    const dup = await db.orm.select({ id: operators.id }).from(operators).where(eq(operators.email, email)).limit(1);
     if (dup.length > 0) throw new ApiError(409, '邮箱已注册');
 
     let role: OperatorRole = 'operator';
@@ -180,15 +229,15 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
       const nowPg = toPgTimestamp(new Date());
       const used = await db.orm
         .update(invites)
-        .set({ usedBy: body.email, usedAt: nowPg })
+        .set({ usedBy: email, usedAt: nowPg })
         .where(and(eq(invites.token, body.inviteToken), isNull(invites.usedAt), gt(invites.expiresAt, nowPg)))
         .returning();
       const inv = used[0];
       if (!inv) {
         await writeAudit(db, {
-          actor: body.email,
+          actor: email,
           action: 'auth.signup',
-          payload: { email: body.email, mode: config.signupMode },
+          payload: { email, mode: config.signupMode },
           ok: false,
           error: 'invalid or expired invite',
         });
@@ -204,7 +253,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
       const inserted = await db.orm
         .insert(operators)
         .values({
-          email: body.email,
+          email,
           passwordHash,
           role,
           status: 'active',

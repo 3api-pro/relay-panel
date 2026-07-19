@@ -16,6 +16,8 @@ import { writeAudit } from '../audit.js';
 import { toPgTimestamp } from '../auth/sessions.js';
 import { redactText } from '../jobs/engine.js';
 import { makeCredentialStoreV2 } from '../credstore.js';
+import { activeSubscription } from '../billing/service.js';
+import { assertPublicUrl } from '../net/guard.js';
 import type { MeteringGateway } from './gateway.js';
 import type { GrantInput } from './types.js';
 
@@ -244,6 +246,16 @@ export async function applyGrant(deps: GrantDeps, ctx: SessionCtx, input: GrantI
     });
   };
 
+  // 🔴 managed 渠道订阅门槛（开放注册前置闸 §1）：免费 operator 直接白嫖我方托管上游 key = 烧钱。
+  // 要求调用者持 status=active 且未过期的付费订阅（含宽限期算有效）；root 豁免（自用/dogfood）；byo 不受此限。
+  if (tpl.source === 'managed' && ctx.role !== 'root') {
+    const sub = await activeSubscription(db, ctx.operatorId, deps.config.billingGraceDays);
+    if (!sub) {
+      await auditFail('启用托管渠道需有效订阅');
+      throw new ApiError(403, '启用托管渠道需有效订阅');
+    }
+  }
+
   // 上游接入参数：byo=入参自带；managed=网关签发
   let upstream: { baseUrl: string; apiKey: string };
   let meterKeyRef: string | null = null;
@@ -263,6 +275,14 @@ export async function applyGrant(deps: GrantDeps, ctx: SessionCtx, input: GrantI
       throw new ApiError(502, `计量网关签发失败: ${msg}`);
     }
   } else {
+    // 纵深防御：operator 自带上游 baseUrl 不得指向内网（引擎会去 fetch 它）；root 自用豁免。
+    // 解析不了放行（failClosed 缺省 false）——上游偶发不可解析不该拦正常注入。
+    try {
+      await assertPublicUrl(input.byo!.baseUrl, { skip: ctx.role === 'root' });
+    } catch (err) {
+      await auditFail(err instanceof ApiError ? err.message : '不允许的目标地址');
+      throw err;
+    }
     upstream = input.byo!;
   }
 

@@ -2,7 +2,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { auditEvents, channelGrants, sites } from '../src/db/schema.js';
+import { auditEvents, channelGrants, sites, subscriptions } from '../src/db/schema.js';
+import { toPgTimestamp } from '../src/auth/sessions.js';
 import type { SessionCtx } from '../src/auth/rbac.js';
 import { applyGrant, importTemplates } from '../src/marketplace/grant.js';
 import { HttpMeteringGateway } from '../src/marketplace/gateway.js';
@@ -51,6 +52,14 @@ beforeAll(async () => {
   opBCookie = opB.cookie;
   const viewer = await ts.seedLogin({ email: 'viewer-mkt@example.com', password: 'vw-pass-1234', role: 'viewer' });
   viewerCookie = viewer.cookie;
+
+  // opA 配有效订阅：managed 授权门槛（§1）要求付费订阅，本文件的 managed 流程用例据此放行。
+  // 免费 operator → 403 的门槛本身在 marketplace-sub-gate.test.ts 单独覆盖。
+  await ts.db.orm.insert(subscriptions).values({
+    operatorId: opA.operatorId,
+    planKey: 'pro',
+    currentPeriodEnd: toPgTimestamp(new Date(Date.now() + 30 * 86_400_000)),
+  });
 
   await ts.db.orm.insert(sites).values([
     {

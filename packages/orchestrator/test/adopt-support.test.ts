@@ -34,11 +34,13 @@ afterAll(async () => {
   await ts.close();
 });
 
+// 加固后 operator 不得 adopt 内网/回环（SSRF 守卫）；用公网测试段 IP（203.0.113.0/24 TEST-NET-3，
+// 守卫视为公网、fake adapter 不真连），保留原有回滚/配额/只读语义的覆盖。
 function adoptPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     slug: 'legacy-a',
     label: '存量站 A',
-    baseUrl: 'http://127.0.0.1:3272',
+    baseUrl: 'http://203.0.113.10:3272',
     engine: 'sub2api',
     adminApiKey: 'sk-legacy-admin',
     ...overrides,
@@ -56,7 +58,7 @@ describe('adopt 自助接管', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('健康探测失败 → 409 且不留半接入行/凭据', async () => {
+  it('健康探测失败 → 400 模糊错误 且不留半接入行/凭据', async () => {
     ts.adapters.sub2api.failOn('health', 'connection refused');
     const res = await ts.app.inject({
       method: 'POST',
@@ -64,7 +66,10 @@ describe('adopt 自助接管', () => {
       cookies: { rp_session: opCookie },
       payload: adoptPayload(),
     });
-    expect(res.statusCode).toBe(409);
+    // operator 路径统一模糊错误（消除内网扫描 oracle）：400，且不回显连接细节
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { message: string }).message).toBe('站点探测失败，请检查地址与凭据');
+    expect(res.body).not.toContain('connection refused');
     ts.adapters.sub2api.clearFailure('health');
 
     const rows = await ts.db.orm.select().from(sites).where(eq(sites.slug, 'legacy-a'));
@@ -73,7 +78,7 @@ describe('adopt 自助接管', () => {
     expect(creds).toHaveLength(0);
   });
 
-  it('admin 凭据实连失败（connect 抛错）→ 409 回滚', async () => {
+  it('admin 凭据实连失败（connect 抛错）→ 400 模糊错误 回滚', async () => {
     ts.adapters.sub2api.failOn('connect', 'invalid admin key');
     const res = await ts.app.inject({
       method: 'POST',
@@ -81,7 +86,9 @@ describe('adopt 自助接管', () => {
       cookies: { rp_session: opCookie },
       payload: adoptPayload(),
     });
-    expect(res.statusCode).toBe(409);
+    // 凭据错/连接错不得回显（否则=内网探测 oracle）：统一 400 模糊错误
+    expect(res.statusCode).toBe(400);
+    expect(res.body).not.toContain('invalid admin key');
     ts.adapters.sub2api.clearFailure('connect');
     expect(await ts.db.orm.select().from(sites).where(eq(sites.slug, 'legacy-a'))).toHaveLength(0);
   });
@@ -172,14 +179,14 @@ describe('adopt 自助接管', () => {
       method: 'POST',
       url: '/api/sites/adopt',
       cookies: { rp_session: poor.cookie },
-      payload: adoptPayload({ slug: 'poor-1', baseUrl: 'http://127.0.0.1:3299' }),
+      payload: adoptPayload({ slug: 'poor-1', baseUrl: 'http://203.0.113.10:3299' }),
     });
     expect(first.statusCode).toBe(201);
     const second = await ts.app.inject({
       method: 'POST',
       url: '/api/sites/adopt',
       cookies: { rp_session: poor.cookie },
-      payload: adoptPayload({ slug: 'poor-2', baseUrl: 'http://127.0.0.1:3300' }),
+      payload: adoptPayload({ slug: 'poor-2', baseUrl: 'http://203.0.113.10:3300' }),
     });
     expect(second.statusCode).toBe(403); // free 档 1 站
   });

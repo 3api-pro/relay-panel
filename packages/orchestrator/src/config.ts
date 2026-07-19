@@ -41,6 +41,14 @@ export interface Config {
   adminPassword?: string;
   signupMode: 'closed' | 'invite' | 'open';
   sessionTtlHours: number;
+  /** 注册限速：单 IP 每小时最多注册尝试数（开放注册防羊毛党批量刷号） */
+  signupMaxPerIp: number;
+  /** 注册限速：单邮箱每小时最多注册尝试数 */
+  signupMaxPerEmail: number;
+  /** 登录限速：单 (IP,账号) 每 10 分钟最多失败次数，超限退避 429 */
+  loginMaxFails: number;
+  /** operator 触发的 adopt 探测统一超时（毫秒）防 slowloris 挂起；root 走引擎原超时 */
+  adoptProbeTimeoutMs: number;
   sitesRoot: string;
   /** 面板开站端口池 */
   portRange: PortRange;
@@ -79,6 +87,10 @@ const envSchema = z.object({
   RP_ADMIN_PASSWORD: z.string().min(1).optional(),
   RP_SIGNUP_MODE: z.enum(['closed', 'invite', 'open']).default('closed'),
   RP_SESSION_TTL_HOURS: z.coerce.number().positive().default(168),
+  RP_SIGNUP_MAX_PER_IP: z.coerce.number().int().min(1).default(20),
+  RP_SIGNUP_MAX_PER_EMAIL: z.coerce.number().int().min(1).default(5),
+  RP_LOGIN_MAX_FAILS: z.coerce.number().int().min(1).default(10),
+  RP_ADOPT_PROBE_TIMEOUT_MS: z.coerce.number().int().min(500).default(6000),
   RP_SITES_ROOT: z.string().default('./data/sites'),
   RP_PORT_RANGE: z
     .string()
@@ -149,6 +161,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     ...(e.RP_ADMIN_PASSWORD !== undefined ? { adminPassword: e.RP_ADMIN_PASSWORD } : {}),
     signupMode: e.RP_SIGNUP_MODE,
     sessionTtlHours: e.RP_SESSION_TTL_HOURS,
+    signupMaxPerIp: e.RP_SIGNUP_MAX_PER_IP,
+    signupMaxPerEmail: e.RP_SIGNUP_MAX_PER_EMAIL,
+    loginMaxFails: e.RP_LOGIN_MAX_FAILS,
+    adoptProbeTimeoutMs: e.RP_ADOPT_PROBE_TIMEOUT_MS,
     sitesRoot: e.RP_SITES_ROOT,
     portRange,
     dockerViaWsl: e.RP_DOCKER_VIA_WSL === '1',

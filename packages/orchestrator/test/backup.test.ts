@@ -121,7 +121,8 @@ beforeAll(async () => {
     { ...base, slug: 'site-c', label: 'C', engine: 'sub2api', hostPort: 0, managed: 'external', status: 'active' },
     { ...base, slug: 'site-d', label: 'D', engine: 'sub2api', hostPort: 18102, managed: 'compose', status: 'destroyed' },
   ]);
-});
+  // 与其余重型套件一致给足 hook 超时：pglite 冷启动在全量并行下可 >10s（默认 hookTimeout）
+}, 60_000);
 
 afterAll(async () => {
   await db.close().catch(() => undefined);

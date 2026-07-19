@@ -34,6 +34,7 @@ import { redactText, type JobEngine, type JobKind, type OnStep } from '../jobs/e
 import { makeCredentialStoreV2 } from '../credstore.js';
 import { encryptSecret } from '../secrets.js';
 import { activeSites, quotaFor } from '../billing/service.js';
+import { assertPublicUrl } from '../net/guard.js';
 
 /**
  * 站点服务（规格 §6，G1 完整版）：DB CRUD、端口分配、快照聚合（吸收原 dashboard.ts）、
@@ -258,6 +259,26 @@ function instOf(site: SiteRow): InstanceInfo {
     composeProject: site.composeProject,
     credentialRef: site.credentialRef,
   };
+}
+
+/**
+ * 给 promise 套统一超时：超时即抛错。底层 adapter fetch 自身仍有 AbortSignal 兜底，
+ * socket 不会因本 race 泄漏。用于收紧 operator 的 adopt 探测路径防 slowloris 挂起。
+ */
+function withDeadline<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('probe deadline exceeded')), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e instanceof Error ? e : new Error(String(e)));
+      },
+    );
+  });
 }
 
 /** 300ms TCP 探测：连上=占用；拒绝/超时=空闲 */
@@ -495,6 +516,11 @@ export class SitesService {
     const baseUrl = input.baseUrl.replace(/\/+$/, '');
     const hostPort = parsed.port !== '' ? Number(parsed.port) : parsed.protocol === 'https:' ? 443 : 80;
 
+    // 🔴 出站地址守卫（防 SSRF 内网端口扫描）：operator 强制校验，root 豁免（内网自有站/dogfood）。
+    // 面板直连路径 failClosed=true——合法公网站点必然快速可解析，解析不了即拒。
+    // 命中抛统一「不允许的目标地址」，与探测失败同为 400，攻击者无法区分"内网被拦"与"连不上"。
+    await assertPublicUrl(input.baseUrl, { skip: ctx.role === 'root', failClosed: true });
+
     const hasKey = typeof input.adminApiKey === 'string' && input.adminApiKey.length > 0;
     const hasPassword =
       typeof input.adminEmail === 'string' &&
@@ -540,16 +566,24 @@ export class SitesService {
     });
 
     // 健康探测 + admin 凭据实连验证；失败回滚（删行+删凭据），不留半接入状态
+    const isRoot = ctx.role === 'root';
     try {
       const adapter = this.deps.adapters[input.engine];
       if (!adapter) throw new ApiError(500, `没有引擎 ${input.engine} 的 adapter`);
       const inst = instOf(site);
-      const health = await adapter.health(inst);
-      if (!health.ok) {
-        throw new ApiError(409, `站点健康探测未通过: ${redactText(health.detail ?? 'unhealthy')}`);
-      }
-      const client = await adapter.connect(inst, this.credstore);
-      await client.settings.getBranding(); // admin 凭据无效在这里暴露
+      // operator 路径统一较短超时防 slowloris 挂起；root 走引擎原 8s/30s 超时便于自查
+      const probe = async (): Promise<{ version?: string }> => {
+        const health = await adapter.health(inst);
+        if (!health.ok) {
+          throw new ApiError(409, `站点健康探测未通过: ${redactText(health.detail ?? 'unhealthy')}`);
+        }
+        const client = await adapter.connect(inst, this.credstore);
+        await client.settings.getBranding(); // admin 凭据无效在这里暴露
+        return { ...(health.version !== undefined ? { version: health.version } : {}) };
+      };
+      const health = isRoot
+        ? await probe()
+        : await withDeadline(probe(), this.deps.config.adoptProbeTimeoutMs);
       if (health.version !== undefined && health.version !== '') {
         await this.deps.db.orm
           .update(sites)
@@ -559,6 +593,7 @@ export class SitesService {
     } catch (err) {
       await this.deps.db.orm.delete(sites).where(eq(sites.id, site.id));
       await this.deps.db.orm.delete(credentials).where(eq(credentials.ref, site.credentialRef));
+      // 审计仍记详细错误（内部可见，已脱敏）；对外错误按角色区分。
       await writeAudit(this.deps.db, {
         actor: ctx.email,
         action: 'site.adopt',
@@ -566,8 +601,13 @@ export class SitesService {
         ok: false,
         error: redactText(errMsg(err)),
       });
-      if (err instanceof ApiError) throw err;
-      throw new ApiError(409, `站点验证失败: ${redactText(errMsg(err))}`);
+      // 🔴 operator 路径：一律统一模糊错误，绝不回显连接错误串/响应体/超时差异（消除内网扫描 oracle）；
+      // root 保留详细错误便于自查内网自有站。
+      if (isRoot) {
+        if (err instanceof ApiError) throw err;
+        throw new ApiError(409, `站点验证失败: ${redactText(errMsg(err))}`);
+      }
+      throw new ApiError(400, '站点探测失败，请检查地址与凭据');
     }
 
     probeCache.delete(site.slug);
@@ -647,6 +687,8 @@ export class SitesService {
   async createChannel(ctx: SessionCtx, slug: string, spec: ChannelSpec): Promise<ChannelRecord> {
     requireWrite(ctx);
     const site = await this.requireSite(ctx, slug);
+    // 纵深防御：渠道 baseUrl 由 operator 可控且引擎会去 fetch，禁止指向内网；root 自用豁免。
+    await assertPublicUrl(spec.baseUrl, { skip: ctx.role === 'root' });
     const client = await this.client(site);
     const rec = await this.adapterWrite(ctx, site, 'channel.create', {
       name: spec.name,
@@ -664,6 +706,10 @@ export class SitesService {
   ): Promise<ChannelRecord> {
     requireWrite(ctx);
     const site = await this.requireSite(ctx, slug);
+    // 改到新 baseUrl 时同样过内网守卫（root 豁免）
+    if (patch.baseUrl !== undefined) {
+      await assertPublicUrl(patch.baseUrl, { skip: ctx.role === 'root' });
+    }
     const client = await this.client(site);
     const rec = await this.adapterWrite(ctx, site, 'channel.update', {
       channelId,
