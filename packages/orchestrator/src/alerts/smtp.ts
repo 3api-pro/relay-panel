@@ -203,12 +203,20 @@ function ehloName(): string {
   return cleaned !== '' ? cleaned : 'localhost';
 }
 
+/** Message-ID 域名取发件地址 @ 后缀，兜底 localhost；缺 Message-ID 是常见反垃圾减分项 */
+function makeMessageId(from: string): string {
+  const domain = from.split('@')[1] ?? 'localhost';
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `<${Date.now()}.${rand}@${domain}>`;
+}
+
 function buildDataPayload(message: SmtpMessage, use8bit: boolean): string {
   const headers = [
     `From: ${message.from}`,
     `To: ${message.to}`,
     `Subject: ${encodeSubject(message.subject)}`,
     `Date: ${rfc5322Date(new Date())}`,
+    `Message-ID: ${makeMessageId(message.from)}`,
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=utf-8',
     `Content-Transfer-Encoding: ${use8bit ? '8bit' : 'quoted-printable'}`,
