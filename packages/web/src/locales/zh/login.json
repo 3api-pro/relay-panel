@@ -8,5 +8,7 @@
   "noRegister": "未开放注册？请联系实例管理员获取邀请。",
   "demoEnter": "进入演示",
   "demoNote": "只读演示环境，示例数据，点击即可体验。",
-  "demoCreds": "或用以下账号登录"
+  "demoCreds": "或用以下账号登录",
+  "newHere": "还没有账号？",
+  "toSignup": "注册"
 }

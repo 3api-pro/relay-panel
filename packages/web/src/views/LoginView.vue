@@ -23,12 +23,20 @@ const error = ref('');
 // 演示模式：后端在 demo 模式下暴露 GET /api/demo（一键账号），据此展示"进入演示"入口
 interface DemoInfo { demo: boolean; email: string; password: string; note?: string }
 const demo = ref<DemoInfo | null>(null);
+// 注册模式：open/invite 时展示注册入口，closed 时保留原提示
+const signupMode = ref<'open' | 'invite' | 'closed'>('closed');
 onMounted(async () => {
   try {
     const info = await get<DemoInfo>('/api/demo', { silent: true, skipAuthRedirect: true });
     if (info?.demo) demo.value = info;
   } catch {
     /* 非演示环境：无此端点，忽略 */
+  }
+  try {
+    const cfg = await get<{ signupMode: 'open' | 'invite' | 'closed' }>('/api/auth/config', { silent: true, skipAuthRedirect: true });
+    if (cfg?.signupMode) signupMode.value = cfg.signupMode;
+  } catch {
+    /* 取不到时按 closed 处理，保留原提示 */
   }
 });
 
@@ -103,7 +111,11 @@ async function enterDemo(): Promise<void> {
         <Button variant="primary" type="submit" block :loading="loading">{{ t('login.submit') }}</Button>
       </form>
 
-      <p class="mt-4 text-center text-[11px] text-muted/80">{{ t('login.noRegister') }}</p>
+      <p v-if="signupMode === 'closed'" class="mt-4 text-center text-[11px] text-muted/80">{{ t('login.noRegister') }}</p>
+      <p v-else class="mt-4 text-center text-[11px] text-muted/80">
+        {{ t('login.newHere') }}
+        <RouterLink to="/signup" class="text-accent hover:underline">{{ t('login.toSignup') }}</RouterLink>
+      </p>
     </div>
   </div>
 </template>

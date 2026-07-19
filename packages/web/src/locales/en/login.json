@@ -8,5 +8,7 @@
   "noRegister": "Registration is closed. Contact your instance admin for an invite.",
   "demoEnter": "Enter demo",
   "demoNote": "Read-only demo with sample data — click to explore.",
-  "demoCreds": "or sign in with"
+  "demoCreds": "or sign in with",
+  "newHere": "New here?",
+  "toSignup": "Create an account"
 }

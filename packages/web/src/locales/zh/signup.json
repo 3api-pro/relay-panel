@@ -1,0 +1,17 @@
+{
+  "tagline": "创建你的 relay-panel 账号",
+  "email": "邮箱",
+  "displayName": "显示名",
+  "displayNamePlaceholder": "选填",
+  "password": "密码",
+  "invite": "邀请码",
+  "invitePlaceholder": "粘贴你的邀请码",
+  "submit": "注册",
+  "haveAccount": "已有账号？",
+  "toLogin": "去登录",
+  "closed": "当前未开放注册，请联系实例管理员获取邀请。",
+  "errorEmpty": "请输入邮箱和密码",
+  "errorPasswordShort": "密码至少 8 位",
+  "errorInviteRequired": "注册需要邀请码",
+  "errorFail": "注册失败，请稍后重试"
+}

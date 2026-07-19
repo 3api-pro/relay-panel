@@ -1,0 +1,17 @@
+{
+  "tagline": "Create your relay-panel account",
+  "email": "Email",
+  "displayName": "Display name",
+  "displayNamePlaceholder": "Optional",
+  "password": "Password",
+  "invite": "Invite code",
+  "invitePlaceholder": "Paste your invite code",
+  "submit": "Create account",
+  "haveAccount": "Already have an account?",
+  "toLogin": "Sign in",
+  "closed": "Registration is currently closed. Contact your instance admin for an invite.",
+  "errorEmpty": "Please enter your email and password",
+  "errorPasswordShort": "Password must be at least 8 characters",
+  "errorInviteRequired": "An invite code is required to register",
+  "errorFail": "Registration failed. Please try again later."
+}

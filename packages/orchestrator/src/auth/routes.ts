@@ -184,6 +184,11 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
     return { ok: true };
   });
 
+  // 公开：登出态的注册页据此决定展示（open=直接注册 / invite=要邀请码 / closed=不开放）
+  app.get('/api/auth/config', async () => {
+    return { signupMode: config.signupMode };
+  });
+
   app.get('/api/auth/me', async (req) => {
     const ctx = await getCtx(req);
     const rows = await db.orm.select().from(operators).where(eq(operators.id, ctx.operatorId)).limit(1);

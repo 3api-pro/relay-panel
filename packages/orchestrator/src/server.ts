@@ -89,7 +89,7 @@ export interface BuildServerOptions {
 }
 
 /** 免认证的 API 路径（其余 /api/* 一律要求合法 session） */
-const PUBLIC_API_PATHS = new Set(['/api/auth/login', '/api/auth/signup']);
+const PUBLIC_API_PATHS = new Set(['/api/auth/login', '/api/auth/signup', '/api/auth/config']);
 
 const WEB_NOT_BUILT_HTML = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><title>relay-panel</title></head>

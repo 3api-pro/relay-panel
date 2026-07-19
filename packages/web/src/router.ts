@@ -23,6 +23,7 @@ declare module 'vue-router' {
 
 const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView, meta: { title: '登录', public: true } },
+  { path: '/signup', component: () => import('./views/SignupView.vue'), meta: { title: '注册', public: true } },
   // 组件厨房：仅 dev 构建注册
   ...(import.meta.env.DEV
     ? [{ path: '/kitchen', component: () => import('./views/DevKitchenSink.vue'), meta: { title: '组件厨房', public: true } }]
