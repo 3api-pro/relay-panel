@@ -24,6 +24,8 @@ declare module 'vue-router' {
 const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView, meta: { title: '登录', public: true } },
   { path: '/signup', component: () => import('./views/SignupView.vue'), meta: { title: '注册', public: true } },
+  // 登出态门面（获客漏斗落地页）：裸首页未登录时由守卫重定向到此
+  { path: '/welcome', component: () => import('./views/LandingView.vue'), meta: { title: 'relay-panel', public: true } },
   // 组件厨房：仅 dev 构建注册
   ...(import.meta.env.DEV
     ? [{ path: '/kitchen', component: () => import('./views/DevKitchenSink.vue'), meta: { title: '组件厨房', public: true } }]
@@ -66,8 +68,8 @@ setUnauthorizedHandler(() => {
 // 守卫：boot 时 GET /api/auth/me 缓存到 session store；未登录跳 /login
 router.beforeEach(async (to) => {
   if (to.meta.public) {
-    // 已登录访问登录页 → 回总览
-    if (to.path === '/login') {
+    // 已登录访问登录页 / 落地页 → 回后台总览
+    if (to.path === '/login' || to.path === '/welcome') {
       const me = await session.ensureLoaded();
       if (me) return { path: '/' };
     }
@@ -75,7 +77,9 @@ router.beforeEach(async (to) => {
   }
   const me = await session.ensureLoaded();
   if (!me) {
-    return { path: '/login', query: to.fullPath !== '/' ? { redirect: to.fullPath } : {} };
+    // 裸首页未登录 → 落地页（获客门面，不带 redirect）；其它深链 → 登录页带回跳地址
+    if (to.path === '/') return { path: '/welcome' };
+    return { path: '/login', query: { redirect: to.fullPath } };
   }
   return true;
 });
