@@ -90,7 +90,7 @@ Hardening across everything above.
 
 - [x] Observability: structured logs, Prometheus metrics, audit trail on every write
 - [x] Backup / restore for orchestrator state and per-site data (`backup` / `restore` CLI, runbook in [docs/OPERATIONS.md](docs/OPERATIONS.md))
-- [ ] 🚧 Security review: credential handling, tenant isolation, upstream ToS boundaries (design doc shipped in [docs/SECURITY.md](docs/SECURITY.md); external review in progress)
+- [x] Security review + open-registration hardening: adversarial multi-agent review of the public-signup attack surface, all confirmed exploitable chains closed — signup/login rate limiting (real IP + email), gmail-alias email normalization, SSRF guard on operator-supplied URLs (adopt/channel/byo — DNS-resolved private/loopback/metadata blocked, opaque errors, root exempt), managed-marketplace-grant subscription gate, per-key rate limit + daily budget in the metering gateway. Public open registration (`RP_SIGNUP_MODE=open`) is **live** with a signup page. (design doc in [docs/SECURITY.md](docs/SECURITY.md))
 - [x] Documentation: self-host guide, API reference, adapter authoring guide, operations runbook, security design
 - [x] Migration tooling: import an existing registry (`import-registry`) or adopt a bare engine instance into a managed site (`adopt`)
 
