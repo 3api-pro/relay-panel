@@ -49,6 +49,10 @@ export interface Config {
   monitorIntervalMs: number;
   /** >0 时启用 low_balance 规则 */
   balanceThreshold: number;
+  /** 订阅宽限期天数（到期后配额仍按原计划生效的窗口）；0=关闭宽限 */
+  billingGraceDays: number;
+  /** 计费扫描循环周期（收敛过期状态 + 到期提醒邮件）；0=关闭该后台循环 */
+  billingSweepIntervalMs: number;
   /** managed 渠道市场网关；未配置=managed 模板不可启用 */
   meteringGatewayUrl?: string;
   meteringGatewayToken?: string;
@@ -83,6 +87,8 @@ const envSchema = z.object({
   RP_DOCKER_VIA_WSL: z.enum(['0', '1']).default('0'),
   RP_MONITOR_INTERVAL_MS: z.coerce.number().int().min(0).default(60_000),
   RP_BALANCE_THRESHOLD: z.coerce.number().min(0).default(0),
+  RP_BILLING_GRACE_DAYS: z.coerce.number().int().min(0).max(365).default(3),
+  RP_BILLING_SWEEP_INTERVAL_MS: z.coerce.number().int().min(0).default(3_600_000),
   RP_METERING_GATEWAY_URL: z.string().url().optional(),
   RP_METERING_GATEWAY_TOKEN: z.string().min(1).optional(),
   RP_LEDGER_PULL_INTERVAL_MS: z.coerce.number().int().min(0).default(3_600_000),
@@ -148,6 +154,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     dockerViaWsl: e.RP_DOCKER_VIA_WSL === '1',
     monitorIntervalMs: e.RP_MONITOR_INTERVAL_MS,
     balanceThreshold: e.RP_BALANCE_THRESHOLD,
+    billingGraceDays: e.RP_BILLING_GRACE_DAYS,
+    billingSweepIntervalMs: e.RP_BILLING_SWEEP_INTERVAL_MS,
     ...(e.RP_METERING_GATEWAY_URL !== undefined ? { meteringGatewayUrl: e.RP_METERING_GATEWAY_URL } : {}),
     ...(e.RP_METERING_GATEWAY_TOKEN !== undefined
       ? { meteringGatewayToken: e.RP_METERING_GATEWAY_TOKEN }

@@ -233,6 +233,9 @@ export const subscriptions = pgTable('subscriptions', {
   planKey: text('plan_key').notNull(),
   status: text('status').notNull().default('active'), // active|expired|cancelled
   currentPeriodEnd: timestamp('current_period_end', { mode: 'string' }).notNull(),
+  // 到期提醒台账：各档（t7/t1/expiry/graceEnd）已发时间戳；续费顺延后清空重新计。
+  // 幂等依据——扫描循环据此保证「同档绝不重发」。
+  remindersSent: jsonb('reminders_sent').$type<Record<string, string>>().notNull().default({}),
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
 });

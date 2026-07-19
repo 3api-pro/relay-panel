@@ -10,6 +10,7 @@ import { JobEngine } from './jobs/engine.js';
 import { lifecycleStepSink, makeStoreCredential } from './sites/service.js';
 import { startMonitor } from './alerts/engine.js';
 import { EmailNotifier, FanoutNotifier, WebhookNotifier } from './alerts/notify.js';
+import { startBillingSweep } from './billing/sweep.js';
 import { HttpMeteringGateway } from './marketplace/gateway.js';
 import { startPullLoop } from './marketplace/ledger.js';
 import { buildServer, type Notifier } from './server.js';
@@ -113,8 +114,17 @@ const stopLedgerPull =
     ? startPullLoop(db, gateway, config.ledgerPullIntervalMs)
     : null;
 
+// 订阅生命周期：计费扫描循环（收敛过期状态 + 到期提醒邮件）。
+// billingSweepIntervalMs=0 时不起；demo 模式不起（罐装数据不发信、不收敛）。
+// SMTP 未配（config.smtp 缺省）时提醒静默跳过，状态收敛仍照常执行。
+const billingSweep =
+  !config.demo && config.billingSweepIntervalMs > 0
+    ? startBillingSweep({ config, db, smtp: config.smtp ?? null }, config.billingSweepIntervalMs)
+    : null;
+
 async function shutdown(): Promise<void> {
   stopLedgerPull?.();
+  billingSweep?.stop();
   monitor.stop();
   jobs.stop();
   await app.close().catch(() => undefined);

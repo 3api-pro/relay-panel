@@ -973,8 +973,9 @@ export class SitesService {
   private async checkQuota(ctx: SessionCtx): Promise<void> {
     if (ctx.role !== 'operator') return;
     const db = this.deps.db;
+    // 宽限期内配额仍按原计划（graceDays 取自 config）；宽限结束后回落 free 只挡新建站，不动存量站
     const [quota, n] = await Promise.all([
-      quotaFor(db, { operatorId: ctx.operatorId, role: ctx.role }),
+      quotaFor(db, { operatorId: ctx.operatorId, role: ctx.role }, this.deps.config.billingGraceDays),
       activeSites(db, ctx.operatorId),
     ]);
     if (n >= quota) {

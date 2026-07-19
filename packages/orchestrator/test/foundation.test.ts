@@ -97,11 +97,15 @@ describe('config: loadConfig', () => {
 describe('db: runMigrations + schema', () => {
   it('跑两遍幂等，记账一条', async () => {
     const first = await runMigrations(db);
-    expect(first).toEqual(['001_init.sql', '002_saas_payments.sql']);
+    expect(first).toEqual(['001_init.sql', '002_saas_payments.sql', '003_subscription_lifecycle.sql']);
     const second = await runMigrations(db);
     expect(second).toEqual([]);
     const rows = await db.query<{ name: string }>(`SELECT name FROM schema_migrations ORDER BY name`);
-    expect(rows).toEqual([{ name: '001_init.sql' }, { name: '002_saas_payments.sql' }]);
+    expect(rows).toEqual([
+      { name: '001_init.sql' },
+      { name: '002_saas_payments.sql' },
+      { name: '003_subscription_lifecycle.sql' },
+    ]);
   });
 
   it('关键表可插查，默认值正确，plans 有三行种子', async () => {

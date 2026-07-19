@@ -3,18 +3,20 @@ import { z } from 'zod';
 import { asc, desc, eq } from 'drizzle-orm';
 import type { Config } from '../config.js';
 import type { Db } from '../db/client.js';
-import { operators, plans, subscriptions, type SubscriptionRow } from '../db/schema.js';
+import { appSettings, operators, plans, subscriptions, type SubscriptionRow } from '../db/schema.js';
 import { writeAudit } from '../audit.js';
 import { ApiError, requireRoot } from '../auth/rbac.js';
+import { toPgTimestamp } from '../auth/sessions.js';
 import {
   FREE_PLAN_KEY,
   activeSites,
-  activeSubscription,
   cancelSubscription,
   planByKey,
   quotaFor,
   subscribeOperator,
+  subscriptionState,
 } from './service.js';
+import { PANEL_BASE_URL_SETTINGS_KEY } from './sweep.js';
 
 /**
  * 计费路由（规格 §9）：套餐/我的订阅/root 手工开通与取消。
@@ -31,6 +33,21 @@ const subscribeBody = z.object({
   planKey: z.string().min(1),
   // 月数语义 = +30*months 天
   months: z.number().int().min(1).max(120),
+});
+
+/** 计费设置：panelBaseUrl 可选（未传=不改动）；'' 或 null=清除；须 http/https 绝对地址 */
+const billingSettingsBody = z.object({
+  panelBaseUrl: z
+    .union([
+      z
+        .string()
+        .url('无效的面板地址')
+        .max(500, '面板地址过长')
+        .refine((u) => u.startsWith('http://') || u.startsWith('https://'), '仅支持 http/https 地址'),
+      z.literal(''),
+      z.null(),
+    ])
+    .optional(),
 });
 
 /** zod 校验失败统一 400；文案不回显请求原值 */
@@ -81,22 +98,38 @@ export function registerBillingRoutes(app: FastifyInstance, deps: BillingRoutesD
   });
 
   // ---- 我的订阅（quota null = 不限额，root/viewer） ----
+  // phase: active|grace|expired|none；宽限期内配额仍按原计划（graceDays 取自 config）。
   app.get('/api/billing/subscription', async (req) => {
     const ctx = requireCtx(req);
-    const quota = await quotaFor(db, ctx);
+    const graceDays = deps.config.billingGraceDays;
+    const quota = await quotaFor(db, ctx, graceDays);
     const usedSites = await activeSites(db, ctx.operatorId);
     if (!Number.isFinite(quota)) {
-      return { plan: null, periodEnd: null, quota: null, usedSites };
+      return {
+        plan: null,
+        periodEnd: null,
+        quota: null,
+        usedSites,
+        phase: 'none',
+        currentPeriodEnd: null,
+        graceEndsAt: null,
+        daysRemaining: null,
+      };
     }
-    const sub = await activeSubscription(db, ctx.operatorId);
-    const plan = await planByKey(db, sub ? sub.planKey : FREE_PLAN_KEY);
+    const state = await subscriptionState(db, ctx.operatorId, graceDays);
+    const plan = await planByKey(db, state.sub ? state.sub.planKey : FREE_PLAN_KEY);
     return {
       plan: plan
         ? { key: plan.key, title: plan.title, priceMonthly: plan.priceMonthly, siteQuota: plan.siteQuota }
         : null,
-      periodEnd: sub ? sub.currentPeriodEnd : null,
+      // periodEnd 保持既有语义：仅当有计配额的有效订阅时给出（前端「到期」展示）
+      periodEnd: state.sub ? state.sub.currentPeriodEnd : null,
       quota,
       usedSites,
+      phase: state.phase,
+      currentPeriodEnd: state.currentPeriodEnd,
+      graceEndsAt: state.graceEndsAt,
+      daysRemaining: state.daysRemaining,
     };
   });
 
@@ -154,5 +187,54 @@ export function registerBillingRoutes(app: FastifyInstance, deps: BillingRoutesD
       ok: true,
     });
     return { ok: true, subscription: toApiSubscription(row) };
+  });
+
+  // ---- root: 计费设置（面板公网地址，用于到期提醒邮件的续费入口；宽限/扫描周期为 env 只读回显） ----
+  async function readPanelBaseUrl(): Promise<string | null> {
+    const rows = await db.orm
+      .select({ value: appSettings.value })
+      .from(appSettings)
+      .where(eq(appSettings.key, PANEL_BASE_URL_SETTINGS_KEY))
+      .limit(1);
+    const url = (rows[0]?.value as { url?: unknown } | undefined)?.url;
+    return typeof url === 'string' && url !== '' ? url : null;
+  }
+
+  app.get('/api/settings/billing', async (req) => {
+    const ctx = requireCtx(req);
+    requireRoot(ctx);
+    return {
+      panelBaseUrl: await readPanelBaseUrl(),
+      graceDays: deps.config.billingGraceDays,
+      sweepIntervalMs: deps.config.billingSweepIntervalMs,
+    };
+  });
+
+  app.put('/api/settings/billing', async (req) => {
+    const ctx = requireCtx(req);
+    requireRoot(ctx);
+    const parsed = billingSettingsBody.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      const issues = parsed.error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`).join('; ');
+      throw new ApiError(400, `请求参数无效: ${issues}`);
+    }
+    const { panelBaseUrl } = parsed.data;
+    if (panelBaseUrl !== undefined) {
+      const now = toPgTimestamp(new Date());
+      const value = { url: panelBaseUrl ?? '' };
+      await db.orm
+        .insert(appSettings)
+        .values({ key: PANEL_BASE_URL_SETTINGS_KEY, value, updatedAt: now })
+        .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: now } });
+    }
+    const next = await readPanelBaseUrl();
+    // 面板地址非敏感，但审计仍只记「是否配置」保持与告警设置一致口径
+    await writeAudit(db, {
+      actor: ctx.email,
+      action: 'settings.billing',
+      payload: { hasPanelBaseUrl: next !== null },
+      ok: true,
+    });
+    return { ok: true, panelBaseUrl: next };
   });
 }

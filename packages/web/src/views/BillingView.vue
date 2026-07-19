@@ -2,7 +2,7 @@
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch, type ComputedRef } from 'vue';
 import { useI18n } from 'vue-i18n';
 import QRCode from 'qrcode';
-import { Check, CreditCard, ExternalLink, Plus, QrCode, Wallet } from 'lucide-vue-next';
+import { AlertTriangle, Check, CreditCard, ExternalLink, Plus, QrCode, Wallet } from 'lucide-vue-next';
 import { del, get, post } from '../api/client';
 import { session } from '../api/session';
 import {
@@ -39,11 +39,17 @@ interface BillingPlan {
 interface PlansResponse {
   plans: BillingPlan[];
 }
+type SubscriptionPhase = 'active' | 'grace' | 'expired' | 'none';
 interface SubscriptionSummary {
   plan: { key: string; title: string; priceMonthly: number; siteQuota: number | null } | null;
   periodEnd: string | null;
   quota: number | null;
   usedSites: number;
+  /** 订阅阶段（生命周期）：有效 / 宽限期 / 已过期 / 无 */
+  phase?: SubscriptionPhase;
+  currentPeriodEnd?: string | null;
+  graceEndsAt?: string | null;
+  daysRemaining?: number | null;
 }
 interface SubscriptionRow {
   id: number;
@@ -288,6 +294,59 @@ const canSubmitBuy = computed(() => buyPlan.value !== null && buyMethod.value !=
 const methodOptions = computed<SelectOption[]>(() => methods.value.map((m) => ({ value: m.key, label: m.name })));
 /** 自助购买入口：operator（root/viewer 不限额，无购买语义） */
 const selfServe = computed(() => canWrite?.value === true && !isRoot.value);
+
+// ---- 订阅生命周期：阶段徽章 / 到期倒计时 / 立即续费引导 ----
+const phase = computed<SubscriptionPhase>(() => sub.value?.phase ?? 'none');
+const lifecycleDays = computed(() => sub.value?.daysRemaining ?? null);
+const graceEndsAt = computed(() => sub.value?.graceEndsAt ?? null);
+/** free/无订阅不显示阶段徽章（避免对免费用户造成「已过期」误读） */
+const showPhaseBadge = computed(() => phase.value !== 'none');
+const phaseTone = computed<'green' | 'amber' | 'red' | 'muted'>(() => {
+  switch (phase.value) {
+    case 'active':
+      return 'green';
+    case 'grace':
+      return 'amber';
+    case 'expired':
+      return 'red';
+    default:
+      return 'muted';
+  }
+});
+const phaseLabel = computed(() => {
+  switch (phase.value) {
+    case 'active':
+      return t('billing.statusActive');
+    case 'grace':
+      return t('billing.statusGrace');
+    case 'expired':
+      return t('billing.statusExpired');
+    default:
+      return t('billing.statusNone');
+  }
+});
+/** 生命周期提示条文案：宽限/已过期/临近到期(<=7天) 各一句，其余为空 */
+const lifecycleNote = computed(() => {
+  const n = lifecycleDays.value;
+  if (phase.value === 'grace') {
+    return t('billing.graceBanner', { n: n ?? 0, date: fmtDate(graceEndsAt.value) });
+  }
+  if (phase.value === 'expired') return t('billing.expiredBanner');
+  if (phase.value === 'active' && n !== null && n <= 7) return t('billing.expiringSoon', { n });
+  return '';
+});
+/** 突出「立即续费」：宽限/已过期，或临近到期(<=7天)；仅自助购买的 operator 可见引导 */
+const renewSuggested = computed(() => {
+  if (!selfServe.value) return false;
+  if (phase.value === 'grace' || phase.value === 'expired') return true;
+  return phase.value === 'active' && lifecycleDays.value !== null && lifecycleDays.value <= 7;
+});
+/** 立即续费：定位当前付费套餐并打开购买弹窗；免费/无付费套餐则不动（下方套餐区可选购） */
+function renewNow(): void {
+  const key = sub.value?.plan?.key;
+  const target = key ? plans.value.find((p) => p.key === key && p.priceMonthly > 0) : undefined;
+  if (target) openBuy(target);
+}
 
 async function loadMethods(): Promise<void> {
   try {
@@ -547,14 +606,32 @@ async function doCancel(): Promise<void> {
 
       <div v-else class="flex flex-col gap-5 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div class="min-w-0">
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <span class="rounded-lg border border-accent/25 bg-accent/10 p-1.5 text-accent">
               <CreditCard :size="16" />
             </span>
             <h3 class="truncate text-lg font-semibold">{{ planTitleDisplay }}</h3>
             <Badge tone="accent" size="sm">{{ t('billing.current') }}</Badge>
+            <Badge v-if="showPhaseBadge" :tone="phaseTone" size="sm">{{ phaseLabel }}</Badge>
           </div>
           <p class="mt-1.5 text-xs text-muted">{{ priceDisplay }} · {{ t('billing.expires') }} {{ expiryDisplay }}</p>
+          <div
+            v-if="lifecycleNote"
+            class="mt-2.5 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs leading-relaxed"
+            :class="
+              phase === 'expired'
+                ? 'border-red/30 bg-red/10 text-red'
+                : phase === 'grace'
+                  ? 'border-amber/30 bg-amber/10 text-amber'
+                  : 'border-border bg-panel-2/50 text-muted'
+            "
+          >
+            <AlertTriangle :size="14" class="shrink-0" />
+            <span class="min-w-0">{{ lifecycleNote }}</span>
+            <Button v-if="renewSuggested" size="sm" variant="primary" class="ml-auto shrink-0" @click="renewNow">
+              <Wallet :size="13" /> {{ t('billing.renewNow') }}
+            </Button>
+          </div>
         </div>
 
         <div class="w-full sm:w-64">
