@@ -25,7 +25,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/login', component: LoginView, meta: { title: '登录', public: true } },
   { path: '/signup', component: () => import('./views/SignupView.vue'), meta: { title: '注册', public: true } },
   // 登出态门面（获客漏斗落地页）：裸首页未登录时由守卫重定向到此
-  { path: '/welcome', component: () => import('./views/LandingView.vue'), meta: { title: 'relay-panel', public: true } },
+  { path: '/welcome', component: () => import('./views/LandingView.vue'), meta: { title: '', public: true } },
   // 组件厨房：仅 dev 构建注册
   ...(import.meta.env.DEV
     ? [{ path: '/kitchen', component: () => import('./views/DevKitchenSink.vue'), meta: { title: '组件厨房', public: true } }]
