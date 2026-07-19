@@ -148,9 +148,13 @@ export function registerBatchRoutes(app: FastifyInstance, deps: BatchServiceDeps
     const ctx = requireCtx(req);
     const body = parseBody(batchBody, req.body);
     const action = toAction(body);
-    // dryRun 与 kind 正交，单独校验一个 boolean（discriminatedUnion 不含此字段）
-    const dryParsed = z.object({ dryRun: z.boolean().optional() }).safeParse(req.body);
-    const dryRun = dryParsed.success && dryParsed.data.dryRun === true;
+    // dryRun 与 kind 正交，单独校验一个 boolean（discriminatedUnion 不含此字段）。
+    // 🔴 类型不对必须 400：dryRun:"true" 等坏值若静默归为"非干跑"，调用方的预览意图会变成真实执行。
+    const rawDryRun = (req.body as Record<string, unknown> | null | undefined)?.['dryRun'];
+    if (rawDryRun !== undefined && typeof rawDryRun !== 'boolean') {
+      throw new ApiError(400, '请求参数无效: dryRun: 必须是布尔值');
+    }
+    const dryRun = rawDryRun === true;
     if (dryRun) {
       // 干跑预览：纯读，零写零任务零审计；逐站带 preview 数组与 blocked 标记
       const results = await service.preview(ctx, body.slugs, action);

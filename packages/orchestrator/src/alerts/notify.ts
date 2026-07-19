@@ -187,6 +187,7 @@ export class EmailNotifier implements Notifier {
           commandTimeoutMs: EMAIL_COMMAND_TIMEOUT_MS,
           ...(this.smtp.user !== undefined ? { user: this.smtp.user } : {}),
           ...(this.smtp.pass !== undefined ? { pass: this.smtp.pass } : {}),
+          ...(this.smtp.allowInsecureAuth === true ? { allowInsecureAuth: true } : {}),
         },
         message,
       );

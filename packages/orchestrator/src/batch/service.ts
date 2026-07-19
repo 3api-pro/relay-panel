@@ -327,6 +327,8 @@ export class BatchService {
         if (tpl.source === 'byo' && !action.byo) throw new ApiError(400, 'byo 模板需提供自带上游的 baseUrl 与 apiKey');
         if (tpl.source === 'managed' && action.byo)
           throw new ApiError(400, 'managed 模板由计量网关签发接入参数，不接受自带上游参数');
+        // 与执行路径(applyGrant)一致：managed 模板未配计量网关，预览也报同样的 400，避免"预览说能建、执行 400"
+        if (tpl.source === 'managed' && this.deps.gateway === null) throw new ApiError(400, '计量网关未配置');
         const name = action.channelName ?? tpl.title;
         const { channels } = await this.matchChannels(ctx, slug, name);
         const exists = channels.some((c) => c.name === name);

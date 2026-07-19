@@ -23,6 +23,8 @@ export interface SmtpSettings {
   from: string;
   /** 465 隐式 TLS；587/25 走 STARTTLS/明文（按 port===465 推断） */
   secure: boolean;
+  /** 🔴 默认 false：未加密信道拒发 AUTH 凭据（防 STARTTLS-stripping）；仅内网调试可放行 */
+  allowInsecureAuth?: boolean;
 }
 
 export interface Config {
@@ -92,6 +94,7 @@ const envSchema = z.object({
   RP_SMTP_USER: z.string().min(1).optional(),
   RP_SMTP_PASS: z.string().min(1).optional(),
   RP_SMTP_FROM: z.string().email('RP_SMTP_FROM 须为合法邮箱地址').optional(),
+  RP_SMTP_ALLOW_INSECURE: z.string().optional(),
   RP_DEMO: z.enum(['0', '1']).default('0'),
 });
 
@@ -125,6 +128,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
           secure: e.RP_SMTP_PORT === 465,
           ...(e.RP_SMTP_USER !== undefined ? { user: e.RP_SMTP_USER } : {}),
           ...(e.RP_SMTP_PASS !== undefined ? { pass: e.RP_SMTP_PASS } : {}),
+          ...(e.RP_SMTP_ALLOW_INSECURE === '1' || e.RP_SMTP_ALLOW_INSECURE === 'true'
+            ? { allowInsecureAuth: true }
+            : {}),
         }
       : undefined;
 

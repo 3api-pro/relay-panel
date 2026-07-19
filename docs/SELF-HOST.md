@@ -64,6 +64,7 @@ docker compose up -d
 | `RP_SMTP_PORT` | 无 | SMTP 端口：`465`=隐式 TLS，`587`/`25`=STARTTLS/明文（自动按端口推断） |
 | `RP_SMTP_USER` / `RP_SMTP_PASS` | 无 | SMTP AUTH LOGIN 账号口令（可选；两者留空则不做认证）。**凭据只在内存，绝不入库/日志** |
 | `RP_SMTP_FROM` | 无 | 告警邮件发件地址（须为合法邮箱） |
+| `RP_SMTP_ALLOW_INSECURE` | `0` | 🔴 默认拒绝在未加密连接上发送 AUTH 凭据（防 STARTTLS-stripping：上游未通告/被中间人剥掉 STARTTLS 时直接报错而非明文发口令）。仅本机/内网调试可设 `1` 放行 |
 
 > 邮件通知还需在面板「告警 → 通知设置」里填收件人（存 `app_settings['alert_email_to']`，可随时改，即时生效）。SMTP 环境变量与收件人任一缺失即静默不发信。见 [OPERATIONS.md](OPERATIONS.md) §1.3。
 

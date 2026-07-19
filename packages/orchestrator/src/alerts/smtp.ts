@@ -26,6 +26,11 @@ export interface SmtpTransport {
   commandTimeoutMs?: number;
   /** 默认校验上游证书；仅测试可关（生产绝不关） */
   tlsRejectUnauthorized?: boolean;
+  /**
+   * 🔴 默认 false：连接未加密（非隐式 TLS 且 STARTTLS 未完成，含被中间人剥掉通告的场景）时拒绝 AUTH，
+   * 防 STARTTLS-stripping 导致凭据明文上线。仅本机/内网调试可显式放行（RP_SMTP_ALLOW_INSECURE=1）。
+   */
+  allowInsecureAuth?: boolean;
 }
 
 export interface SmtpMessage {
@@ -365,16 +370,23 @@ export async function sendMail(transport: SmtpTransport, message: SmtpMessage): 
 
     let caps = await ehlo(channel, commandTimeoutMs);
 
-    // 587/25：通告 STARTTLS 则升级；未通告则明文继续
+    // 587/25：通告 STARTTLS 则升级；未通告则明文继续（是否允许明文 AUTH 由下方门禁把关）
+    let secured = secure;
     if (!secure && caps.has('STARTTLS')) {
       await command(channel, 'STARTTLS', 220, commandTimeoutMs, 'STARTTLS');
       channel.detach();
       socket = await upgradeToTls(socket, transport.host, rejectUnauthorized, connectTimeoutMs);
       channel = new SmtpChannel(socket);
       caps = await ehlo(channel, commandTimeoutMs); // TLS 后重新 EHLO 取能力
+      secured = true;
     }
 
     if (transport.user !== undefined && transport.pass !== undefined) {
+      // 🔴 未加密信道默认拒发凭据：上游未通告 STARTTLS 可能是服务器本身明文，
+      // 也可能是中间人剥掉了通告（STARTTLS-stripping）——两种情况都不能把口令写上明文线路
+      if (!secured && transport.allowInsecureAuth !== true) {
+        throw new Error('连接未加密（无 TLS 且未完成 STARTTLS），拒绝发送 SMTP 凭据；确需明文认证请设 RP_SMTP_ALLOW_INSECURE=1');
+      }
       await authLogin(channel, transport.user, transport.pass, commandTimeoutMs);
     }
 

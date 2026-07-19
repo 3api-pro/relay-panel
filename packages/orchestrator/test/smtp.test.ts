@@ -184,6 +184,7 @@ describe('SMTP 客户端: 全流程命令序列', () => {
         user: 'smtp-user',
         pass: 'smtp-secret-pass',
         secure: false,
+        allowInsecureAuth: true, // 假服务器无 TLS，显式放行明文 AUTH 以覆盖完整命令序列
         commandTimeoutMs: 5_000,
         connectTimeoutMs: 5_000,
       };
@@ -264,12 +265,40 @@ describe('SMTP 客户端: STARTTLS / 认证失败 / 超时', () => {
     }
   });
 
+  it('默认拒绝未加密信道 AUTH：无 STARTTLS 通告时凭据绝不上明文线路（防 STARTTLS-stripping）', async () => {
+    const server = new FakeSmtpServer({ advertiseAuth: true, advertiseStarttls: false });
+    const port = await server.listen();
+    try {
+      await expect(
+        sendMail(
+          { host: '127.0.0.1', port, user: 'u', pass: 'strip-secret-pw', secure: false, commandTimeoutMs: 5_000 },
+          BASE_MSG,
+        ),
+      ).rejects.toThrow(/连接未加密/);
+      // 凭据（明文与 base64）都不得出现在线路上，AUTH 都不该发出
+      const wire = server.commands.join('\n');
+      expect(wire).not.toContain('AUTH LOGIN');
+      expect(wire).not.toContain('strip-secret-pw');
+      expect(wire).not.toContain(Buffer.from('strip-secret-pw', 'utf8').toString('base64'));
+    } finally {
+      await server.close();
+    }
+  });
+
   it('AUTH 被拒时抛错但绝不回显账号/口令', async () => {
     const server = new FakeSmtpServer({ rejectAuth: true });
     const port = await server.listen();
     try {
       const p = sendMail(
-        { host: '127.0.0.1', port, user: 'u', pass: 'top-secret-pw', secure: false, commandTimeoutMs: 5_000 },
+        {
+          host: '127.0.0.1',
+          port,
+          user: 'u',
+          pass: 'top-secret-pw',
+          secure: false,
+          allowInsecureAuth: true,
+          commandTimeoutMs: 5_000,
+        },
         BASE_MSG,
       );
       await expect(p).rejects.toThrow(/认证失败/);

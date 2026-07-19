@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, ref, type ComputedRef } from 'vue';
+import { computed, inject, onMounted, ref, watch, type ComputedRef } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
   ArrowRight, CheckCircle2, CircleSlash, Layers, Lock, Megaphone, Minus, Package, Power,
@@ -204,12 +204,14 @@ async function submit(): Promise<void> {
   results.value = [];
   summary.value = null;
   try {
-    const res = await post<{ total: number; ok: number; failed: number; results: BatchResult[] }>('/api/sites/batch', buildBody());
+    // 预览面板打开时执行其快照 payload（watch 保证与当前表单一致，快照是最后一道保险）
+    const body = preview.value !== null && previewedBody.value !== null ? previewedBody.value : buildBody();
+    const res = await post<{ total: number; ok: number; failed: number; results: BatchResult[] }>('/api/sites/batch', body);
     results.value = res.results;
     summary.value = { total: res.total, ok: res.ok, failed: res.failed };
     if (res.failed === 0) toast.success(t('batch.allOk', { n: res.ok }));
     else toast.info(t('batch.partial', { ok: res.ok, failed: res.failed }));
-    preview.value = null; // 真执行后预览已失效
+    clearPreview(); // 真执行后预览已失效
     await loadSites();
   } catch {
     /* client 已弹错误 toast */
@@ -221,15 +223,30 @@ async function submit(): Promise<void> {
 // ---- 干跑预览（dryRun）：读操作，先看每站将发生什么，再用同一 payload 确认执行 ----
 const preview = ref<BatchPreviewResponse | null>(null);
 const previewing = ref(false);
+// 🔴 预览时快照 payload：确认执行必须执行"被预览过的那份"，而不是点击瞬间的实时表单
+const previewedBody = ref<Record<string, unknown> | null>(null);
+
+function clearPreview(): void {
+  preview.value = null;
+  previewedBody.value = null;
+}
+
+// 表单/选站任何变化立即失效预览，逼用户重新预览——杜绝"预览了 A、执行了 B"
+watch(
+  () => JSON.stringify(buildBody()),
+  () => clearPreview(),
+);
 
 async function runPreview(): Promise<void> {
   if (!canSubmit.value) return;
   previewing.value = true;
-  preview.value = null;
+  clearPreview();
   results.value = [];
   summary.value = null;
   try {
-    preview.value = await post<BatchPreviewResponse>('/api/sites/batch', { ...buildBody(), dryRun: true });
+    const body = buildBody();
+    preview.value = await post<BatchPreviewResponse>('/api/sites/batch', { ...body, dryRun: true });
+    previewedBody.value = body;
   } catch {
     /* client 已弹错误 toast */
   } finally {
@@ -510,7 +527,7 @@ function cellText(state: string): string {
               {{ previewHasChange ? t('batch.preview.confirmHint', { n: preview.ok }) : t('batch.preview.nothingToDo') }}
             </p>
             <div class="flex items-center gap-2">
-              <Button variant="ghost" size="sm" @click="preview = null">{{ t('batch.preview.dismiss') }}</Button>
+              <Button variant="ghost" size="sm" @click="clearPreview">{{ t('batch.preview.dismiss') }}</Button>
               <Button
                 :variant="action === 'channel.delete' ? 'danger' : 'primary'"
                 size="sm"
