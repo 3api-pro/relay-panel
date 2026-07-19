@@ -236,6 +236,20 @@ const errors = ref<Record<string, string>>({});
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,31}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// slug 自动派生：域名/名称 → 合法 slug；派生失败（如纯中文）返回 ''
+function slugify(raw: string): string {
+  const s = raw
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .split(/[/?#]/, 1)
+    .join('')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32)
+    .replace(/-+$/g, '');
+  return SLUG_RE.test(s) ? s : '';
+}
 const CUSTOM_VERSION = '__custom__';
 
 // 版本 = 官方镜像 tag（我们不托管 exe，provision 拉官方镜像）。下拉给已知 tag + 自定义兜底
@@ -266,12 +280,24 @@ watch(fVersionSelect, (v) => {
   else fVersion.value = String(v);
 });
 
+// 名称 → slug 自动预填；slug 被手改过（当前值 ≠ 上次自动值）就不再覆盖
+const fSlugAuto = ref('');
+watch(fLabel, (v) => {
+  if (fSlug.value && fSlug.value !== fSlugAuto.value) return;
+  const s = slugify(v);
+  if (s) {
+    fSlug.value = s;
+    fSlugAuto.value = s;
+  }
+});
+
 function openCreate(): void {
   fEngine.value = 'sub2api';
   const list = engineVersions.value.sub2api;
   fVersionSelect.value = list[0] ?? CUSTOM_VERSION;
   fVersion.value = list[0] ?? '';
   fSlug.value = '';
+  fSlugAuto.value = '';
   fLabel.value = '';
   fPort.value = '';
   fEmail.value = '';
@@ -343,6 +369,17 @@ const aAdminPassword = ref('');
 const aReadonly = ref(true);
 const aErrors = ref<Record<string, string>>({});
 
+// baseUrl 域名 → slug 自动预填；同 create,手改后不覆盖
+const aSlugAuto = ref('');
+watch(aBaseUrl, (v) => {
+  if (aSlug.value && aSlug.value !== aSlugAuto.value) return;
+  const s = slugify(v);
+  if (s) {
+    aSlug.value = s;
+    aSlugAuto.value = s;
+  }
+});
+
 const credModeOptions = computed<SelectOption[]>(() => [
   { value: 'key', label: t('sites.adopt.credKey') },
   { value: 'password', label: t('sites.adopt.credPassword') },
@@ -351,6 +388,7 @@ const credModeOptions = computed<SelectOption[]>(() => [
 function openAdopt(): void {
   aEngine.value = 'sub2api';
   aSlug.value = '';
+  aSlugAuto.value = '';
   aLabel.value = '';
   aBaseUrl.value = '';
   aCredMode.value = 'key';
@@ -605,6 +643,9 @@ async function submitAdopt(): Promise<void> {
         </div>
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field :label="t('sites.create.labelLabel')" required :error="errors.label">
+            <Input v-model="fLabel" :placeholder="t('sites.create.labelPlaceholder')" :disabled="submitting" />
+          </Field>
           <Field
             label="slug"
             required
@@ -612,9 +653,6 @@ async function submitAdopt(): Promise<void> {
             :hint="t('sites.create.slugHint')"
           >
             <Input v-model="fSlug" mono placeholder="my-site" :disabled="submitting" />
-          </Field>
-          <Field :label="t('sites.create.labelLabel')" required :error="errors.label">
-            <Input v-model="fLabel" :placeholder="t('sites.create.labelPlaceholder')" :disabled="submitting" />
           </Field>
         </div>
 
@@ -661,14 +699,14 @@ async function submitAdopt(): Promise<void> {
           <Field :label="t('sites.create.engineLabel')" required :error="aErrors.engine">
             <Select v-model="aEngine" :options="engineOptions" :disabled="adoptSubmitting" />
           </Field>
-          <Field label="slug" required :error="aErrors.slug" :hint="t('sites.adopt.slugHint')">
-            <Input v-model="aSlug" mono placeholder="my-legacy-site" :disabled="adoptSubmitting" />
+          <Field :label="t('sites.adopt.baseUrlLabel')" required :error="aErrors.baseUrl" :hint="t('sites.adopt.baseUrlHint')">
+            <Input v-model="aBaseUrl" mono placeholder="https://api.example.com" :disabled="adoptSubmitting" />
           </Field>
         </div>
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field :label="t('sites.adopt.baseUrlLabel')" required :error="aErrors.baseUrl" :hint="t('sites.adopt.baseUrlHint')">
-            <Input v-model="aBaseUrl" mono placeholder="https://api.example.com" :disabled="adoptSubmitting" />
+          <Field label="slug" required :error="aErrors.slug" :hint="t('sites.adopt.slugHint')">
+            <Input v-model="aSlug" mono placeholder="my-legacy-site" :disabled="adoptSubmitting" />
           </Field>
           <Field :label="t('sites.create.labelLabel')">
             <Input v-model="aLabel" :placeholder="t('sites.create.labelPlaceholder')" :disabled="adoptSubmitting" />

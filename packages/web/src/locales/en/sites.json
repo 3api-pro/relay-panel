@@ -57,7 +57,7 @@
     "engineRecommended": "sub2api (recommended)",
     "versionLabel": "Version",
     "versionHint": "Image tag, e.g. v0.1.160",
-    "slugHint": "Lowercase letters/digits/hyphens, 2–32 chars, used for URL and container ID",
+    "slugHint": "Internal site ID, auto-generated from the display name (editable); lowercase letters/digits/hyphens, 2–32 chars",
     "labelLabel": "Display name",
     "labelPlaceholder": "My relay site",
     "portLabel": "Port",
@@ -112,7 +112,7 @@
     "errAdminPassword": "Admin password is required",
     "submit": "Verify & connect",
     "success": "Site connected",
-    "slugHint": "A short unique name for this site inside the panel (e.g. prod-cn). Only lowercase letters, digits and hyphens — it labels the site here, it does not have to match anything on the site itself.",
+    "slugHint": "A short unique name for this site inside the panel, auto-generated from the site domain (editable). Only lowercase letters, digits and hyphens — it labels the site here, it does not have to match anything on the site itself.",
     "keyHelpSub2api": "sub2api: sign in to the site admin, open Settings → System → API tokens (or reuse an existing admin API key). Alternatively use the admin email + password below.",
     "keyHelpNewapi": "new-api: sign in as root, open Settings → your profile → generate an access token (system admin token). Alternatively use the admin email + password below."
   }

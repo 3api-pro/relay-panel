@@ -57,7 +57,7 @@
     "engineRecommended": "sub2api（推荐）",
     "versionLabel": "版本",
     "versionHint": "镜像 tag，如 v0.1.160",
-    "slugHint": "小写字母/数字/连字符，2–32 位，URL 与容器标识",
+    "slugHint": "站点内部代号，已按显示名称自动生成，可改；小写字母/数字/连字符，2–32 位",
     "labelLabel": "显示名称",
     "labelPlaceholder": "我的中转站",
     "portLabel": "端口",
@@ -112,7 +112,7 @@
     "errAdminPassword": "请填写管理员密码",
     "submit": "验证并接入",
     "success": "站点已接入",
-    "slugHint": "本站点在面板内的唯一短标识（如 prod-cn）。仅小写字母/数字/连字符——只用于在面板里标记该站，不必与站点本身任何名称一致。",
+    "slugHint": "本站点在面板内的唯一短标识，已按站点域名自动生成，可改。仅小写字母/数字/连字符——只用于在面板里标记该站，不必与站点本身任何名称一致。",
     "keyHelpSub2api": "sub2api：登录站点后台，进入 设置 → 系统 → API 令牌（或复用已有的管理员 API key）。也可改用下方管理员邮箱+密码。",
     "keyHelpNewapi": "new-api：以 root 登录，进入 设置 → 个人资料 → 生成访问令牌（系统管理员令牌）。也可改用下方管理员邮箱+密码。"
   }
