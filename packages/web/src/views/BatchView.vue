@@ -337,7 +337,7 @@ function cellText(state: string): string {
                 <Field :label="t('batch.protocol')" required><Select v-model="chProtocol" :options="protocolOptions" /></Field>
               </div>
               <Field label="Base URL" required><Input v-model="chBaseUrl" mono placeholder="https://upstream.example.com/v1" /></Field>
-              <Field :label="t('batch.apiKey')" required :hint="t('batch.apiKeyHint')"><Input v-model="chApiKey" type="password" mono autocomplete="off" /></Field>
+              <Field :label="t('batch.apiKey')" required :hint="t('batch.apiKeyHint')"><Input v-model="chApiKey" type="password" mono /></Field>
               <Field :label="t('batch.models')" required :hint="t('batch.modelsHint')"><Input v-model="chModels" mono placeholder="gpt-4o, claude-3-5-sonnet" /></Field>
             </template>
 
@@ -345,7 +345,7 @@ function cellText(state: string): string {
               <Field :label="t('batch.channelName')" required :hint="t('batch.updateMatchHint')"><Input v-model="upName" :placeholder="t('batch.channelNamePlaceholder')" /></Field>
               <p class="text-[11px] text-muted">{{ t('batch.updateFillHint') }}</p>
               <Field label="Base URL"><Input v-model="upBaseUrl" mono placeholder="https://new-upstream.example.com/v1" /></Field>
-              <Field :label="t('batch.rotateKey')" :hint="t('batch.rotateKeyHint')"><Input v-model="upApiKey" type="password" mono autocomplete="off" /></Field>
+              <Field :label="t('batch.rotateKey')" :hint="t('batch.rotateKeyHint')"><Input v-model="upApiKey" type="password" mono /></Field>
               <Field :label="t('batch.models')" :hint="t('batch.modelsHint')"><Input v-model="upModels" mono placeholder="gpt-4o, gpt-4o-mini" /></Field>
             </template>
 
@@ -367,7 +367,7 @@ function cellText(state: string): string {
               </Field>
               <template v-if="grantNeedsByo">
                 <Field label="Base URL" required><Input v-model="grantByoBaseUrl" mono placeholder="https://upstream.example.com/v1" /></Field>
-                <Field :label="t('batch.apiKey')" required><Input v-model="grantByoApiKey" type="password" mono autocomplete="off" /></Field>
+                <Field :label="t('batch.apiKey')" required><Input v-model="grantByoApiKey" type="password" mono /></Field>
               </template>
             </template>
 

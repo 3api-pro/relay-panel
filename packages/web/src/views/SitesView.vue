@@ -729,14 +729,14 @@ async function submitAdopt(): Promise<void> {
               :error="aErrors.adminKey"
               :hint="t('sites.adopt.adminKeyHint')"
             >
-              <Input v-model="aAdminKey" type="password" mono :disabled="adoptSubmitting" autocomplete="off" />
+              <Input v-model="aAdminKey" type="password" mono :disabled="adoptSubmitting" />
             </Field>
             <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field :label="t('sites.adopt.adminEmailLabel')" required :error="aErrors.adminEmail">
                 <Input v-model="aAdminEmail" type="email" placeholder="admin@example.com" :disabled="adoptSubmitting" />
               </Field>
               <Field :label="t('sites.adopt.adminPasswordLabel')" required :error="aErrors.adminPassword">
-                <Input v-model="aAdminPassword" type="password" :disabled="adoptSubmitting" autocomplete="off" />
+                <Input v-model="aAdminPassword" type="password" :disabled="adoptSubmitting" />
               </Field>
             </div>
           </div>

@@ -13,7 +13,13 @@ const props = withDefaults(
     autofocus?: boolean;
     autocomplete?: string;
   }>(),
-  { type: 'text', placeholder: '', disabled: false, mono: false, autofocus: false, autocomplete: 'off' },
+  { type: 'text', placeholder: '', disabled: false, mono: false, autofocus: false, autocomplete: undefined },
+);
+
+// 密码框默认 new-password:Chrome 无视 'off',会把保存的站点密码灌进任意
+// type=password 输入框(还顺带把用户名塞进邻近文本框);登录/改密码页显式传值覆盖
+const autocompleteResolved = computed(
+  () => props.autocomplete ?? (props.type === 'password' ? 'new-password' : 'off'),
 );
 
 const emit = defineEmits<{ 'update:modelValue': [v: string | number] }>();
@@ -47,7 +53,7 @@ function onInput(ev: Event): void {
     :value="props.modelValue"
     :placeholder="props.placeholder"
     :disabled="props.disabled"
-    :autocomplete="props.autocomplete"
+    :autocomplete="autocompleteResolved"
     :class="cls"
     @input="onInput"
   />
