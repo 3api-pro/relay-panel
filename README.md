@@ -71,6 +71,21 @@ relay-panel collapses that into one control plane:
 </tr>
 </table>
 
+## Hosted or self-hosted
+
+**Two ways to run relay-panel — same codebase, your choice of whose server runs it.**
+
+| | Hosted SaaS | Self-hosted |
+|---|---|---|
+| Get started | Sign up at **[panel.3api.pro](https://panel.3api.pro)** — no server needed | `docker compose up -d` from [`deploy/`](deploy/) |
+| Runs on | Our infrastructure | Yours |
+| You manage | Just your relay stations | The orchestrator + your stations |
+| Best for | Ship fast, connect existing stations, pay as you grow | Full control, air-gapped, or your own SaaS |
+
+- **Try before anything** → [demo.3api.pro](https://demo.3api.pro) (read-only, sample data).
+- **Hosted**: create a new station or **connect an existing sub2api / new-api** in minutes, manage your whole fleet from one panel, and grow into the channel marketplace. Self-serve subscriptions; you never touch a server.
+- **Self-hosted**: one command brings up the full stack; the [self-host guide](docs/SELF-HOST.md) covers reverse proxy, backups, and metering.
+
 ## Core principles
 
 1. **Engines are never modified.** sub2api / new-api always run their official releases. All added value lives in the orchestration layer and is applied through each engine's own admin API. This keeps upgrades cheap and licensing clean (see [docs/LICENSE-COMPLIANCE.md](docs/LICENSE-COMPLIANCE.md)).
