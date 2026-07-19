@@ -147,7 +147,17 @@ export function registerBatchRoutes(app: FastifyInstance, deps: BatchServiceDeps
   app.post('/api/sites/batch', async (req) => {
     const ctx = requireCtx(req);
     const body = parseBody(batchBody, req.body);
-    const results = await service.run(ctx, body.slugs, toAction(body));
+    const action = toAction(body);
+    // dryRun 与 kind 正交，单独校验一个 boolean（discriminatedUnion 不含此字段）
+    const dryParsed = z.object({ dryRun: z.boolean().optional() }).safeParse(req.body);
+    const dryRun = dryParsed.success && dryParsed.data.dryRun === true;
+    if (dryRun) {
+      // 干跑预览：纯读，零写零任务零审计；逐站带 preview 数组与 blocked 标记
+      const results = await service.preview(ctx, body.slugs, action);
+      const okCount = results.filter((r) => r.ok).length;
+      return { dryRun: true, total: results.length, ok: okCount, failed: results.length - okCount, results };
+    }
+    const results = await service.run(ctx, body.slugs, action);
     const okCount = results.filter((r) => r.ok).length;
     return { total: results.length, ok: okCount, failed: results.length - okCount, results };
   });

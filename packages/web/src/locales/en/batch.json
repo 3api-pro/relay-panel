@@ -78,5 +78,42 @@
   "lifeStart": "Start",
   "lifeStop": "Stop",
   "toVersion": "Target version",
-  "toVersionHint": "Pinned image tag (never latest)"
+  "toVersionHint": "Pinned image tag (never latest)",
+  "dryRun": "Dry-run preview",
+  "preview": {
+    "title": "Dry-run preview",
+    "siteCount": "{n} site(s)",
+    "unreachable": "{n} unreachable",
+    "readNote": "Read-only — nothing was changed on any site.",
+    "noChange": "No changes — everything already matches.",
+    "confirmHint": "Ready to apply to {n} reachable site(s).",
+    "nothingToDo": "Nothing to apply — every change is a no-op, miss, or skip.",
+    "dismiss": "Dismiss",
+    "confirm": "Confirm and apply",
+    "rotateKey": "Rotate API key",
+    "willCreate": "Create channel \"{name}\"",
+    "willDelete": "Delete channel \"{name}\"",
+    "missDesc": "No channel named \"{name}\" — nothing to change",
+    "skipDesc": "Not applicable — skipped",
+    "f": {
+      "siteName": "Site name",
+      "logoUrl": "Logo URL",
+      "announcement": "Announcement",
+      "baseUrl": "Base URL",
+      "models": "Models",
+      "priority": "Priority",
+      "weight": "Weight",
+      "enabled": "State",
+      "version": "Version",
+      "status": "Status"
+    },
+    "flags": {
+      "noop": "no change",
+      "conflict": "name conflict",
+      "blocked": "read-only",
+      "miss": "no match",
+      "skip": "skipped",
+      "change": "will change"
+    }
+  }
 }

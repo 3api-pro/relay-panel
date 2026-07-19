@@ -2,11 +2,13 @@
 import { computed, inject, onMounted, ref, type ComputedRef } from 'vue';
 import { useI18n } from 'vue-i18n';
 import {
-  CheckCircle2, CircleSlash, Layers, Lock, Megaphone, Package, Power,
-  Radio, RefreshCw, Sparkles, Trash2, XCircle,
+  ArrowRight, CheckCircle2, CircleSlash, Layers, Lock, Megaphone, Minus, Package, Power,
+  Radio, RefreshCw, ScanEye, SearchX, SkipForward, Sparkles, Trash2, TriangleAlert, XCircle,
 } from 'lucide-vue-next';
 import { get, post } from '../api/client';
-import type { MarketplaceTemplate, SitesResponse, SiteView } from '../api/types';
+import type {
+  BatchPreviewResponse, MarketplaceTemplate, PreviewFlag, PreviewItem, SitesResponse, SiteView,
+} from '../api/types';
 import { Badge, Button, EmptyState, Field, Input, Select, Skeleton, StatusDot, Tabs, toast } from '../components/ui';
 import type { SelectOption, TabItem } from '../components/ui';
 
@@ -207,12 +209,82 @@ async function submit(): Promise<void> {
     summary.value = { total: res.total, ok: res.ok, failed: res.failed };
     if (res.failed === 0) toast.success(t('batch.allOk', { n: res.ok }));
     else toast.info(t('batch.partial', { ok: res.ok, failed: res.failed }));
+    preview.value = null; // 真执行后预览已失效
     await loadSites();
   } catch {
     /* client 已弹错误 toast */
   } finally {
     submitting.value = false;
   }
+}
+
+// ---- 干跑预览（dryRun）：读操作，先看每站将发生什么，再用同一 payload 确认执行 ----
+const preview = ref<BatchPreviewResponse | null>(null);
+const previewing = ref(false);
+
+async function runPreview(): Promise<void> {
+  if (!canSubmit.value) return;
+  previewing.value = true;
+  preview.value = null;
+  results.value = [];
+  summary.value = null;
+  try {
+    preview.value = await post<BatchPreviewResponse>('/api/sites/batch', { ...buildBody(), dryRun: true });
+  } catch {
+    /* client 已弹错误 toast */
+  } finally {
+    previewing.value = false;
+  }
+}
+
+/** 预览里是否存在“会实际改动”的条目（noop/miss/skip 不算变更；conflict 与普通变更算） */
+const previewHasChange = computed(() => {
+  const p = preview.value;
+  if (!p) return false;
+  return p.results.some(
+    (r) => r.ok && (r.preview ?? []).some((i) => i.flag === undefined || i.flag === 'conflict'),
+  );
+});
+
+type FlagTone = 'muted' | 'amber' | 'accent';
+/** 变更标记 → 图标 + 颜色 + 徽标色 + 文案 */
+function flagMeta(flag?: PreviewFlag): { icon: typeof ArrowRight; cls: string; tone: FlagTone; label: string } {
+  switch (flag) {
+    case 'noop': return { icon: Minus, cls: 'text-muted', tone: 'muted', label: t('batch.preview.flags.noop') };
+    case 'conflict': return { icon: TriangleAlert, cls: 'text-amber', tone: 'amber', label: t('batch.preview.flags.conflict') };
+    case 'blocked': return { icon: Lock, cls: 'text-amber', tone: 'amber', label: t('batch.preview.flags.blocked') };
+    case 'miss': return { icon: SearchX, cls: 'text-muted', tone: 'muted', label: t('batch.preview.flags.miss') };
+    case 'skip': return { icon: SkipForward, cls: 'text-muted', tone: 'muted', label: t('batch.preview.flags.skip') };
+    default: return { icon: ArrowRight, cls: 'text-accent', tone: 'accent', label: t('batch.preview.flags.change') };
+  }
+}
+
+/** 一条预览的人类可读标题（apiKey 只标“将轮换”，绝不回显任何值） */
+function itemLabel(item: PreviewItem): string {
+  switch (item.field) {
+    case 'apiKey': return t('batch.preview.rotateKey');
+    case 'siteName': return t('batch.preview.f.siteName');
+    case 'logoUrl': return t('batch.preview.f.logoUrl');
+    case 'announcement': return t('batch.preview.f.announcement');
+    case 'baseUrl': return t('batch.preview.f.baseUrl');
+    case 'models': return t('batch.preview.f.models');
+    case 'priority': return t('batch.preview.f.priority');
+    case 'weight': return t('batch.preview.f.weight');
+    case 'enabled': return t('batch.preview.f.enabled');
+    case 'version': return t('batch.preview.f.version');
+    case 'status': return t('batch.preview.f.status');
+    case 'create': return t('batch.preview.willCreate', { name: item.target });
+    case 'delete': return t('batch.preview.willDelete', { name: item.target });
+  }
+  if (item.flag === 'miss') return t('batch.preview.missDesc', { name: item.target });
+  if (item.flag === 'skip') return t('batch.preview.skipDesc');
+  return item.target;
+}
+
+/** 该条是否有 from→to 值可展示（apiKey/纯 flag 条目无值） */
+function hasDelta(item: PreviewItem): boolean {
+  if (item.field === 'apiKey') return false;
+  return item.from !== undefined || item.to !== undefined;
 }
 
 function siteStatus(s: SiteView): string {
@@ -380,12 +452,76 @@ function cellText(state: string): string {
             </template>
           </div>
 
-          <div class="mt-4 flex items-center justify-between border-t border-border/60 pt-4">
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
             <p class="text-xs text-muted">{{ t('batch.willApply', { n: selected.size }) }}</p>
-            <Button :variant="action === 'channel.delete' ? 'danger' : 'primary'" :disabled="!canSubmit" :loading="submitting" @click="submit">
-              {{ t('batch.apply') }}
-            </Button>
+            <div class="flex items-center gap-2">
+              <Button variant="outline" :disabled="!canSubmit" :loading="previewing" @click="runPreview">
+                <ScanEye :size="14" /> {{ t('batch.dryRun') }}
+              </Button>
+              <Button :variant="action === 'channel.delete' ? 'danger' : 'primary'" :disabled="!canSubmit" :loading="submitting" @click="submit">
+                {{ t('batch.apply') }}
+              </Button>
+            </div>
           </div>
+        </div>
+
+        <!-- 干跑预览：每站 × 变更项，flag 用颜色/图标区分；表下同一 payload 确认执行 -->
+        <div v-if="preview" class="rp-panel overflow-hidden">
+          <header class="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+            <ScanEye :size="15" class="text-accent" />
+            <h2 class="text-[13px] font-semibold">{{ t('batch.preview.title') }}</h2>
+            <Badge tone="muted" size="sm">{{ t('batch.preview.siteCount', { n: preview.total }) }}</Badge>
+            <Badge v-if="preview.failed > 0" tone="red" size="sm">{{ t('batch.preview.unreachable', { n: preview.failed }) }}</Badge>
+            <span class="ml-auto text-[11px] text-muted">{{ t('batch.preview.readNote') }}</span>
+          </header>
+
+          <div class="divide-y divide-border/50">
+            <div v-for="r in preview.results" :key="r.slug" class="px-4 py-3">
+              <div class="flex items-center gap-2">
+                <span class="truncate font-mono text-[12px] font-medium">{{ r.slug }}</span>
+                <Badge v-if="r.blocked" tone="amber" size="sm"><Lock :size="9" /> {{ t('batch.preview.flags.blocked') }}</Badge>
+                <XCircle v-if="!r.ok" :size="13" class="text-red" />
+              </div>
+
+              <p v-if="!r.ok" class="mt-1 text-[11.5px] text-red/90">{{ r.error }}</p>
+              <p v-else-if="(r.preview ?? []).length === 0" class="mt-1 text-[11.5px] text-muted">{{ t('batch.preview.noChange') }}</p>
+
+              <ul v-else class="mt-1.5 space-y-1.5">
+                <li v-for="(item, idx) in r.preview" :key="idx" class="flex items-start gap-2">
+                  <component :is="flagMeta(item.flag).icon" :size="13" class="mt-0.5 shrink-0" :class="flagMeta(item.flag).cls" />
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                      <span class="text-[12px]">{{ itemLabel(item) }}</span>
+                      <Badge v-if="item.flag" :tone="flagMeta(item.flag).tone" size="sm">{{ flagMeta(item.flag).label }}</Badge>
+                    </div>
+                    <div v-if="hasDelta(item)" class="mt-0.5 flex flex-wrap items-center gap-1 font-mono text-[11px]">
+                      <span v-if="item.from !== undefined" class="text-muted">{{ item.from || '∅' }}</span>
+                      <ArrowRight v-if="item.from !== undefined && item.to !== undefined" :size="11" class="text-muted/50" />
+                      <span v-if="item.to !== undefined" class="text-text/85">{{ item.to || '∅' }}</span>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <footer class="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3">
+            <p class="text-[11.5px]" :class="previewHasChange ? 'text-muted' : 'text-amber'">
+              {{ previewHasChange ? t('batch.preview.confirmHint', { n: preview.ok }) : t('batch.preview.nothingToDo') }}
+            </p>
+            <div class="flex items-center gap-2">
+              <Button variant="ghost" size="sm" @click="preview = null">{{ t('batch.preview.dismiss') }}</Button>
+              <Button
+                :variant="action === 'channel.delete' ? 'danger' : 'primary'"
+                size="sm"
+                :disabled="!canSubmit"
+                :loading="submitting"
+                @click="submit"
+              >
+                {{ t('batch.preview.confirm') }}
+              </Button>
+            </div>
+          </footer>
         </div>
 
         <div v-if="summary" class="rp-panel overflow-hidden">

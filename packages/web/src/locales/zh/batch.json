@@ -78,5 +78,42 @@
   "lifeStart": "启动",
   "lifeStop": "停止",
   "toVersion": "目标版本",
-  "toVersionHint": "钉版本镜像 tag（不可用 latest）"
+  "toVersionHint": "钉版本镜像 tag（不可用 latest）",
+  "dryRun": "干跑预览",
+  "preview": {
+    "title": "干跑预览",
+    "siteCount": "{n} 个站点",
+    "unreachable": "{n} 个不可达",
+    "readNote": "只读预览——未改动任何站点。",
+    "noChange": "无变更——当前值已一致。",
+    "confirmHint": "可对 {n} 个可达站点执行。",
+    "nothingToDo": "无可执行变更——全部为无变化 / 未命中 / 跳过。",
+    "dismiss": "关闭",
+    "confirm": "确认执行",
+    "rotateKey": "轮换 API key",
+    "willCreate": "新建渠道「{name}」",
+    "willDelete": "删除渠道「{name}」",
+    "missDesc": "无同名渠道「{name}」——无需改动",
+    "skipDesc": "不适用——已跳过",
+    "f": {
+      "siteName": "站点名称",
+      "logoUrl": "Logo URL",
+      "announcement": "公告",
+      "baseUrl": "Base URL",
+      "models": "模型",
+      "priority": "优先级",
+      "weight": "权重",
+      "enabled": "状态",
+      "version": "版本",
+      "status": "状态"
+    },
+    "flags": {
+      "noop": "无变化",
+      "conflict": "同名冲突",
+      "blocked": "只读拒绝",
+      "miss": "未命中",
+      "skip": "跳过",
+      "change": "将变更"
+    }
+  }
 }
