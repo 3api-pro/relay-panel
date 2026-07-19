@@ -187,6 +187,20 @@ export interface SiteView extends SiteProbe {
   activeJob: { id: number; kind: string; status: string } | null;
 }
 
+/**
+ * 站点元信息（DB 字段，不含实时探测）：批量干跑预览的只读依赖。
+ * 只暴露预览需要的字段，绝不含 credentialRef/dataDir/composeProject/baseUrl。
+ */
+export interface SiteMeta {
+  slug: string;
+  label: string;
+  engine: string;
+  version: string;
+  status: string;
+  managed: string;
+  readonly: boolean;
+}
+
 export interface UsageBucket {
   date: string;
   requests: number;
@@ -301,6 +315,23 @@ export class SitesService {
     const row = await this.requireSiteJoined(ctx, slug);
     const jobMap = await this.activeJobsBySlug([slug]);
     return this.toView(row.site, row.operatorEmail, jobMap.get(slug) ?? null, await this.probe(row.site));
+  }
+
+  /**
+   * 站点元信息（DB only，不探测引擎）：批量干跑预览取 readonly/status/version/managed。
+   * 不存在与无权访问统一 404（语义同 getSite），故 operator 只见自己名下的站。
+   */
+  async getSiteMeta(ctx: SessionCtx, slug: string): Promise<SiteMeta> {
+    const site = await this.requireSite(ctx, slug);
+    return {
+      slug: site.slug,
+      label: site.label,
+      engine: site.engine,
+      version: site.version,
+      status: site.status,
+      managed: site.managed,
+      readonly: site.readonly,
+    };
   }
 
   async listChannels(ctx: SessionCtx, slug: string): Promise<ChannelRecord[]> {

@@ -254,6 +254,69 @@ relay-panel 编排器（orchestrator）的 HTTP API 全表。默认监听 `http:
 }
 ```
 
+### 批量操作与渠道矩阵（/api/sites/batch、/api/sites/channel-matrix）
+
+| 方法 | 路径 | 角色 | 说明 |
+|---|---|---|---|
+| POST | `/api/sites/batch` | 写 | 多选站点，一次操作扇出到全部；逐站结果 |
+| GET | `/api/sites/channel-matrix` | 所有 | 跨站渠道矩阵（谁有/缺某渠道、某 key 还在哪启用） |
+
+`POST /api/sites/batch` 请求体按 `kind` 判别（`slugs` 去重保序，最多 50 个）：
+
+```
+{ slugs, kind: "announcement", announcement }
+{ slugs, kind: "branding", siteName?, logoUrl?, announcement? }
+{ slugs, kind: "channel.create", channel }
+{ slugs, kind: "channel.toggle", channelName, enabled }
+{ slugs, kind: "channel.update", channelName, patch: { baseUrl?, apiKey?, models?, priority?, weight?, enabled? } }
+{ slugs, kind: "channel.delete", channelName }
+{ slugs, kind: "grant", templateKey, channelName?, byo?, groupIds?, priority? }
+{ slugs, kind: "lifecycle", op: "upgrade"|"start"|"stop", toVersion? }
+```
+
+纪律：整体永远 HTTP 200，逐站结果携带状态；任一站失败不影响其它站（partial 是常态）。权限（写）、站点归属（404）、只读保险丝（403）、审计都由复用的单站写路径保证，批量层不新增写/审计路径。
+
+```json
+// 执行响应
+{ "total": 3, "ok": 2, "failed": 1, "results": [
+  { "slug": "site-a", "ok": true, "detail": "2 个渠道已更新" },
+  { "slug": "site-b", "ok": false, "error": "未找到名为「openai-primary」的渠道" }
+] }
+```
+
+**干跑预览（`dryRun: true`）**：在上述任一请求体加 `dryRun: true`，同端点改为**纯读**——零引擎写、零 DB 写、不建任务、不落审计——逐站算出“将会发生什么”：
+
+```json
+// 请求：{ "slugs": ["site-a","site-b"], "kind": "channel.update", "channelName": "openai-primary",
+//        "patch": { "baseUrl": "https://new/v1", "apiKey": "…" }, "dryRun": true }
+// 200
+{ "dryRun": true, "total": 2, "ok": 2, "failed": 0, "results": [
+  { "slug": "site-a", "ok": true, "preview": [
+    { "kind": "channel.update", "target": "openai-primary", "field": "baseUrl",
+      "from": "https://old/v1", "to": "https://new/v1" },
+    { "kind": "channel.update", "target": "openai-primary", "field": "apiKey" }
+  ] },
+  { "slug": "site-b", "ok": true, "blocked": true, "preview": [
+    { "kind": "channel.update", "target": "openai-primary", "flag": "miss" }
+  ] }
+] }
+```
+
+- `ok`：预览是否算出（站不可达/读失败 → `ok:false` + `error`，不拖垮其它站）。
+- `blocked`：整站只读，真执行该引擎写动作会 `403`（生命周期不受只读约束，故不标 blocked）；预览仍照常算出。
+- `preview[]` 每条 = `{ kind, target, field?, from?, to?, flag? }`，`flag ∈ noop | conflict | miss | skip`：
+  - `noop` 值已一致（真执行零改动）；`conflict` 已存在同名渠道；`miss` 按名未命中（真执行 404）；`skip` 不适用（如对 external 站做生命周期）。
+- 渠道 `apiKey` **绝不**出现在 `from`/`to`；轮换仅以 `field:"apiKey"` 一条标注。
+
+预览与执行共用同一读取/匹配代码（`matchChannels`/`getBranding`/模板加载）与同一并发（5）、slug 去重，避免“预览说 A、执行做 B”的漂移。
+
+```json
+// GET /api/sites/channel-matrix
+{ "sites": [ { "slug": "site-a", "label": "示例站 A", "ok": true } ],
+  "channels": [ { "name": "openai-primary", "protocol": "openai",
+    "presence": { "site-a": "enabled" } } ] }
+```
+
 ## 5. 任务（/api/jobs）
 
 任务只读；写入口只有各写路由触发的 `enqueue`。同一站点（slug）同一时间只允许一个排队/执行中的任务（冲突 → 409），全局并发 2。

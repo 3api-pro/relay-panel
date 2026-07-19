@@ -140,6 +140,36 @@ export interface LedgerImportResponse {
 export type ChannelProtocol = 'anthropic' | 'openai' | 'openai-responses' | 'gemini';
 export type TemplateSource = 'byo' | 'managed';
 
+// ---- 批量干跑预览（POST /api/sites/batch dryRun:true）----
+export type PreviewFlag = 'noop' | 'conflict' | 'blocked' | 'miss' | 'skip';
+
+/** 一条“将会发生什么”（apiKey 绝不出现在 from/to；轮换仅以 field=apiKey 标注） */
+export interface PreviewItem {
+  kind: string;
+  target: string;
+  field?: string;
+  from?: string;
+  to?: string;
+  flag?: PreviewFlag;
+}
+
+/** 逐站预览结果：ok=false 携 error（站不可达）；readonly 站携 blocked */
+export interface BatchPreviewResult {
+  slug: string;
+  ok: boolean;
+  blocked?: boolean;
+  preview?: PreviewItem[];
+  error?: string;
+}
+
+export interface BatchPreviewResponse {
+  dryRun: true;
+  total: number;
+  ok: number;
+  failed: number;
+  results: BatchPreviewResult[];
+}
+
 /** GET /api/marketplace/templates 行（凭据从不出口，raw 已在后端 redact） */
 export interface MarketplaceTemplate {
   id: number;

@@ -41,7 +41,7 @@ Design invariant: **batch never invents its own write path.** Every mutation run
 ## 6. Targeting, safety & workflow
 - ✅ Multi-select with read-only sites flagged and skipped
 - ⬜ **Filter/select** sites by engine / group / tag / health
-- ⬜ **Dry-run preview** — show exactly what each site will change before applying
+- ✅ **Dry-run preview** — show exactly what each site will change before applying (`dryRun:true` on `POST /api/sites/batch`; pure read — zero engine/DB write, no jobs, no audit)
 - ⬜ **Retry failed** — re-run a batch against only the sites that failed
 - ⬜ **Saved batches** — name and re-run a batch definition
 - ⬜ **Scheduled batches** — cron a recurring batch (e.g. nightly announcement rotation)
@@ -64,6 +64,31 @@ Write fan-out — `POST /api/sites/batch`, discriminated on `kind`:
 ```
 Response: `{ total, ok, failed, results: [{ slug, ok, detail?, error? }] }` — always HTTP 200; per-site outcomes carry the status.
 
+### Dry-run preview (`dryRun: true`)
+
+Add `dryRun: true` to any of the write bodies above and the same endpoint computes — **without touching a single site** (no engine write, no DB write, no job enqueued, no audit event; a preview is a read) — exactly what each target site *would* change:
+
+```
+{ slugs, kind: "channel.update", channelName, patch, dryRun: true }
+```
+
+Response reuses the per-site envelope and adds `preview` + `blocked`:
+```
+{ dryRun: true, total, ok, failed, results: [
+  { slug, ok, blocked?, error?, preview: [ PreviewItem, … ] }
+]}
+```
+- `ok` — the preview computed (site reachable). Unreachable / read-failed sites carry `ok:false` + `error` and never abort the rest (partial is normal).
+- `blocked` — the whole site is read-only, so a real run of an engine-write action would be `403` (lifecycle is *not* read-only-gated, so it is never marked blocked). The preview is still computed.
+- `PreviewItem = { kind, target, field?, from?, to?, flag? }` — one change description. `flag ∈ noop | conflict | blocked | miss | skip`:
+  - **noop** — value already matches; the real run changes nothing.
+  - **conflict** — a same-named channel already exists (create/grant would add a duplicate).
+  - **miss** — no channel matched by name (a real update/delete/toggle would `404`).
+  - **skip** — not applicable (e.g. lifecycle on an external/adopted site).
+- Channel `apiKey` is **never** echoed in `from`/`to`; a rotation surfaces only as an item with `field: "apiKey"` (“will rotate”).
+
+The preview path reuses the same reads and name-matching (`matchChannels`, `getBranding`, template load) and the same concurrency (5) / slug-dedup as the executor, so “preview says A, run does B” drift is avoided.
+
 Read — `GET /api/sites/channel-matrix` → `{ sites: [{slug,label}], channels: [{name, protocol, presence: { [slug]: "enabled"|"disabled"|"absent" }}] }`. 🚧
 
-All batch writes are audited per site through the reused single-site methods; the batch layer adds no separate audit path.
+All batch writes are audited per site through the reused single-site methods; the batch layer adds no separate audit path. A dry-run writes nothing and therefore audits nothing.

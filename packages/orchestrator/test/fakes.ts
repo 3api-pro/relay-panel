@@ -63,6 +63,7 @@ export class FakeAdapter implements EngineAdapter {
   private readonly states = new Map<string, FakeSiteState>();
   private readonly failures = new Map<string, string>();
   private readonly unhealthy = new Set<string>();
+  private readonly unreachable = new Set<string>();
 
   constructor(engine: EngineKind = 'sub2api') {
     this.engine = engine;
@@ -91,6 +92,12 @@ export class FakeAdapter implements EngineAdapter {
   setUnhealthy(slug: string, down = true): void {
     if (down) this.unhealthy.add(slug);
     else this.unhealthy.delete(slug);
+  }
+
+  /** 单站 connect 失败开关（模拟站点不可达：admin 面读写在连接期即失败，用于批量 partial 测试） */
+  setUnreachable(slug: string, down = true): void {
+    if (down) this.unreachable.add(slug);
+    else this.unreachable.delete(slug);
   }
 
   private check(op: string): void {
@@ -122,6 +129,9 @@ export class FakeAdapter implements EngineAdapter {
   async connect(inst: InstanceInfo, _credentials: CredentialStore): Promise<EngineAdminClient> {
     this.calls.push(`connect:${inst.siteSlug}`);
     this.check('connect');
+    if (this.unreachable.has(inst.siteSlug)) {
+      throw new Error(`connection refused (injected): ${inst.siteSlug}`);
+    }
     return this.clientFor(inst);
   }
 
