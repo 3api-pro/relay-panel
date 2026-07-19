@@ -21,6 +21,7 @@ import {
   toast,
 } from '../components/ui';
 import type { SelectOption, TableColumn } from '../components/ui';
+import { findRenewTarget } from './billing-renew';
 
 /**
  * 计费：我的套餐（当前档 + 到期 + 站点配额进度）、套餐档位卡片网格，
@@ -341,11 +342,20 @@ const renewSuggested = computed(() => {
   if (phase.value === 'grace' || phase.value === 'expired') return true;
   return phase.value === 'active' && lifecycleDays.value !== null && lifecycleDays.value <= 7;
 });
-/** 立即续费：定位当前付费套餐并打开购买弹窗；免费/无付费套餐则不动（下方套餐区可选购） */
+/** 下方套餐区容器（过期态续费回退：无当前付费套餐时滚动至此引导选购） */
+const plansSection = ref<HTMLElement | null>(null);
+/**
+ * 立即续费：定位当前付费套餐并打开购买弹窗。
+ * expired 阶段后端把 plan 回落为 free（priceMonthly=0），定位不到付费套餐——
+ * 此时滚动至下方套餐区引导选购，而非静默无反应（否则最需续费的用户点了没反应）。
+ */
 function renewNow(): void {
-  const key = sub.value?.plan?.key;
-  const target = key ? plans.value.find((p) => p.key === key && p.priceMonthly > 0) : undefined;
-  if (target) openBuy(target);
+  const target = findRenewTarget(sub.value?.plan?.key, plans.value);
+  if (target) {
+    openBuy(target);
+    return;
+  }
+  plansSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function loadMethods(): Promise<void> {
@@ -650,7 +660,7 @@ async function doCancel(): Promise<void> {
     </section>
 
     <!-- 套餐档位 -->
-    <section>
+    <section ref="plansSection">
       <p class="rp-microlabel mb-3">{{ t('billing.plansSection') }}</p>
 
       <div v-if="loading" class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">

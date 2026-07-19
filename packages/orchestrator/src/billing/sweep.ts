@@ -73,10 +73,16 @@ export function renderReminderEmail(kind: ReminderKind, ctx: ReminderContext): {
   const subject = `[relay-panel] ${REMINDER_TITLE[kind]} - ${ctx.planTitle}`;
   const endUtc = toUtc(ctx.periodEnd);
 
+  // 到期文案按是否有宽限期分支：grace=0（无宽限，到期即回落 free）时绝不能声称「宽限期内配额仍按原计划生效」
+  const expiryLead =
+    ctx.graceEndsAt !== null
+      ? '您的订阅已到期。已进入宽限期，宽限期内配额仍按原计划生效，请尽快续费。'
+      : '您的订阅已到期，站点配额已回落至免费档。您名下已有站点不会被停止或销毁，但将无法按原计划新建站点，请尽快续费以恢复权益。';
+
   const lead: Record<ReminderKind, string> = {
     t7: '您的订阅将于 7 天内到期，为避免服务权益中断，请及时续费。',
     t1: '您的订阅将于 1 天内到期，请尽快续费以免权益中断。',
-    expiry: '您的订阅已到期。已进入宽限期，宽限期内配额仍按原计划生效，请尽快续费。',
+    expiry: expiryLead,
     graceEnd: '您的订阅宽限期已结束，站点配额已回落至免费档。您名下已有站点不会被停止或销毁，但将无法按原计划新建站点，请续费以恢复权益。',
   };
 
@@ -147,17 +153,20 @@ export function startBillingSweep(deps: BillingSweepDeps, intervalMs: number): B
     return base !== null ? `${base}/billing` : '/billing（登录面板 → 计费页续费）';
   }
 
-  /** 发某订阅本轮到期提醒；成功的档合入 reminders_sent（失败只 warn 不记，下轮重试） */
+  /**
+   * 发某订阅本轮到期提醒；成功的档合入 reminders_sent（失败只 warn 不记，下轮重试）。
+   * 返回本轮成功发送的档集合（供收敛前判定终档是否已送达）。
+   */
   async function sendDueReminders(
     sub: SubscriptionRow,
     email: string,
     planTitle: string,
     base: string | null,
     now: number,
-  ): Promise<void> {
-    if (smtp === null) return; // 未配 SMTP：静默跳过（收敛仍照常）
+  ): Promise<Record<string, string>> {
+    if (smtp === null) return {}; // 未配 SMTP：静默跳过（收敛仍照常）
     const due = dueReminders(sub, graceDays, now);
-    if (due.length === 0) return;
+    if (due.length === 0) return {};
 
     const graceEndsAt = graceMs > 0 ? toPgTimestamp(new Date(fromPgTimestamp(sub.currentPeriodEnd).getTime() + graceMs)) : null;
     const rctx: ReminderContext = {
@@ -195,12 +204,22 @@ export function startBillingSweep(deps: BillingSweepDeps, intervalMs: number): B
     }
 
     if (Object.keys(sentNow).length > 0) {
-      // 条件更新：仍 active 才合入（若本轮已被收敛/续费清空则不覆盖）
+      // 乐观并发守卫：仅当仍 active 且 currentPeriodEnd 未变才合入。
+      // 续费(subscribeOperator)会保持 active 但顺延 currentPeriodEnd 并清空 remindersSent；
+      // 若在本轮 await send 期间发生续费，此处 WHERE 会因 currentPeriodEnd 已变而落空，
+      // 从而不会用 tick 开始的旧快照覆盖续费刚重置的台账（避免 lost-update）。
       await db.orm
         .update(subscriptions)
         .set({ remindersSent: { ...(sub.remindersSent ?? {}), ...sentNow } })
-        .where(and(eq(subscriptions.id, sub.id), eq(subscriptions.status, 'active')));
+        .where(
+          and(
+            eq(subscriptions.id, sub.id),
+            eq(subscriptions.status, 'active'),
+            eq(subscriptions.currentPeriodEnd, sub.currentPeriodEnd),
+          ),
+        );
     }
+    return sentNow;
   }
 
   async function tick(): Promise<void> {
@@ -231,16 +250,30 @@ export function startBillingSweep(deps: BillingSweepDeps, intervalMs: number): B
         try {
           const planTitle = await planTitleOf(sub.planKey);
           // 先发到期提醒（含 graceEnd），再判定收敛——保证 graceEnd 档能在收敛前发出
-          await sendDueReminders(sub, email, planTitle, base, now);
+          const sentNow = await sendDueReminders(sub, email, planTitle, base, now);
 
           const graceEndMs = fromPgTimestamp(sub.currentPeriodEnd).getTime() + graceMs;
           if (now >= graceEndMs) {
-            // 收敛为 expired（条件更新抢占，幂等）；审计 actor='system'
-            const updated = await db.orm
-              .update(subscriptions)
-              .set({ status: 'expired', updatedAt: toPgTimestamp(new Date(now)) })
-              .where(and(eq(subscriptions.id, sub.id), eq(subscriptions.status, 'active')))
-              .returning({ id: subscriptions.id });
+            // 收敛前须确保终档提醒已送达（grace>0=graceEnd，grace=0=expiry）：
+            // 收敛后该行离开 active 集合、下轮扫描不再选中，此时若终档提醒本轮发送失败便永久丢失。
+            // 故终档未送达（且已配 SMTP）时暂不收敛，保持 active 让下轮按窗口条件自然重试。
+            const terminalKind: ReminderKind = graceMs > 0 ? 'graceEnd' : 'expiry';
+            const effectiveSent = { ...(sub.remindersSent ?? {}), ...sentNow };
+            const terminalDelivered = smtp === null || typeof effectiveSent[terminalKind] === 'string';
+            // 收敛为 expired（条件更新抢占，幂等）；同带 currentPeriodEnd 乐观守卫，避免收敛掉本轮刚续费顺延的订阅；审计 actor='system'
+            const updated = terminalDelivered
+              ? await db.orm
+                  .update(subscriptions)
+                  .set({ status: 'expired', updatedAt: toPgTimestamp(new Date(now)) })
+                  .where(
+                    and(
+                      eq(subscriptions.id, sub.id),
+                      eq(subscriptions.status, 'active'),
+                      eq(subscriptions.currentPeriodEnd, sub.currentPeriodEnd),
+                    ),
+                  )
+                  .returning({ id: subscriptions.id })
+              : [];
             if (updated.length > 0) {
               await writeAudit(db, {
                 actor: 'system',

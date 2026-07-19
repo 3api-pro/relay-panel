@@ -506,7 +506,7 @@ describe('HttpMeteringGateway HTTP 契约', () => {
   const GW_TOKEN = 'gw-test-token-xyz';
   let server: Server;
   let port = 0;
-  let mode: 'ok' | 'http500' | 'badshape' = 'ok';
+  let mode: 'ok' | 'http500' | 'badshape' | 'del404' = 'ok';
   const seen: { method: string; url: string; auth: string | undefined; body: string }[] = [];
 
   function respond(req: IncomingMessage, res: ServerResponse): void {
@@ -526,7 +526,8 @@ describe('HttpMeteringGateway HTTP 契约', () => {
       return;
     }
     if (req.method === 'DELETE' && req.url?.startsWith('/v1/keys/')) {
-      res.writeHead(204);
+      // 契约 §3.2：keyRef 不存在返回 404（与 204 同视为幂等成功）
+      res.writeHead(mode === 'del404' ? 404 : 204);
       res.end();
       return;
     }
@@ -589,6 +590,26 @@ describe('HttpMeteringGateway HTTP 契约', () => {
     const req = seen.at(-1)!;
     expect(req.method).toBe('DELETE');
     expect(req.url).toBe(`/v1/keys/${encodeURIComponent('kr 1/x')}`);
+  });
+
+  it('revokeKey: 未知 keyRef 返回 404 视为幂等成功（契约 §3.2，不抛错）', async () => {
+    mode = 'del404';
+    const gw = new HttpMeteringGateway(`http://127.0.0.1:${port}`, GW_TOKEN);
+    await expect(gw.revokeKey('kr_doesnotexist')).resolves.toBeUndefined();
+    mode = 'ok';
+  });
+
+  it('revokeKey: 其余非 2xx（500）仍抛错，错误不含 token', async () => {
+    mode = 'http500';
+    const gw = new HttpMeteringGateway(`http://127.0.0.1:${port}`, GW_TOKEN);
+    const err = await gw
+      .revokeKey('kr-1')
+      .then(() => null)
+      .catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err!.message).toContain('HTTP 500');
+    expect(err!.message).not.toContain(GW_TOKEN);
+    mode = 'ok';
   });
 
   it('pullUsage: GET /v1/usage?keyRef=&from=&to=', async () => {

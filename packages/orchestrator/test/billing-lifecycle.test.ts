@@ -202,6 +202,17 @@ describe('提醒档判定与渲染（dueReminders / renderReminderEmail）', () 
     expect(graceEnd.text).toContain('不会被停止');
     expect(graceEnd.text).toContain('2026-07-22T08:00:00.000Z');
   });
+
+  it('grace=0（无宽限期）expiry 文案不得提「宽限期」；grace>0 才保留宽限措辞', () => {
+    const base = { planTitle: '专业', periodEnd: '2026-07-19 08:00:00', renewUrl: 'https://p/billing' };
+    // grace=0：sendDueReminders 传 graceEndsAt=null，文案须改为「已回落免费档」，不能声称宽限期内配额生效
+    const grace0 = renderReminderEmail('expiry', { ...base, graceEndsAt: null });
+    expect(grace0.text).not.toContain('宽限');
+    expect(grace0.text).toContain('回落至免费档');
+    // grace>0：保留原「宽限期内配额仍按原计划生效」措辞
+    const withGrace = renderReminderEmail('expiry', { ...base, graceEndsAt: '2026-07-22 08:00:00' });
+    expect(withGrace.text).toContain('宽限期内配额仍按原计划生效');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -276,6 +287,26 @@ describe('计费扫描循环（startBillingSweep）', () => {
     expect(send).toHaveBeenCalledTimes(2); // 新周期再次发 t7
   });
 
+  it('并发续费 lost-update：发信期间续费顺延，旧快照写回因 currentPeriodEnd 守卫落空（不覆盖续费重置）', async () => {
+    const id = await seedOperator(db, { email: 'sweep-lostupdate@example.com', role: 'operator' });
+    const sub = await seedSub(id, { planKey: 'pro', endOffsetMs: 6 * DAY_MS }); // t7 窗口内
+    // 模拟 await send 期间发生续费：保持 status=active，但顺延 currentPeriodEnd 且清空 reminders_sent
+    const send = vi.fn(async () => {
+      await db.orm
+        .update(subscriptions)
+        .set({ remindersSent: {}, currentPeriodEnd: toPgTimestamp(new Date(Date.now() + 40 * DAY_MS)) })
+        .where(eq(subscriptions.id, sub.id));
+    });
+    const sweep = startBillingSweep({ config: makeTestConfig({ billingGraceDays: 3 }), db, smtp: FAKE_SMTP, send }, 0);
+
+    await sweep.tick();
+    expect(send).toHaveBeenCalledTimes(1);
+    // 旧快照的 t7 时间戳写回因 currentPeriodEnd 已变而 WHERE 落空 → 续费重置的空台账未被覆盖
+    // （若无乐观并发守卫，remindersSent 会被写回 {t7:...}，续费后新周期的 t7 提醒将被静默抑制）
+    const after = (await db.orm.select().from(subscriptions).where(eq(subscriptions.id, sub.id)))[0]!;
+    expect(after.remindersSent).toEqual({});
+  });
+
   it('面板公网地址已配 → 续费入口用绝对地址', async () => {
     await db.orm
       .insert(appSettings)
@@ -305,23 +336,31 @@ describe('计费扫描循环（startBillingSweep）', () => {
     expect(after.status).toBe('expired');
   });
 
-  it('邮件发送失败只 warn 不中断：该档不记，收敛仍进行', async () => {
+  it('终档提醒发送失败：不收敛（保持 active 待下轮重试）；发送成功后再收敛', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const id = await seedOperator(db, { email: 'sweep-fail@example.com', role: 'operator' });
-    const sub = await seedSub(id, { endOffsetMs: -4 * DAY_MS }); // expiry + graceEnd 到期
+    const sub = await seedSub(id, { endOffsetMs: -4 * DAY_MS }); // 过宽限：expiry + graceEnd 同轮到期
+    let failNext = true;
     const send = vi.fn(async () => {
-      throw new Error('ECONNREFUSED 127.0.0.1:2525');
+      if (failNext) throw new Error('ECONNREFUSED 127.0.0.1:2525');
     });
     const sweep = startBillingSweep({ config: makeTestConfig({ billingGraceDays: 3 }), db, smtp: FAKE_SMTP, send }, 0);
 
+    // 第一轮：终档(graceEnd)发送失败 → 该档不记，且不收敛
+    // （若此时收敛，行离开 active 集合、下轮扫描不再选中，终档提醒便永久丢失，违反「失败下轮重试」契约）
     await sweep.tick();
     expect(send).toHaveBeenCalled();
     expect(warn).toHaveBeenCalled();
-    // 失败档不记 → reminders_sent 仍为空
-    const after = (await db.orm.select().from(subscriptions).where(eq(subscriptions.id, sub.id)))[0]!;
-    expect(after.remindersSent).toEqual({});
-    // 但状态仍收敛
-    expect(after.status).toBe('expired');
+    const after1 = (await db.orm.select().from(subscriptions).where(eq(subscriptions.id, sub.id)))[0]!;
+    expect(after1.remindersSent).toEqual({}); // 失败档不记
+    expect(after1.status).toBe('active'); // 未收敛，保持 active 供下轮重发
+
+    // 第二轮：发送成功 → 终档记入 reminders_sent 并随即收敛为 expired（下轮重试兑现）
+    failNext = false;
+    await sweep.tick();
+    const after2 = (await db.orm.select().from(subscriptions).where(eq(subscriptions.id, sub.id)))[0]!;
+    expect(typeof (after2.remindersSent as Record<string, string>).graceEnd).toBe('string');
+    expect(after2.status).toBe('expired');
   });
 
   it('free 回落不影响存量站：扫描不触碰 sites，站点仍在', async () => {

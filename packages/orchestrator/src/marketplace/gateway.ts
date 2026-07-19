@@ -68,7 +68,12 @@ export class HttpMeteringGateway implements MeteringGateway {
     this.token = token;
   }
 
-  private async request(method: string, path: string, body?: unknown): Promise<Response> {
+  private async request(
+    method: string,
+    path: string,
+    body?: unknown,
+    opts?: { acceptNotFound?: boolean },
+  ): Promise<Response> {
     let res: Response;
     try {
       res = await fetch(`${this.baseUrl}${path}`, {
@@ -85,7 +90,8 @@ export class HttpMeteringGateway implements MeteringGateway {
       const kind = err instanceof Error ? err.name : 'Error';
       throw new Error(`计量网关请求失败: ${method} ${path.split('?')[0]}: ${kind}`);
     }
-    if (!res.ok) {
+    // 契约 §3.2：DELETE 的 404（keyRef 不存在）与 2xx 同属可接受语义（幂等撤销），不算失败
+    if (!res.ok && !(opts?.acceptNotFound === true && res.status === 404)) {
       throw new Error(`计量网关请求失败: ${method} ${path.split('?')[0]}: HTTP ${res.status}`);
     }
     return res;
@@ -116,7 +122,8 @@ export class HttpMeteringGateway implements MeteringGateway {
   }
 
   async revokeKey(keyRef: string): Promise<void> {
-    await this.request('DELETE', `/v1/keys/${encodeURIComponent(keyRef)}`);
+    // 契约 §3.2：keyRef 不存在返回 404，与 204 同视为幂等成功（撤销目标本就不该存在），只对其余非 2xx 抛错
+    await this.request('DELETE', `/v1/keys/${encodeURIComponent(keyRef)}`, undefined, { acceptNotFound: true });
   }
 
   async pullUsage(keyRef: string, from: Date, to: Date): Promise<MeteringUsageRow[]> {
