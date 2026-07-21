@@ -34,7 +34,7 @@ import {
 } from '../db/schema.js';
 import { ApiError, canAccessSite, requireWrite, type SessionCtx } from '../auth/rbac.js';
 import { toPgTimestamp } from '../auth/sessions.js';
-import { redact, writeAudit } from '../audit.js';
+import { redact, redactRootOnlyAuditPayload, writeAudit } from '../audit.js';
 import { redactText, type JobEngine, type JobKind, type OnStep } from '../jobs/engine.js';
 import { makeCredentialStoreV2 } from '../credstore.js';
 import { encryptSecret } from '../secrets.js';
@@ -899,6 +899,92 @@ export class SitesService {
   }
 
   /**
+   * F5 上游渠道快捷充值/额度重置（不可逆写）：清零该 quota 型渠道所有维度的【已用】计数。
+   * 🔴 root-only + env 门控在路由层；本方法负责其余硬闸，逐条守卫、不可逆写、全量审计：
+   *  - 站点 readonly → 403（dogfood 保险丝，复用引擎写统一口径）；
+   *  - 引擎须同时支持 channelBalances(定位+判 kind) 与 channels.resetQuota(写)，否则 400（newapi 无此能力）；
+   *  - 目标渠道不存在 → 404；kind!=='quota'(window/none 零覆盖，无额度语义) → 400（明确拒绝，不空跑）；
+   *  - confirm 必须精确等于目标渠道名（防误点/防跨渠道错 id），否则 400——渠道名以引擎实时读为准；
+   *  - reset 成功/失败均写审计（action=upstream.channel.reset_quota，记 channelName/quotaUsedBefore(+After)）；
+   *  - 成功后失效该站余额列表缓存（quotaUsed 已变），重读定位最新原始行返回供路由装配对客视图。
+   * 幂等：reset 语义天然幂等（再次调用仍归零）；失败不失效缓存、无半状态，可安全重试。
+   */
+  async resetChannelQuota(
+    ctx: SessionCtx,
+    slug: string,
+    channelId: string,
+    confirm: string,
+    days: number,
+  ): Promise<{ channelName: string; quotaUsedBefore: number; quotaUsedAfter: number; row: SiteChannelBalanceRow | null }> {
+    // 🔴 纵深防御：不可逆写总开关（默认关）在 service 层复核——不止路由层，任何调用路径都受同一 kill-switch 约束
+    if (!this.deps.config.upstreamResetEnabled) {
+      throw new ApiError(403, '快捷充值写操作未启用，需 RP_UPSTREAM_RESET_ENABLED=1');
+    }
+    const site = await this.requireSite(ctx, slug);
+    // dogfood 保险丝：只读站一律拒绝引擎写（与 adapterWrite 同口径）
+    if (site.readonly) {
+      throw new ApiError(403, '该站点已设为只读，面板拒绝引擎写操作（可在站点设置中关闭只读）');
+    }
+    const client = await this.client(site);
+    const channelBalancesFn = client.stats.channelBalances;
+    const resetQuotaFn = client.channels.resetQuota;
+    if (!channelBalancesFn || !resetQuotaFn) {
+      throw new ApiError(400, '该站引擎不支持渠道额度重置');
+    }
+
+    // 定位目标渠道（读最新，不走缓存，确保 name/kind/before 准确）
+    const before = await this.adapterRead(() => channelBalancesFn());
+    const target = before.find((b) => b.id === channelId);
+    if (!target) throw new ApiError(404, '目标渠道不存在');
+    // 仅 kind='quota' 有真实额度可重置；window/none 零覆盖渠道无额度语义，明确拒绝（不对无额度渠道空跑）
+    if (target.kind !== 'quota') {
+      throw new ApiError(400, '该渠道类型无额度，无需/无法充值');
+    }
+    // 确认令牌：必须精确等于目标渠道名（防误点/防跨渠道错 id）；渠道名以引擎实时读为准
+    if (confirm !== target.name) {
+      throw new ApiError(400, '确认令牌与目标渠道名不匹配，已取消重置');
+    }
+    const quotaUsedBefore = target.quotaUsed ?? 0;
+
+    // 不可逆写：失败即审计 ok:false 再抛（不失效缓存，无半状态，可安全重试）
+    try {
+      await resetQuotaFn(channelId);
+    } catch (e) {
+      const msg = redactText(errMsg(e));
+      await writeAudit(this.deps.db, {
+        siteId: site.id,
+        actor: ctx.email,
+        action: 'upstream.channel.reset_quota',
+        payload: { slug: site.slug, channelId, channelName: target.name, quotaUsedBefore },
+        ok: false,
+        error: msg,
+      });
+      if (e instanceof ApiError) throw e;
+      throw new ApiError(502, `引擎操作失败: ${msg}`);
+    }
+
+    // 成功：失效该站余额列表缓存（quotaUsed 已变），重读定位最新行（含 avgDailyCost，供路由算 daysLeft）
+    upstreamBalanceCache.delete(`list:${site.slug}`);
+    let row: SiteChannelBalanceRow | null = null;
+    let quotaUsedAfter = 0;
+    try {
+      const rows = await this.listSiteChannelBalances(ctx, days);
+      row = rows.find((r) => r.siteOk && r.siteSlug === site.slug && r.id === channelId) ?? null;
+      quotaUsedAfter = row?.quotaUsed ?? 0;
+    } catch {
+      // 重读失败不影响已成功且幂等的重置；行留空由路由回落
+    }
+    await writeAudit(this.deps.db, {
+      siteId: site.id,
+      actor: ctx.email,
+      action: 'upstream.channel.reset_quota',
+      payload: { slug: site.slug, channelId, channelName: target.name, quotaUsedBefore, quotaUsedAfter },
+      ok: true,
+    });
+    return { channelName: target.name, quotaUsedBefore, quotaUsedAfter, row };
+  }
+
+  /**
    * 充值(现金到账)跨站汇总：各站 payment/dashboard(days=从 from 到今天) → 今日充值 + 区间充值(按 daily 过滤 [from,to])。
    * 口径=现金流入(RMB)，非营收/消费。单站失败静默跳过；全失败 ok=false（前端不展示）。5min 缓存。
    */
@@ -943,12 +1029,17 @@ export class SitesService {
   async auditTrail(ctx: SessionCtx, slug: string, limit: number): Promise<AuditEventRow[]> {
     const site = await this.requireSite(ctx, slug);
     const capped = Math.min(Math.max(Math.floor(limit) || 50, 1), 200);
-    return this.deps.db.orm
+    const rows = await this.deps.db.orm
       .select()
       .from(auditEvents)
       .where(eq(auditEvents.siteId, site.id))
       .orderBy(desc(auditEvents.id))
       .limit(capped);
+    // canAccessSite 授予 viewer 全站 / operator 本站访问本端点；root-only 上游用量字段
+    // (quotaUsedBefore/quotaUsedAfter, USD) 对非 root 就地剥离，与 F5 root-only balances 口径一致。
+    const isRoot = ctx.role === 'root';
+    if (isRoot) return rows;
+    return rows.map((r) => ({ ...r, payload: redactRootOnlyAuditPayload(r.payload, isRoot) }));
   }
 
   // ---- 写路径：站点生命周期 ----

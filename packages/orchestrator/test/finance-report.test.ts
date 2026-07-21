@@ -25,7 +25,8 @@ import {
   weeklyReportWindow,
 } from '../src/finance/report.js';
 import { startFinanceReports } from '../src/finance/scheduler.js';
-import { makeTestConfig, makeTestDb, seedOperator } from './helpers.js';
+import { ALERT_EMAIL_SETTINGS_KEY } from '../src/alerts/notify.js';
+import { makeTestConfig, makeTestDb, makeTestServer, seedOperator, type TestServer } from './helpers.js';
 import { FakeAdapter, FakeLifecycle, FakeNotifier } from './fakes.js';
 
 /**
@@ -356,4 +357,134 @@ describe('parseReportConfig 容错回落默认', () => {
       weekly: true,
     });
   });
+});
+
+// ---------------------------------------------------------------------------
+// ⑤ 立即发送测试报告端点 POST /api/finance/report/test（root 一键验证）
+// ---------------------------------------------------------------------------
+
+describe('测试报告端点 POST /api/finance/report/test', () => {
+  let ts: TestServer;
+  let send: ReturnType<typeof vi.fn>;
+  let rootCookie: string;
+  let opCookie: string;
+
+  beforeAll(async () => {
+    send = vi.fn(async () => undefined);
+    // 注入 SMTP 发信替身 + 配好 smtp（config.smtp 非空），使发信路径可断言
+    ts = await makeTestServer({ config: { smtp: FAKE_SMTP }, smtpSend: send });
+    rootCookie = (await ts.seedLogin({ email: 'rep-root@example.com', password: 'pw-12345678', role: 'root' })).cookie;
+    opCookie = (await ts.seedLogin({ email: 'rep-op@example.com', password: 'pw-12345678', role: 'operator' })).cookie;
+  }, 60_000);
+
+  afterAll(async () => {
+    await ts.close();
+  });
+
+  beforeEach(async () => {
+    send.mockClear();
+    // 隔离：清掉报告配置 / 发送标记 / 告警邮箱
+    await ts.db.orm.delete(appSettings).where(eq(appSettings.key, FINANCE_REPORT_SETTINGS_KEY));
+    await ts.db.orm.delete(appSettings).where(eq(appSettings.key, FINANCE_REPORT_STATE_KEY));
+    await ts.db.orm.delete(appSettings).where(eq(appSettings.key, ALERT_EMAIL_SETTINGS_KEY));
+  });
+
+  async function setReportConfig(value: Record<string, unknown>): Promise<void> {
+    await ts.db.orm
+      .insert(appSettings)
+      .values({ key: FINANCE_REPORT_SETTINGS_KEY, value })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value } });
+  }
+
+  async function stateRows(): Promise<unknown[]> {
+    return ts.db.orm.select().from(appSettings).where(eq(appSettings.key, FINANCE_REPORT_STATE_KEY));
+  }
+
+  it('未登录 → 401；operator（非 root）→ 403，均不发信', async () => {
+    const anon = await ts.app.inject({ method: 'POST', url: '/api/finance/report/test' });
+    expect(anon.statusCode).toBe(401);
+    const asOp = await ts.app.inject({
+      method: 'POST',
+      url: '/api/finance/report/test',
+      cookies: { rp_session: opCookie },
+    });
+    expect(asOp.statusCode).toBe(403);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('无收件人 + 无告警邮箱 → 400，不发信、不写发送标记', async () => {
+    await setReportConfig({ recipients: [], daily: true, weekly: true });
+    const res = await ts.app.inject({
+      method: 'POST',
+      url: '/api/finance/report/test',
+      cookies: { rp_session: rootCookie },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(send).not.toHaveBeenCalled();
+    expect(await stateRows()).toHaveLength(0);
+  });
+
+  it('有收件人 → 逐个 RCPT 调发信替身，返回 sent/recipients/preview，且绝不写 finance_report_state', async () => {
+    await setReportConfig({ recipients: ['ops@example.com', 'fin@example.com'], daily: true, weekly: true });
+    const res = await ts.app.inject({
+      method: 'POST',
+      url: '/api/finance/report/test',
+      cookies: { rp_session: rootCookie },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { sent: boolean; recipients: number; preview: string };
+    expect(body.sent).toBe(true);
+    expect(body.recipients).toBe(2);
+    expect(body.preview).toContain('经营日报'); // 日报正文首行
+    // 逐个收件人各一封
+    expect(send).toHaveBeenCalledTimes(2);
+    const tos = send.mock.calls.map((c) => (c[1] as { to: string }).to);
+    expect(tos).toEqual(['ops@example.com', 'fin@example.com']);
+    expect((send.mock.calls[0]![1] as { subject: string }).subject).toContain('日报');
+    // 🔴 不占用当日发送标记（允许反复测试）
+    expect(await stateRows()).toHaveLength(0);
+    // 反复测试仍不写标记
+    await ts.app.inject({ method: 'POST', url: '/api/finance/report/test', cookies: { rp_session: rootCookie } });
+    expect(await stateRows()).toHaveLength(0);
+  });
+
+  it('无收件人但配置了告警邮箱 → 回落发到告警邮箱', async () => {
+    await setReportConfig({ recipients: [], daily: true, weekly: true });
+    await ts.db.orm
+      .insert(appSettings)
+      .values({ key: ALERT_EMAIL_SETTINGS_KEY, value: { email: 'oncall@example.com' } })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value: { email: 'oncall@example.com' } } });
+    const res = await ts.app.inject({
+      method: 'POST',
+      url: '/api/finance/report/test',
+      cookies: { rp_session: rootCookie },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { recipients: number }).recipients).toBe(1);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect((send.mock.calls[0]![1] as { to: string }).to).toBe('oncall@example.com');
+  });
+});
+
+describe('测试报告端点：未配 SMTP → 400', () => {
+  it('config.smtp 未配 + 有收件人 → 400，不构造发信', async () => {
+    const ts = await makeTestServer({}); // 不注入 smtp/smtpSend
+    try {
+      const cookie = (await ts.seedLogin({ email: 'nosmtp-root@example.com', password: 'pw-12345678', role: 'root' })).cookie;
+      await ts.db.orm
+        .insert(appSettings)
+        .values({ key: FINANCE_REPORT_SETTINGS_KEY, value: { recipients: ['x@example.com'], daily: true, weekly: true } });
+      const res = await ts.app.inject({
+        method: 'POST',
+        url: '/api/finance/report/test',
+        cookies: { rp_session: cookie },
+      });
+      expect(res.statusCode).toBe(400);
+      // 未写任何发送标记
+      const st = await ts.db.orm.select().from(appSettings).where(eq(appSettings.key, FINANCE_REPORT_STATE_KEY));
+      expect(st).toHaveLength(0);
+    } finally {
+      await ts.close();
+    }
+  }, 60_000);
 });

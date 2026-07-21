@@ -242,6 +242,13 @@ export class Sub2apiAdminClient implements EngineAdminClient {
         return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
     },
+
+    // F5 快捷充值/续杯：重置该账户所有维度配额【已用】为 0（AccountHandler.ResetQuota→ResetAccountQuota→ResetQuotaUsed）。
+    // 🔴 不可逆(丢失已用计数)、纯透传。仅对 kind='quota'(apikey/bedrock) 渠道有意义——kind 判定与确认令牌/门控在 orchestrator，
+    // adapter 不做业务判断，只 POST。响应无实体（envelope.data 忽略）。
+    resetQuota: async (id: string): Promise<void> => {
+      await this.http.post(`/api/v1/admin/accounts/${id}/reset-quota`);
+    },
   };
 
   groups = {
@@ -531,8 +538,9 @@ export class Sub2apiAdminClient implements EngineAdminClient {
       };
     },
 
-    // F5 上游渠道"余额/可用度"：复用 /admin/accounts 列表，逐账户按覆盖度分类。
-    // 🔴 绝不触碰 accountToChannelRecord（monitor/finance/channels.list 共用）；绝不新增 reset-quota 等写调用。
+    // F5 上游渠道"余额/可用度"：复用 /admin/accounts 列表，逐账户按覆盖度分类（纯只读）。
+    // 🔴 绝不触碰 accountToChannelRecord（monitor/finance/channels.list 共用）。
+    //    额度写(reset-quota)是独立能力，走 channels.resetQuota（有 root+门控+确认令牌+kind 守卫），本读路径永不触发写。
     //  - typeof quota_limit==='number'（apikey/bedrock 且管理员配>0）→ kind='quota'（带 quotaLimit/quotaUsed，真实可用额度）；
     //  - 否则 window_cost_limit 有值 或 type∈{oauth,setup_token}（Anthropic OAuth/号池）→ kind='window'（仅窗口成本闸，非余额）；
     //  - 否则 → kind='none'（零覆盖）。

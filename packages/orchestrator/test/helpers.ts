@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { EngineAdapter, EngineKind, EngineLifecycle } from '@relay-panel/adapter-core';
 import { loadConfig, type Config } from '../src/config.js';
+import type { SmtpSend } from '../src/alerts/smtp.js';
 import { makeDb, runMigrations, type Db } from '../src/db/client.js';
 import { operators } from '../src/db/schema.js';
 import { hashPassword } from '../src/auth/passwords.js';
@@ -44,6 +45,8 @@ export interface MakeTestServerOverrides {
   config?: Partial<Config>;
   /** 复用外部 db（缺省新建 pglite:memory + migrate；close() 时一并关闭） */
   db?: Db;
+  /** 注入 SMTP 发信替身（F2 测试报告直投断言用）；缺省不注入，走真 sendMail */
+  smtpSend?: SmtpSend;
 }
 
 export interface TestServer {
@@ -96,6 +99,7 @@ export async function makeTestServer(overrides: MakeTestServerOverrides = {}): P
     gateway,
     jobs,
     notifier,
+    ...(overrides.smtpSend !== undefined ? { smtpSend: overrides.smtpSend } : {}),
   });
   await app.ready();
 

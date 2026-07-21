@@ -54,6 +54,14 @@ export interface EngineAdminClient {
     update(id: string, patch: Partial<ChannelSpec> & { enabled?: boolean }): Promise<ChannelRecord>;
     remove(id: string): Promise<void>;
     test(id: string, model?: string): Promise<ChannelTestResult>;
+    /**
+     * 重置该渠道(账户)全部维度的配额【已用】计数为 0（F5 快捷充值/续杯；可选：引擎支持才实现，
+     * adapter-newapi 未实现即 undefined）。🔴 不可逆：丢失已用计数，仅对 kind='quota'
+     * (apikey/bedrock，有真实 quota_limit) 的渠道有意义；window/none 零覆盖渠道无额度语义，
+     * 上层（orchestrator）必须先经 channelBalances 判 kind 后再调，绝不对 window/none 渠道调用。
+     * adapter 层为纯透传（POST /accounts/:id/reset-quota），业务门控/确认令牌在 orchestrator。
+     */
+    resetQuota?(id: string): Promise<void>;
   };
 
   groups: {

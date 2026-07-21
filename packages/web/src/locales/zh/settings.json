@@ -50,6 +50,12 @@
     "saved": "经营报告配置已保存",
     "loadFailed": "读取报告配置失败",
     "usdNote": "金额单位 USD",
-    "noResolveNote": "毛利率/成本预警需人工在告警页处理，无自动恢复。"
+    "noResolveNote": "毛利率/成本预警需人工在告警页处理，无自动恢复。",
+    "sendTest": "发送测试报告",
+    "sendTestHint": "用当前配置立即渲染一份日报并发送给收件人，无须等待定时任务即可验证送达。",
+    "testSent": "测试报告已发送给 {count} 位收件人",
+    "testPartial": "测试报告部分送达：{total} 位中仅 {sent} 位成功，请检查 SMTP 出信",
+    "testFailed": "测试报告发送失败，请检查 SMTP 出信与收件人配置",
+    "previewTitle": "报告预览"
   }
 }

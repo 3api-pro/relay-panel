@@ -48,5 +48,13 @@
   "rechargeRemove": "Remove",
   "rechargeSaved": "Recharge links saved",
   "rechargeUrlInvalid": "Every URL must be http or https",
+  "colAction": "Action",
+  "resetBtn": "Reset used",
+  "resetDisabledHint": "Quota reset is disabled on the server. Set RP_UPSTREAM_RESET_ENABLED=1 and restart to enable it.",
+  "resetOnlyQuotaHint": "Only real-quota channels have a usable quota interface",
+  "resetConfirmTitle": "Reset upstream channel quota",
+  "resetConfirmMessage": "Irreversible: this zeroes the used-quota counter for this upstream channel, used after a top-up or renewal. It cannot be undone.",
+  "resetConfirmAction": "Reset used quota",
+  "resetSuccess": "Used quota reset",
   "loadFailed": "Failed to load"
 }

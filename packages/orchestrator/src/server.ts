@@ -10,6 +10,7 @@ import type { Db } from './db/client.js';
 import { authenticateDetailed, type SessionCtx } from './auth/rbac.js';
 import { SESSION_COOKIE, sessionCookieOptions } from './auth/sessions.js';
 import { JobEngine } from './jobs/engine.js';
+import type { SmtpSend } from './alerts/smtp.js';
 import { registerAuthRoutes } from './auth/routes.js';
 import { registerJobsRoutes } from './jobs/routes.js';
 import { registerSitesRoutes } from './sites/routes.js';
@@ -85,6 +86,11 @@ export interface ServerDeps {
   gateway: MeteringGateway | null;
   jobs: JobEngine;
   notifier: Notifier;
+  /**
+   * 可选注入的 SMTP 发信替身（默认真 sendMail）。仅测试注入以断言 F2 测试报告直投；
+   * 生产不传，registerFinanceRoutes 内部回落 sendMail。
+   */
+  smtpSend?: SmtpSend;
 }
 
 export interface BuildServerOptions {

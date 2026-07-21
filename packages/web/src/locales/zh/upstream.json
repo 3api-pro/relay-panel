@@ -48,5 +48,13 @@
   "rechargeRemove": "删除",
   "rechargeSaved": "充值外链已保存",
   "rechargeUrlInvalid": "每个链接都必须是 http 或 https",
+  "colAction": "操作",
+  "resetBtn": "重置已用",
+  "resetDisabledHint": "服务端未启用额度重置。需设置 RP_UPSTREAM_RESET_ENABLED=1 并重启后生效。",
+  "resetOnlyQuotaHint": "仅真实额度渠道有可用的额度接口",
+  "resetConfirmTitle": "重置上游渠道已用额度",
+  "resetConfirmMessage": "不可逆：将清零该上游渠道的已用额度计数（充值/续杯后重置用量用），无法撤销。",
+  "resetConfirmAction": "重置已用额度",
+  "resetSuccess": "已重置已用额度",
   "loadFailed": "加载失败"
 }

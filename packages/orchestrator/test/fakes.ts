@@ -227,6 +227,12 @@ export class FakeAdapter implements EngineAdapter {
           if (!rec) return { ok: false, error: `channel not found: ${id}` };
           return { ok: true, latencyMs: 3, ...(model !== undefined ? { model } : {}) };
         },
+        // F5 快捷充值：重置该渠道已用额度为 0（对预置 channelBalances 里同 id 的 quotaUsed 归零）
+        resetQuota: async (id: string): Promise<void> => {
+          track('channels.resetQuota');
+          const b = state.channelBalances?.find((x) => x.id === id);
+          if (b && b.kind === 'quota') b.quotaUsed = 0;
+        },
       },
       groups: {
         list: async (): Promise<GroupRecord[]> => {

@@ -50,6 +50,12 @@
     "saved": "Business report settings saved",
     "loadFailed": "Failed to load report settings",
     "usdNote": "Amounts in USD",
-    "noResolveNote": "Margin/cost warnings need manual handling on the Alerts page; they do not auto-resolve."
+    "noResolveNote": "Margin/cost warnings need manual handling on the Alerts page; they do not auto-resolve.",
+    "sendTest": "Send test report",
+    "sendTestHint": "Immediately render a daily report from the current settings and email it to the recipients, so you can verify delivery without waiting for the scheduled run.",
+    "testSent": "Test report sent to {count} recipient(s)",
+    "testPartial": "Test report partially delivered: {sent} of {total} recipient(s); check SMTP output",
+    "testFailed": "Failed to send the test report; please check SMTP output and recipient settings",
+    "previewTitle": "Report preview"
   }
 }

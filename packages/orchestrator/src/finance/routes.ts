@@ -6,10 +6,15 @@ import { ApiError, requireRoot } from '../auth/rbac.js';
 import { toPgTimestamp } from '../auth/sessions.js';
 import { writeAudit } from '../audit.js';
 import { SitesService, type SitesServiceDeps } from '../sites/service.js';
+import { sendMail, type SmtpSend } from '../alerts/smtp.js';
+import { ALERT_EMAIL_SETTINGS_KEY, EmailNotifier } from '../alerts/notify.js';
 import { COST_RATIOS_KEY, readCostRatios, resolveSummaryRows, summaryTotals } from './summary.js';
 import {
   FINANCE_REPORT_SETTINGS_KEY,
+  REPORT_SEND_HOUR,
+  dailyReportWindow,
   parseReportConfig,
+  renderDailyReport,
   type FinanceReportConfig,
 } from './report.js';
 
@@ -140,7 +145,14 @@ function breakdownTotals(rows: FinanceBreakdownRow[]): {
   );
 }
 
-export function registerFinanceRoutes(app: FastifyInstance, deps: SitesServiceDeps): void {
+/** 测试报告 preview：返回渲染出的报告纯文本前 N 行供 UI 展示（不含任何凭据/上游供应商名） */
+const REPORT_PREVIEW_LINES = 20;
+
+export function registerFinanceRoutes(
+  app: FastifyInstance,
+  // smtpSend 为可选注入（默认真 sendMail）；仅供测试注入 SMTP 发信替身，生产不传即走 sendMail
+  deps: SitesServiceDeps & { smtpSend?: SmtpSend },
+): void {
   const service = new SitesService(deps);
 
   // ---- 汇总（含按天走势）----
@@ -332,6 +344,21 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: SitesServiceDe
     return rows[0]?.value;
   }
 
+  /**
+   * 收件人解析（与 scheduler.resolveRecipients 同口径）：
+   * finance_report.recipients 优先；留空 = 回落告警邮箱 alert_email_to.email；都没有 = 空数组。
+   */
+  async function resolveReportRecipients(cfg: FinanceReportConfig): Promise<string[]> {
+    if (cfg.recipients.length > 0) return cfg.recipients;
+    const rows = await deps.db.orm
+      .select({ value: appSettings.value })
+      .from(appSettings)
+      .where(eq(appSettings.key, ALERT_EMAIL_SETTINGS_KEY))
+      .limit(1);
+    const email = (rows[0]?.value as { email?: unknown } | undefined)?.email;
+    return typeof email === 'string' && email !== '' ? [email] : [];
+  }
+
   app.get('/api/settings/finance-report', async (req) => {
     const ctx = requireCtx(req);
     requireRoot(ctx);
@@ -378,5 +405,64 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: SitesServiceDe
     });
 
     return next;
+  });
+
+  // ---- 立即发送测试报告（仅 root；F2）----
+  // 用当前 finance_report 配置即时渲染一份【日报】(与 scheduler runReport 同口径)并直投收件人，
+  // 供 root 一键验证「报告能生成 + SMTP 能送达」，无须等 sweep。
+  // 🔴 只发信、只读数——绝不写 finance_report_state（不占用当日发送标记，允许反复测试），
+  //    也绝不触碰引擎/额度/sites。收件人/SMTP 缺任一 → 400 明确提示。
+  app.post('/api/finance/report/test', async (req) => {
+    const ctx = requireCtx(req);
+    requireRoot(ctx);
+
+    const cfg = parseReportConfig(await readReportConfigRaw());
+    const recipients = await resolveReportRecipients(cfg);
+    const smtp = deps.config.smtp ?? null;
+
+    // 两类前置缺失各自明确提示，便于 root 自查（都不发信、不写任何状态）
+    if (recipients.length === 0) {
+      throw new ApiError(
+        400,
+        '未配置收件人：请在经营报告设置里填写收件人，或先在告警页配置告警邮箱作为回落收件人',
+      );
+    }
+    if (smtp === null) {
+      throw new ApiError(400, '未配置 SMTP 出信（服务端未设 RP_SMTP_*），无法发送测试报告');
+    }
+
+    // 与 scheduler 同口径：覆盖最近一个已完整过完的北京日历日
+    const now = Date.now();
+    const win = dailyReportWindow(now, REPORT_SEND_HOUR);
+    const [usage, ratios] = await Promise.all([
+      service.financeUsage(ctx, win.from, win.to),
+      readCostRatios(deps.db),
+    ]);
+    const rows = resolveSummaryRows(usage, ratios);
+    // 口径铁律：合计先剔除 ok===false 降级站（探测降级不误报），与 scheduler 一致
+    const totals = summaryTotals(rows.filter((r) => r.ok !== false), null);
+    const { subject, text } = renderDailyReport(win.from, win.to, rows, totals);
+
+    // 经 EmailNotifier 直投（复用同一 SMTP 出信凭据；smtpSend 可注入测试替身，生产走真 sendMail）
+    const notifier = new EmailNotifier(deps.db, smtp, deps.smtpSend ?? sendMail);
+    const sentCount = await notifier.sendDirect(recipients, subject, text);
+
+    // 🔴 审计只记数量/是否送达/覆盖日，绝不落收件人邮箱原值
+    await writeAudit(deps.db, {
+      siteId: null,
+      actor: ctx.email,
+      action: 'finance.report_test.send',
+      payload: {
+        recipientCount: recipients.length,
+        sent: sentCount > 0,
+        sentCount,
+        target: win.target,
+      },
+      ok: sentCount > 0,
+    });
+
+    const preview = text.split('\n').slice(0, REPORT_PREVIEW_LINES).join('\n');
+    // sentCount 透出：部分收件人投递失败时前端可如实提示，不掩盖 SMTP 送达故障
+    return { sent: sentCount > 0, sentCount, recipients: recipients.length, preview };
   });
 }

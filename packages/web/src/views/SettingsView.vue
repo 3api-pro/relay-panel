@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { ArrowRight, KeyRound, LineChart, ServerCog, UserRound } from 'lucide-vue-next';
 import { get, post, put } from '../api/client';
 import { session } from '../api/session';
-import type { FinanceReportConfig, Me, OperatorRole } from '../api/types';
+import type { FinanceReportConfig, FinanceReportTestResponse, Me, OperatorRole } from '../api/types';
 import { Badge, Button, Card, EmptyState, Field, Input, Skeleton, toast } from '../components/ui';
 
 /**
@@ -83,6 +83,8 @@ async function submitPassword(): Promise<void> {
 // ---- 经营报告配置（root · F2）----
 const reportLoading = ref(false);
 const reportSaving = ref(false);
+const reportTesting = ref(false);
+const reportPreview = ref('');
 const recipients = ref('');
 const marginLowPctInput = ref<number | string>(20); // 展示为百分比（0..100），提交转 0..1
 const costSpikeFactor = ref<number | string>(1.5);
@@ -149,6 +151,28 @@ async function saveReportConfig(): Promise<void> {
     // client 已弹错误 toast
   } finally {
     reportSaving.value = false;
+  }
+}
+
+// 立即发送测试报告：用当前配置渲染日报并直投收件人，验证「能生成 + 能送达」。
+// 后端 400（未配置收件人/SMTP）由 client 自动弹出后端中文原因；送达失败(sent=false)在此弹失败 toast。
+async function sendTestReport(): Promise<void> {
+  reportTesting.value = true;
+  try {
+    const res = await post<FinanceReportTestResponse>('/api/finance/report/test', {});
+    reportPreview.value = res.preview ?? '';
+    if (res.sent && res.sentCount >= res.recipients) {
+      toast.success(t('settings.report.testSent', { count: res.sentCount }));
+    } else if (res.sent) {
+      // 部分投递失败：如实提示实际送达/总数，别掩盖 SMTP 送达故障
+      toast.error(t('settings.report.testPartial', { sent: res.sentCount, total: res.recipients }));
+    } else {
+      toast.error(t('settings.report.testFailed'));
+    }
+  } catch {
+    // client 已弹后端 400 原因（未配置收件人/SMTP）
+  } finally {
+    reportTesting.value = false;
   }
 }
 </script>
@@ -308,10 +332,24 @@ async function saveReportConfig(): Promise<void> {
               {{ t('settings.report.usdNote') }} · {{ t('settings.report.noResolveNote') }}
             </p>
 
-            <div class="flex justify-end border-t border-border/60 pt-3">
-              <Button variant="primary" :loading="reportSaving" @click="saveReportConfig">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+              <Button
+                variant="outline"
+                :loading="reportTesting"
+                :disabled="reportSaving"
+                :title="t('settings.report.sendTestHint')"
+                @click="sendTestReport"
+              >
+                {{ t('settings.report.sendTest') }}
+              </Button>
+              <Button variant="primary" :loading="reportSaving" :disabled="reportTesting" @click="saveReportConfig">
                 {{ t('settings.report.save') }}
               </Button>
+            </div>
+
+            <div v-if="reportPreview" class="space-y-1.5">
+              <p class="text-xs font-medium text-muted">{{ t('settings.report.previewTitle') }}</p>
+              <pre class="max-h-64 overflow-auto rounded-lg border border-border bg-panel-2/40 p-3 text-[11px] leading-relaxed text-text/90 whitespace-pre-wrap">{{ reportPreview }}</pre>
             </div>
           </div>
         </Card>

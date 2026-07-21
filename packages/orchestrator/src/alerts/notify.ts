@@ -4,7 +4,7 @@ import type { SmtpSettings } from '../config.js';
 import { appSettings } from '../db/schema.js';
 import { fromPgTimestamp } from '../auth/sessions.js';
 import { redactText } from '../jobs/engine.js';
-import { sendMail, type SmtpMessage, type SmtpSend } from './smtp.js';
+import { sendMail, type SmtpMessage, type SmtpSend, type SmtpTransport } from './smtp.js';
 
 /**
  * 告警通知（规格 §8）。事件负载只含告警行与站点摘要（slug/label），
@@ -71,6 +71,23 @@ export const ALERT_EMAIL_SETTINGS_KEY = 'alert_email_to';
 /** 邮件建连/命令超时（略高于 webhook 的 5s，容忍 SMTP 多轮往返；仍不足以拖垮监控轮） */
 const EMAIL_CONNECT_TIMEOUT_MS = 10_000;
 const EMAIL_COMMAND_TIMEOUT_MS = 10_000;
+
+/**
+ * 从内存里的 SmtpSettings 组装 SmtpTransport（含超时；user/pass/allowInsecureAuth 仅在存在时带上）。
+ * 🔴 凭据只在内存并直发 socket，绝不落日志。fire() 与 sendDirect() 共用同一组装，出信参数逐字段一致。
+ */
+function buildSmtpTransport(smtp: SmtpSettings): SmtpTransport {
+  return {
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.secure,
+    connectTimeoutMs: EMAIL_CONNECT_TIMEOUT_MS,
+    commandTimeoutMs: EMAIL_COMMAND_TIMEOUT_MS,
+    ...(smtp.user !== undefined ? { user: smtp.user } : {}),
+    ...(smtp.pass !== undefined ? { pass: smtp.pass } : {}),
+    ...(smtp.allowInsecureAuth === true ? { allowInsecureAuth: true } : {}),
+  };
+}
 
 /** 告警行结构化子集（NotifyEvent.alert 为 unknown，此处按需读取，容错缺字段） */
 interface AlertLike {
@@ -202,6 +219,31 @@ export class EmailNotifier implements Notifier {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn('[alerts] 邮件通知失败:', redactText(msg));
     }
+  }
+
+  /**
+   * 直投：把一封已渲染好的纯文本邮件逐个发给指定收件人列表（供 F2 主动发「测试报告」等，
+   * 不读 alert_email_to、不受告警去重影响）。逐个 RCPT，任一失败只 warn（脱敏）不抛，
+   * 与 fire() 一样绝不反噬调用方。返回成功送达的收件人数；smtp 未配(null)或收件人为空 → 0
+   * （调用方据此判定并回 400/提示）。复用同一 SMTP 出信凭据与传输参数，凭据只在内存。
+   */
+  async sendDirect(recipients: readonly string[], subject: string, text: string): Promise<number> {
+    const smtp = this.smtp;
+    if (smtp === null || recipients.length === 0) return 0;
+    const transport = buildSmtpTransport(smtp);
+    let sent = 0;
+    for (const to of recipients) {
+      const message: SmtpMessage = { from: smtp.from, to, subject, text };
+      try {
+        await this.send(transport, message);
+        sent += 1;
+      } catch (err) {
+        // 🔴 错误可能内嵌 SMTP 服务端文本，过 redactText 再落；单个收件人失败不阻断其余
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn('[alerts] 直投邮件发送失败:', redactText(msg));
+      }
+    }
+    return sent;
   }
 }
 

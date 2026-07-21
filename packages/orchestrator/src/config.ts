@@ -81,6 +81,12 @@ export interface Config {
    * 绝不调用 platform-quotas 写回；true 才允许写回（UI 动作亦受此门控）。改需受控重启生效。
    */
   riskEnforce: boolean;
+  /**
+   * 🔴 上游渠道快捷充值/额度重置写开关（F5）：默认 false（禁写）。false 时 reset-quota 端点直接 403，
+   * 只读余额呈现不受影响；true 才允许对 kind='quota'(apikey/bedrock) 渠道调 reset-quota 清零已用计数
+   * （不可逆，另受 root-only + 站点 readonly + 确认令牌=渠道名 + 仅 quota 型 多重守卫）。改需受控重启生效。
+   */
+  upstreamResetEnabled: boolean;
   /** 风控骤增后台扫描周期（毫秒）；0=不起自动扫描循环（默认，避免线上突现骤增告警噪音，仅按需 POST 触发）。 */
   riskScanIntervalMs: number;
   /**
@@ -134,6 +140,7 @@ const envSchema = z.object({
   RP_REPORT_WEEKLY: z.enum(['0', '1']).default('1'),
   RP_REPORT_SWEEP_INTERVAL_MS: z.coerce.number().int().min(0).default(0),
   RP_RISK_ENFORCE: z.enum(['0', '1']).default('0'),
+  RP_UPSTREAM_RESET_ENABLED: z.enum(['0', '1']).default('0'),
   RP_RISK_SCAN_INTERVAL_MS: z.coerce.number().int().min(0).default(0),
   RP_CRM_SNAPSHOT_INTERVAL_MS: z.coerce.number().int().min(0).default(0),
   RP_METERING_GATEWAY_URL: z.string().url().optional(),
@@ -212,6 +219,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     reportWeekly: e.RP_REPORT_WEEKLY === '1',
     reportSweepIntervalMs: e.RP_REPORT_SWEEP_INTERVAL_MS,
     riskEnforce: e.RP_RISK_ENFORCE === '1',
+    upstreamResetEnabled: e.RP_UPSTREAM_RESET_ENABLED === '1',
     riskScanIntervalMs: e.RP_RISK_SCAN_INTERVAL_MS,
     crmSnapshotIntervalMs: e.RP_CRM_SNAPSHOT_INTERVAL_MS,
     ...(e.RP_METERING_GATEWAY_URL !== undefined ? { meteringGatewayUrl: e.RP_METERING_GATEWAY_URL } : {}),

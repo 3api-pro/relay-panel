@@ -6,21 +6,24 @@ import {
   Info,
   Plus,
   RefreshCw,
+  RotateCcw,
   Settings2,
   Trash2,
   TriangleAlert,
   Wallet,
 } from 'lucide-vue-next';
-import { get, put } from '../api/client';
+import { get, post, put } from '../api/client';
 import type {
   ChannelBalanceView as ChannelRow,
   RechargeLink,
   RechargeLinksResponse,
+  ResetQuotaResponse,
   UpstreamBalancesResponse,
 } from '../api/types';
 import {
   Badge,
   Button,
+  ConfirmDanger,
   EmptyState,
   Field,
   Input,
@@ -67,6 +70,8 @@ const data = ref<UpstreamBalancesResponse | null>(null);
 
 const realRows = computed<ChannelRow[]>(() => (data.value?.rows ?? []).filter((r) => r.siteOk));
 const degradedRows = computed<ChannelRow[]>(() => (data.value?.rows ?? []).filter((r) => !r.siteOk));
+/** 服务端 RP_UPSTREAM_RESET_ENABLED；关时重置按钮禁用+提示（避免必然 403 的误点） */
+const resetEnabled = computed<boolean>(() => data.value?.resetEnabled === true);
 
 async function loadBalances(): Promise<void> {
   loading.value = true;
@@ -115,6 +120,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'daysLeft', label: t('upstream.colDaysLeft'), align: 'right' },
   { key: 'avgDailyCost', label: t('upstream.colAvgDaily'), align: 'right' },
   { key: 'windowCostLimit', label: t('upstream.colWindowLimit'), align: 'right' },
+  { key: 'action', label: t('upstream.colAction'), align: 'right' },
 ]);
 
 const tableRows = computed<Record<string, unknown>[]>(() =>
@@ -186,6 +192,40 @@ async function saveLinks(): Promise<void> {
     // client 已弹后端中文错误
   } finally {
     saving.value = false;
+  }
+}
+
+// ---- 快捷充值/重置已用（root only；不可逆；后端多重硬闸 + 前端逐字输入渠道名二次确认）----
+const resetOpen = ref(false);
+const resetting = ref(false);
+const resetTarget = ref<ChannelRow | null>(null);
+
+/** 仅对 kind='quota' 行开放；env 关闭时按钮 disabled（openReset 不被触发） */
+function openReset(row: ChannelRow): void {
+  resetTarget.value = row;
+  resetOpen.value = true;
+}
+
+async function doReset(): Promise<void> {
+  const target = resetTarget.value;
+  if (!target) return;
+  resetting.value = true;
+  try {
+    // confirm 令牌=渠道名，与后端精确比对（后端另有 root+env+readonly+仅 quota 守卫）
+    const res = await post<ResetQuotaResponse>(
+      `/api/upstream/channels/${encodeURIComponent(target.siteSlug)}/${encodeURIComponent(target.id)}/reset-quota`,
+      { confirm: target.name, days: effectiveDays() },
+    );
+    toast.success(
+      `${t('upstream.resetSuccess')}: ${res.quotaUsedBefore.toFixed(2)} → ${res.quotaUsedAfter.toFixed(2)} USD`,
+    );
+    resetOpen.value = false;
+    resetTarget.value = null;
+    await loadBalances(); // 重新拉取，reset 后已用归零即时可见
+  } catch {
+    // client 已弹后端中文错误（403/400/404 等）
+  } finally {
+    resetting.value = false;
   }
 }
 
@@ -340,6 +380,22 @@ onMounted(() => {
         <template #cell-windowCostLimit="{ row }">
           <span class="tnum text-muted">{{ fmtUsd(asRow(row).windowCostLimit) }}</span>
         </template>
+        <template #cell-action="{ row }">
+          <!-- 仅 quota 型可重置；window/none 无额度接口，只显提示不给动作 -->
+          <template v-if="asRow(row).kind === 'quota'">
+            <Button
+              size="sm"
+              variant="ghost"
+              :disabled="!resetEnabled"
+              :title="resetEnabled ? '' : t('upstream.resetDisabledHint')"
+              @click="openReset(asRow(row))"
+            >
+              <RotateCcw :size="13" />
+              {{ t('upstream.resetBtn') }}
+            </Button>
+          </template>
+          <span v-else class="text-xs text-muted" :title="t('upstream.resetOnlyQuotaHint')">—</span>
+        </template>
       </Table>
     </section>
 
@@ -417,5 +473,16 @@ onMounted(() => {
         </Button>
       </template>
     </Modal>
+
+    <!-- 重置已用额度确认（不可逆；要求逐字输入渠道名，与后端 confirm 令牌一一对应）-->
+    <ConfirmDanger
+      v-model:open="resetOpen"
+      :title="t('upstream.resetConfirmTitle')"
+      :confirm-text="resetTarget?.name ?? ''"
+      :message="t('upstream.resetConfirmMessage')"
+      :action-label="t('upstream.resetConfirmAction')"
+      :loading="resetting"
+      @confirm="doReset"
+    />
   </div>
 </template>

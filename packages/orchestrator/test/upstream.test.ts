@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { sites } from '../src/db/schema.js';
+import { eq } from 'drizzle-orm';
+import { auditEvents, sites } from '../src/db/schema.js';
 import type { SiteChannelBalanceRow } from '../src/sites/service.js';
 import {
   buildBalanceOverview,
@@ -315,6 +316,225 @@ describe('/api/upstream/* HTTP', () => {
       const marker = body.rows.find((r: { siteOk: boolean }) => r.siteOk === false);
       expect(marker).toBeTruthy();
       expect(marker.siteSlug).toBe('up-down');
+    } finally {
+      await ts.close();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 快捷充值/额度重置（reset-quota，不可逆写；多重硬闸）
+// ---------------------------------------------------------------------------
+
+describe('POST /api/upstream/channels/:slug/:channelId/reset-quota', () => {
+  /** 预置一个带 quota + window 两渠道的 sub2api 站；readonly 可选 */
+  async function seedResetSite(
+    ts: Awaited<ReturnType<typeof makeTestServer>>,
+    operatorId: number,
+    slug: string,
+    port: number,
+    readonly = false,
+  ): Promise<void> {
+    await ts.db.orm.insert(sites).values({
+      operatorId,
+      slug,
+      label: slug.toUpperCase(),
+      engine: 'sub2api',
+      version: 'v1',
+      hostPort: port,
+      baseUrl: `http://127.0.0.1:${port + 1}`,
+      status: 'active',
+      readonly,
+    });
+    ts.adapters.sub2api.setChannelBalances(slug, [
+      { id: '1', name: 'apikey-ch', accountType: 'apikey', enabled: true, kind: 'quota', quotaLimit: 100, quotaUsed: 80 },
+      { id: '2', name: 'oauth-ch', accountType: 'oauth', enabled: true, kind: 'window', windowCostLimit: 50 },
+    ]);
+  }
+
+  it('env 门控 off（默认）→ 403，绝不触发引擎写', async () => {
+    const ts = await makeTestServer(); // upstreamResetEnabled 默认 false
+    try {
+      const { operatorId, cookie } = await ts.seedLogin({ email: 'rq1@x.com', password: 'pw-123456', role: 'root' });
+      await seedResetSite(ts, operatorId, 'rq-gate', 20710);
+      const res = await ts.app.inject({
+        method: 'POST',
+        url: '/api/upstream/channels/rq-gate/1/reset-quota',
+        cookies: { rp_session: cookie },
+        payload: { confirm: 'apikey-ch' },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(ts.adapters.sub2api.calls).not.toContain('channels.resetQuota:rq-gate');
+    } finally {
+      await ts.close();
+    }
+  });
+
+  it('operator（非 root）→ 403（requireRoot）', async () => {
+    const ts = await makeTestServer({ config: { upstreamResetEnabled: true } });
+    try {
+      const { operatorId, cookie } = await ts.seedLogin({ email: 'rqop@x.com', password: 'pw-123456', role: 'operator' });
+      await seedResetSite(ts, operatorId, 'rq-op', 20712);
+      const res = await ts.app.inject({
+        method: 'POST',
+        url: '/api/upstream/channels/rq-op/1/reset-quota',
+        cookies: { rp_session: cookie },
+        payload: { confirm: 'apikey-ch' },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(ts.adapters.sub2api.calls).not.toContain('channels.resetQuota:rq-op');
+    } finally {
+      await ts.close();
+    }
+  });
+
+  it('只读站 → 403（dogfood 保险丝），绝不触发引擎写', async () => {
+    const ts = await makeTestServer({ config: { upstreamResetEnabled: true } });
+    try {
+      const { operatorId, cookie } = await ts.seedLogin({ email: 'rqro@x.com', password: 'pw-123456', role: 'root' });
+      await seedResetSite(ts, operatorId, 'rq-ro', 20714, true);
+      const res = await ts.app.inject({
+        method: 'POST',
+        url: '/api/upstream/channels/rq-ro/1/reset-quota',
+        cookies: { rp_session: cookie },
+        payload: { confirm: 'apikey-ch' },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(ts.adapters.sub2api.calls).not.toContain('channels.resetQuota:rq-ro');
+    } finally {
+      await ts.close();
+    }
+  });
+
+  it('confirm 不匹配→400、非 quota→400、不存在→404，均不写；正常路径 reset+归零+审计(before/after)', async () => {
+    const ts = await makeTestServer({ config: { upstreamResetEnabled: true, channelBalanceThreshold: 0 } });
+    try {
+      const { operatorId, cookie } = await ts.seedLogin({ email: 'rq4@x.com', password: 'pw-123456', role: 'root' });
+      await seedResetSite(ts, operatorId, 'rq-a', 20716);
+
+      // 确认令牌与渠道名不匹配 → 400，未写
+      const bad = await ts.app.inject({
+        method: 'POST',
+        url: '/api/upstream/channels/rq-a/1/reset-quota',
+        cookies: { rp_session: cookie },
+        payload: { confirm: 'WRONG-NAME' },
+      });
+      expect(bad.statusCode).toBe(400);
+      expect(ts.adapters.sub2api.calls).not.toContain('channels.resetQuota:rq-a');
+
+      // 非 quota（window）渠道 → 400（即便 confirm 名字对）
+      const nonQuota = await ts.app.inject({
+        method: 'POST',
+        url: '/api/upstream/channels/rq-a/2/reset-quota',
+        cookies: { rp_session: cookie },
+        payload: { confirm: 'oauth-ch' },
+      });
+      expect(nonQuota.statusCode).toBe(400);
+      expect(ts.adapters.sub2api.calls).not.toContain('channels.resetQuota:rq-a');
+
+      // 目标渠道不存在 → 404
+      const notFound = await ts.app.inject({
+        method: 'POST',
+        url: '/api/upstream/channels/rq-a/999/reset-quota',
+        cookies: { rp_session: cookie },
+        payload: { confirm: 'apikey-ch' },
+      });
+      expect(notFound.statusCode).toBe(404);
+      expect(ts.adapters.sub2api.calls).not.toContain('channels.resetQuota:rq-a');
+
+      // 正常路径：confirm=渠道名 → 执行重置
+      const ok = await ts.app.inject({
+        method: 'POST',
+        url: '/api/upstream/channels/rq-a/1/reset-quota',
+        cookies: { rp_session: cookie },
+        payload: { confirm: 'apikey-ch', days: 7 },
+      });
+      expect(ok.statusCode).toBe(200);
+      const body = ok.json();
+      expect(body.ok).toBe(true);
+      expect(body.channelName).toBe('apikey-ch');
+      expect(body.quotaUsedBefore).toBe(80);
+      expect(body.quotaUsedAfter).toBe(0);
+      expect(body.costUnit).toBe('USD');
+      // 返回重置后的最新对客视图行：已用归零、剩余=额度
+      expect(body.row).toMatchObject({ id: '1', kind: 'quota', coverage: 'exact', quotaUsed: 0, remaining: 100 });
+      // 引擎写恰好触发一次
+      expect(ts.adapters.sub2api.calls.filter((c) => c === 'channels.resetQuota:rq-a')).toHaveLength(1);
+
+      // 审计：成功一条，payload 记 before/after 关键值
+      const audits = await ts.db.orm
+        .select()
+        .from(auditEvents)
+        .where(eq(auditEvents.action, 'upstream.channel.reset_quota'));
+      const okAudit = audits.find((a) => a.ok);
+      expect(okAudit).toBeTruthy();
+      expect(okAudit!.payload).toMatchObject({
+        slug: 'rq-a',
+        channelId: '1',
+        channelName: 'apikey-ch',
+        quotaUsedBefore: 80,
+        quotaUsedAfter: 0,
+      });
+    } finally {
+      await ts.close();
+    }
+  });
+
+  it('审计端点：非 root 读取剥离 root-only 上游用量(quotaUsedBefore/After)，root 见全量、可追溯字段保留、库内不变', async () => {
+    const ts = await makeTestServer({ config: { upstreamResetEnabled: true, channelBalanceThreshold: 0 } });
+    try {
+      // 站点归 operator 所有；root 执行不可逆写(reset) 生成审计，随后各角色经 GET /audit 读取
+      const root = await ts.seedLogin({ email: 'auz-root@x.com', password: 'pw-123456', role: 'root' });
+      const owner = await ts.seedLogin({ email: 'auz-owner@x.com', password: 'pw-123456', role: 'operator' });
+      const viewer = await ts.seedLogin({ email: 'auz-viewer@x.com', password: 'pw-123456', role: 'viewer' });
+      await seedResetSite(ts, owner.operatorId, 'rq-audit', 20720);
+
+      const ok = await ts.app.inject({
+        method: 'POST',
+        url: '/api/upstream/channels/rq-audit/1/reset-quota',
+        cookies: { rp_session: root.cookie },
+        payload: { confirm: 'apikey-ch', days: 7 },
+      });
+      expect(ok.statusCode).toBe(200);
+
+      async function readResetAuditPayload(cookie: string): Promise<Record<string, unknown>> {
+        const res = await ts.app.inject({
+          method: 'GET',
+          url: '/api/sites/rq-audit/audit',
+          cookies: { rp_session: cookie },
+        });
+        expect(res.statusCode).toBe(200);
+        const ev = res
+          .json()
+          .events.find((e: { action: string; ok: boolean }) => e.action === 'upstream.channel.reset_quota' && e.ok);
+        expect(ev).toBeTruthy();
+        return ev.payload as Record<string, unknown>;
+      }
+
+      // root：见全量 before/after
+      const rootPayload = await readResetAuditPayload(root.cookie);
+      expect(rootPayload).toMatchObject({
+        slug: 'rq-audit',
+        channelId: '1',
+        channelName: 'apikey-ch',
+        quotaUsedBefore: 80,
+        quotaUsedAfter: 0,
+      });
+
+      // 非 root（owner operator + viewer）：quotaUsedBefore/After 被剥离，可追溯字段保留
+      for (const cookie of [owner.cookie, viewer.cookie]) {
+        const p = await readResetAuditPayload(cookie);
+        expect(p.quotaUsedBefore).toBeUndefined();
+        expect(p.quotaUsedAfter).toBeUndefined();
+        expect(p).toMatchObject({ slug: 'rq-audit', channelId: '1', channelName: 'apikey-ch' });
+      }
+
+      // 库内审计仍保留全量 before/after（服务层剥离，不改库，全量审计不受影响）
+      const stored = await ts.db.orm
+        .select()
+        .from(auditEvents)
+        .where(eq(auditEvents.action, 'upstream.channel.reset_quota'));
+      expect(stored.find((a) => a.ok)!.payload).toMatchObject({ quotaUsedBefore: 80, quotaUsedAfter: 0 });
     } finally {
       await ts.close();
     }

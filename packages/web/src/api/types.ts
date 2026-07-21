@@ -450,6 +450,18 @@ export interface FinanceReportConfig {
   weekly: boolean;
 }
 
+/** POST /api/finance/report/test 响应（root · F2 立即发送测试报告；不占用当日发送标记） */
+export interface FinanceReportTestResponse {
+  /** 是否至少送达一位收件人 */
+  sent: boolean;
+  /** 实际成功送达的收件人数（< recipients 表示部分投递失败） */
+  sentCount: number;
+  /** 目标收件人数（含回落告警邮箱） */
+  recipients: number;
+  /** 报告纯文本前若干行，供 UI 预览 */
+  preview: string;
+}
+
 // ============================================================
 // 风控 / 异常消费告警 + 限额护栏（F3，RiskView 专属 · root only）
 // ============================================================
@@ -646,8 +658,29 @@ export interface UpstreamBalancesResponse {
   /** channel_low_balance 告警阈值(USD)；0=告警关闭 */
   thresholdUsd: number;
   costUnit: string;
+  /** 快捷充值/重置写是否启用（RP_UPSTREAM_RESET_ENABLED）；false 时前端不展示/禁用重置动作 */
+  resetEnabled?: boolean;
   coverage: UpstreamCoverage;
   rows: ChannelBalanceView[];
+}
+
+/** POST /api/upstream/channels/:slug/:channelId/reset-quota 请求体 */
+export interface ResetQuotaRequest {
+  /** 确认令牌：必须精确等于目标渠道名（防误点/跨渠道错 id） */
+  confirm: string;
+  /** 返回行的窗口天数（算 daysLeft，1..90，默认与当前页窗口一致） */
+  days?: number;
+}
+
+/** POST reset-quota 响应（row=重置后该渠道最新对客视图行，重读失败为 null） */
+export interface ResetQuotaResponse {
+  ok: boolean;
+  channelId: string;
+  channelName: string;
+  quotaUsedBefore: number;
+  quotaUsedAfter: number;
+  costUnit: string;
+  row: ChannelBalanceView | null;
 }
 
 /** 充值外链条目 */

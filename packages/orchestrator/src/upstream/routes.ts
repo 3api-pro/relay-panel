@@ -9,12 +9,14 @@ import { RECHARGE_LINKS_KEY, buildBalanceOverview, isHttpUrl, readRechargeLinks 
 
 /**
  * 上游渠道"余额/可用度" + 快捷充值路由（F5，口径风险最高，全部 requireRoot——含上游账户结构/成本，nav 亦 rootOnly）：
- *  - GET /api/upstream/balances?days=N   跨站上游余额/可用度（days 1..90 默认7；诚实标注覆盖盲区）
- *  - GET /api/upstream/recharge-links     读充值外链
- *  - PUT /api/upstream/recharge-links     盲覆盖写充值外链（zod 校验 + url 必 http/https + 审计）
+ *  - GET  /api/upstream/balances?days=N            跨站上游余额/可用度（days 1..90 默认7；诚实标注覆盖盲区）
+ *  - GET  /api/upstream/recharge-links             读充值外链
+ *  - PUT  /api/upstream/recharge-links             盲覆盖写充值外链（zod 校验 + url 必 http/https + 审计）
+ *  - POST /api/upstream/channels/:slug/:channelId/reset-quota
+ *        🔴 不可逆写：清零该 quota 型渠道已用额度计数（快捷充值/续杯）。多重硬闸：
+ *        requireRoot + 站点 readonly 403 + env RP_UPSTREAM_RESET_ENABLED 门控(默认 off 403)
+ *        + 确认令牌 confirm 精确等于渠道名 + 仅 kind='quota'(window/none 400) + 逐条不批量 + 全量审计(before/after)。
  *
- * 🔴 只读呈现 + 外链 + 手工记账：绝不实现 reset-quota / 砍余额 / 任何引擎写端点。
- *    绝不调用 sub2api 已存在的 POST /accounts/:id/reset-quota，adapter 也无该方法。
  * 金额单位 USD（本行业 USD:RMB 1:1，无汇率）。deps 是 SitesServiceDeps。
  */
 
@@ -32,6 +34,15 @@ const rechargeLinkSchema = z.object({
 });
 const rechargeLinksBody = z.object({
   links: z.array(rechargeLinkSchema).max(50),
+});
+
+/**
+ * reset-quota 请求体：confirm=确认令牌（须精确等于目标渠道名，防误点/跨渠道错 id，服务端以引擎实时读的渠道名复核）；
+ * days=返回行的窗口（算 daysLeft 用，1..90 默认7，与 balances 页当前窗口对齐）。
+ */
+const resetQuotaBody = z.object({
+  confirm: z.string().min(1).max(200),
+  days: z.number().int().min(1).max(90).optional(),
 });
 
 export function registerUpstreamRoutes(app: FastifyInstance, deps: SitesServiceDeps): void {
@@ -52,6 +63,8 @@ export function registerUpstreamRoutes(app: FastifyInstance, deps: SitesServiceD
       days,
       thresholdUsd: deps.config.channelBalanceThreshold,
       costUnit: 'USD',
+      // 前端据此决定是否展示"重置已用"动作（关时按钮 disabled + 提示，避免必然 403 的误点）
+      resetEnabled: deps.config.upstreamResetEnabled,
       coverage: overview.coverage,
       rows: overview.rows,
     };
@@ -98,4 +111,41 @@ export function registerUpstreamRoutes(app: FastifyInstance, deps: SitesServiceD
 
     return { links };
   });
+
+  // ---- 快捷充值/额度重置（仅 root；不可逆写，多重硬闸；env 默认 off）----
+  app.post<{ Params: { slug: string; channelId: string } }>(
+    '/api/upstream/channels/:slug/:channelId/reset-quota',
+    async (req) => {
+      const ctx = requireCtx(req);
+      requireRoot(ctx);
+      // 🔴 env 门控：默认 off 时直接拒绝，绝不触发任何引擎写（与 F3 riskEnforce 同范式）
+      if (!deps.config.upstreamResetEnabled) {
+        throw new ApiError(403, '快捷充值写操作未启用，需 RP_UPSTREAM_RESET_ENABLED=1');
+      }
+      const parsed = resetQuotaBody.safeParse(req.body ?? {});
+      if (!parsed.success) throw new ApiError(400, parsed.error.issues[0]?.message ?? '参数无效');
+      const days = parsed.data.days ?? 7;
+      // 逐条：单渠道一次；确认令牌=渠道名、readonly、kind 判定、审计（before/after）均在 service 内
+      const result = await service.resetChannelQuota(
+        ctx,
+        req.params.slug,
+        req.params.channelId,
+        parsed.data.confirm,
+        days,
+      );
+      // 装配对客视图行（复用 buildBalanceOverview 的口径守卫：window/none 不给余额数）；重读失败则 row=null
+      const overview = result.row
+        ? buildBalanceOverview([result.row], deps.config.channelBalanceThreshold)
+        : null;
+      return {
+        ok: true,
+        channelId: req.params.channelId,
+        channelName: result.channelName,
+        quotaUsedBefore: result.quotaUsedBefore,
+        quotaUsedAfter: result.quotaUsedAfter,
+        costUnit: 'USD',
+        row: overview?.rows[0] ?? null,
+      };
+    },
+  );
 }
