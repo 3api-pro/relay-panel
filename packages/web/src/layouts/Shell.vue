@@ -14,6 +14,7 @@ import {
   Server,
   Settings,
   Store,
+  TrendingUp,
   Users,
 } from 'lucide-vue-next';
 import { session } from '../api/session';
@@ -40,6 +41,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: '/', key: 'overview', icon: LayoutDashboard },
+  { to: '/finance', key: 'finance', icon: TrendingUp },
   { to: '/sites', key: 'sites', icon: Server },
   { to: '/batch', key: 'batch', icon: Layers },
   { to: '/marketplace', key: 'marketplace', icon: Store },

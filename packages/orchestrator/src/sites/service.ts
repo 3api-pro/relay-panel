@@ -14,6 +14,10 @@ import type {
   SiteBranding,
   SiteSpec,
   SiteUserRecord,
+  ModelUsageStat,
+  CustomerUsageStat,
+  AccountUsageStat,
+  RechargeSummary,
 } from '@relay-panel/adapter-core';
 import type { Config } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -69,10 +73,83 @@ const PROBE_TTL_MS = 15_000;
 const usageCache = new Map<string, { at: number; body: UsageSeries }>();
 const USAGE_TTL_MS = 600_000;
 
+/** 经营概览：区间用量 5min 缓存；key=`<slug>:<from>:<to>` */
+const financeUsageCache = new Map<string, { at: number; body: FinanceSiteUsage }>();
+const FINANCE_TTL_MS = 300_000;
+
+/**
+ * 经营走势：单站单日用量缓存；key=`<slug>:<YYYY-MM-DD>`。
+ * 历史日不变→长 TTL（6h）；今日/未来→短 TTL（2min）。这样多日走势冷启动后仅今日会重拉。
+ */
+const financeDailyCache = new Map<string, { at: number; body: { revenue: number; accountCost: number | null; requests: number; tokens: number } }>();
+const FINANCE_DAILY_HIST_TTL_MS = 21_600_000;
+const FINANCE_DAILY_TODAY_TTL_MS = 120_000;
+
+/** 经营下钻缓存 5min；key 形如 model:<slug>:<from>:<to> / customer:<slug>:<from>:<to>:<limit> / account:<slug>:<id>:<days> */
+const financeBreakdownCache = new Map<string, { at: number; body: unknown }>();
+
+/** finance 缓存条目上限（key 含用户可控 from/to/days，需容量护栏防进程长跑内存单调增长） */
+const FINANCE_CACHE_MAX = 4000;
+
+/** 带容量上限的写入：超限时淘汰最早插入的键（Map 保序，近似 FIFO/LRU） */
+function cachePut<V>(cache: Map<string, V>, key: string, value: V): void {
+  if (cache.size >= FINANCE_CACHE_MAX && !cache.has(key)) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
+  cache.set(key, value);
+}
+
+/** 并发受限 map：最多 limit 个并发跑 fn，保序返回 */
+async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array<R>(items.length);
+  let idx = 0;
+  const worker = async (): Promise<void> => {
+    while (idx < items.length) {
+      const i = idx++;
+      out[i] = await fn(items[i] as T);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, limit), items.length || 1) }, worker));
+  return out;
+}
+
+/** 北京(Asia/Shanghai)当前日历日 YYYY-MM-DD */
+function beijingTodayStr(): string {
+  return new Date(Date.now() + 8 * 3_600_000).toISOString().slice(0, 10);
+}
+
+/** 枚举 [from, to] 闭区间日期串（升序，上限 400 天护栏） */
+function enumerateBjDates(from: string, to: string): string[] {
+  const out: string[] = [];
+  let cur = from;
+  for (let i = 0; i < 400 && cur <= to; i++) {
+    out.push(cur);
+    const [y, m, d] = cur.split('-').map(Number) as [number, number, number];
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() + 1);
+    cur = dt.toISOString().slice(0, 10);
+  }
+  return out;
+}
+
+/**
+ * 北京(Asia/Shanghai)日历日 'YYYY-MM-DD' → 锚在该日正午 UTC 的 Date。
+ * 锚正午保证 adapter 的 stats.usage/trend 里 toISOString().slice(0,10) 取到该北京日历日
+ * （sub2api 按 timezone=Asia/Shanghai 解释 start_date/end_date）。见 financeUsage 时区注释。
+ */
+function bjDateAnchor(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1, 12));
+}
+
 /** 测试辅助：清空全部站点级缓存（生产不调用） */
 export function clearSiteCaches(): void {
   probeCache.clear();
   usageCache.clear();
+  financeUsageCache.clear();
+  financeDailyCache.clear();
+  financeBreakdownCache.clear();
   latestSnapshotCache.clear();
 }
 
@@ -212,6 +289,67 @@ export interface UsageBucket {
 export interface UsageSeries {
   buckets: UsageBucket[];
   costUnit: string;
+}
+
+/**
+ * 经营概览单站用量（一次区间聚合，非按天）。revenue = 引擎记账的用户消费流水（对客价），
+ * 是站点真实营收口径；单站探测失败降级 ok=false（不含成本/毛利，那些在 finance 路由按成本率算）。
+ */
+export interface FinanceSiteUsage {
+  slug: string;
+  label: string;
+  ok: boolean;
+  requests: number;
+  tokens: number;
+  revenue: number;
+  /** 引擎记账的上游账户实际成本（真实 COGS）；引擎未提供该口径时为 null */
+  accountCost: number | null;
+  costUnit: string;
+  error?: string;
+}
+
+/** 单站按天走势点（revenue/accountCost/tokens 均为该北京日历日的精确值） */
+export interface FinanceSiteDailyPoint {
+  date: string;
+  revenue: number;
+  accountCost: number | null;
+  requests: number;
+  tokens: number;
+}
+
+export interface FinanceSiteDaily {
+  slug: string;
+  label: string;
+  daily: FinanceSiteDailyPoint[];
+}
+
+/** 客户下钻行（不跨站合并，附站点标识） */
+export interface FinanceCustomerRow extends CustomerUsageStat {
+  siteSlug: string;
+  siteLabel: string;
+}
+
+/** 上游渠道(账户)下钻行 */
+export interface FinanceAccountRow {
+  siteSlug: string;
+  siteLabel: string;
+  accountId: string;
+  accountName: string;
+  requests: number;
+  tokens: number;
+  revenue: number;
+  cost: number;
+  avgDailyCost: number;
+}
+
+/** 充值(现金到账)跨站汇总。金额为站点结算货币(RMB=本行业 1:1 于 USD)，与营收(消费)口径不同。 */
+export interface FinanceRecharge {
+  /** 区间充值合计 */
+  periodAmount: number;
+  /** 北京日历日 → 该日充值(跨站合计)，供每日明细/走势逐日展示 */
+  byDate: Record<string, number>;
+  /** 是否有站点成功返回（全失败则前端不展示充值列） */
+  ok: boolean;
 }
 
 export interface CreateSiteInput {
@@ -416,6 +554,284 @@ export class SitesService {
     };
     usageCache.set(key, { at: now, body });
     return body;
+  }
+
+  /** 可见（未销毁）站点，按 id 序；operator 只见自己名下 */
+  private async visibleSites(ctx: SessionCtx): Promise<SiteRow[]> {
+    const rows = await this.deps.db.orm.select({ site: sites }).from(sites).orderBy(asc(sites.id));
+    return rows.map((r) => r.site).filter((s) => s.status !== 'destroyed' && canAccessSite(ctx, s));
+  }
+
+  /**
+   * 经营概览：对所有可见站点，各发一次 stats.usage 区间聚合，得营收流水 + 上游账户成本。
+   * 区间 = [fromDate, toDate] 北京(Asia/Shanghai)日历日闭区间（YYYY-MM-DD）。
+   * 单站失败降级 ok=false，不阻塞他站；每站 5min 缓存（key=slug:from:to）。
+   */
+  async financeUsage(ctx: SessionCtx, fromDate: string, toDate: string): Promise<FinanceSiteUsage[]> {
+    const visible = await this.visibleSites(ctx);
+    const from = bjDateAnchor(fromDate);
+    const to = bjDateAnchor(toDate);
+
+    return Promise.all(
+      visible.map(async (site): Promise<FinanceSiteUsage> => {
+        const key = `${site.slug}:${fromDate}:${toDate}`;
+        const cached = financeUsageCache.get(key);
+        const nowMs = Date.now();
+        if (cached && nowMs - cached.at < FINANCE_TTL_MS) return cached.body;
+        try {
+          const client = await this.client(site);
+          const s = await client.stats.usage(from, to);
+          const body: FinanceSiteUsage = {
+            slug: site.slug,
+            label: site.label,
+            ok: true,
+            requests: s.requests,
+            tokens: s.promptTokens + s.completionTokens,
+            revenue: s.cost,
+            accountCost: typeof s.accountCost === 'number' ? s.accountCost : null,
+            costUnit: s.costUnit,
+          };
+          cachePut(financeUsageCache, key, { at: nowMs, body });
+          return body;
+        } catch (e) {
+          // 单站降级：错误文本脱敏，不缓存（下次重试）
+          return {
+            slug: site.slug,
+            label: site.label,
+            ok: false,
+            requests: 0,
+            tokens: 0,
+            revenue: 0,
+            accountCost: null,
+            costUnit: 'USD',
+            error: redactText(errMsg(e)),
+          };
+        }
+      }),
+    );
+  }
+
+  /**
+   * 经营概览走势：各可见站点在 [fromDate,toDate] 北京日历日闭区间内，逐日调 stats.usage 得
+   * 每日精确营收 + 上游账户成本（真实，非分摊）。返回按站的每日序列，由路由层套用成本率覆盖后
+   * 跨站汇总为走势。单站单日 5 并发限流 + 缓存（历史日不变长缓存），冷启动后仅今日重拉。
+   */
+  async financeTrend(ctx: SessionCtx, fromDate: string, toDate: string): Promise<FinanceSiteDaily[]> {
+    const visible = await this.visibleSites(ctx);
+    const dates = enumerateBjDates(fromDate, toDate);
+    const bjToday = beijingTodayStr();
+
+    return Promise.all(
+      visible.map(async (site): Promise<FinanceSiteDaily> => {
+        let client: EngineAdminClient;
+        try {
+          client = await this.client(site);
+        } catch {
+          // 站点连不上：整段按 0 降级，不阻塞他站/走势
+          return {
+            slug: site.slug,
+            label: site.label,
+            daily: dates.map((date) => ({ date, revenue: 0, accountCost: null, requests: 0, tokens: 0 })),
+          };
+        }
+        const daily = await mapPool(dates, 5, async (date): Promise<FinanceSiteDailyPoint> => {
+          const key = `${site.slug}:${date}`;
+          const cached = financeDailyCache.get(key);
+          const nowMs = Date.now();
+          const ttl = date >= bjToday ? FINANCE_DAILY_TODAY_TTL_MS : FINANCE_DAILY_HIST_TTL_MS;
+          if (cached && nowMs - cached.at < ttl) return { date, ...cached.body };
+          try {
+            const anchor = bjDateAnchor(date);
+            const s = await client.stats.usage(anchor, anchor);
+            const body = {
+              revenue: s.cost,
+              accountCost: typeof s.accountCost === 'number' ? s.accountCost : null,
+              requests: s.requests,
+              tokens: s.promptTokens + s.completionTokens,
+            };
+            cachePut(financeDailyCache, key, { at: nowMs, body });
+            return { date, ...body };
+          } catch {
+            return { date, revenue: 0, accountCost: null, requests: 0, tokens: 0 };
+          }
+        });
+        return { slug: site.slug, label: site.label, daily };
+      }),
+    );
+  }
+
+  /**
+   * 经营下钻·按模型：跨站按模型名聚合（1 call/site）。营收=标准计费、成本=上游账户成本（口径同经营页）。
+   */
+  async financeModelBreakdown(ctx: SessionCtx, fromDate: string, toDate: string): Promise<ModelUsageStat[]> {
+    const visible = await this.visibleSites(ctx);
+    const from = bjDateAnchor(fromDate);
+    const to = bjDateAnchor(toDate);
+    const perSite = await Promise.all(
+      visible.map(async (site): Promise<ModelUsageStat[]> => {
+        const key = `model:${site.slug}:${fromDate}:${toDate}`;
+        const cached = financeBreakdownCache.get(key);
+        const nowMs = Date.now();
+        if (cached && nowMs - cached.at < FINANCE_TTL_MS) return cached.body as ModelUsageStat[];
+        try {
+          const c = await this.client(site);
+          if (!c.stats.modelBreakdown) return [];
+          const rows = await c.stats.modelBreakdown(from, to);
+          cachePut(financeBreakdownCache, key, { at: nowMs, body: rows });
+          return rows;
+        } catch {
+          return [];
+        }
+      }),
+    );
+    const byModel = new Map<string, ModelUsageStat>();
+    for (const arr of perSite) {
+      for (const m of arr) {
+        const a = byModel.get(m.model) ?? {
+          model: m.model,
+          requests: 0,
+          tokens: 0,
+          revenue: 0,
+          actualCost: 0,
+          cost: 0,
+        };
+        a.requests += m.requests;
+        a.tokens += m.tokens;
+        a.revenue += m.revenue;
+        a.actualCost += m.actualCost;
+        a.cost += m.cost;
+        byModel.set(m.model, a);
+      }
+    }
+    return [...byModel.values()];
+  }
+
+  /**
+   * 经营下钻·按客户：每站取 user-breakdown（1 call/site），不跨站合并（无可靠归并键），每行附站点。
+   */
+  async financeCustomerBreakdown(
+    ctx: SessionCtx,
+    fromDate: string,
+    toDate: string,
+    limit: number,
+  ): Promise<FinanceCustomerRow[]> {
+    const visible = await this.visibleSites(ctx);
+    const from = bjDateAnchor(fromDate);
+    const to = bjDateAnchor(toDate);
+    const perSite = await Promise.all(
+      visible.map(async (site): Promise<FinanceCustomerRow[]> => {
+        const key = `customer:${site.slug}:${fromDate}:${toDate}:${limit}`;
+        const cached = financeBreakdownCache.get(key);
+        const nowMs = Date.now();
+        if (cached && nowMs - cached.at < FINANCE_TTL_MS) return cached.body as FinanceCustomerRow[];
+        try {
+          const c = await this.client(site);
+          if (!c.stats.customerBreakdown) return [];
+          const rows = (await c.stats.customerBreakdown(from, to, limit)).map((r) => ({
+            ...r,
+            siteSlug: site.slug,
+            siteLabel: site.label,
+          }));
+          cachePut(financeBreakdownCache, key, { at: nowMs, body: rows });
+          return rows;
+        } catch {
+          return [];
+        }
+      }),
+    );
+    return perSite.flat();
+  }
+
+  /**
+   * 经营下钻·按上游渠道(账户)：列各站账户 → 逐账户 accountStats(days)（N+1，5 并发限流 + 5min 缓存）。
+   * 🔴 仅 root 可调（路由层守卫）：会暴露上游账户结构与成本。剔除无活动账户。
+   */
+  async financeAccountBreakdown(ctx: SessionCtx, days: number): Promise<FinanceAccountRow[]> {
+    const visible = await this.visibleSites(ctx);
+    const out: FinanceAccountRow[] = [];
+    for (const site of visible) {
+      let client: EngineAdminClient;
+      let accounts: ChannelRecord[];
+      try {
+        client = await this.client(site);
+        if (!client.stats.accountStats) continue;
+        accounts = await client.channels.list();
+      } catch {
+        continue; // 站点连不上或无账户列表：跳过该站
+      }
+      const accountStats = client.stats.accountStats;
+      const rows = await mapPool(accounts, 5, async (acc): Promise<FinanceAccountRow | null> => {
+        const key = `account:${site.slug}:${acc.id}:${days}`;
+        const cached = financeBreakdownCache.get(key);
+        const nowMs = Date.now();
+        let stat: AccountUsageStat;
+        if (cached && nowMs - cached.at < FINANCE_TTL_MS) {
+          stat = cached.body as AccountUsageStat;
+        } else {
+          try {
+            stat = await accountStats(acc.id, days);
+            cachePut(financeBreakdownCache, key, { at: nowMs, body: stat });
+          } catch {
+            return null;
+          }
+        }
+        if (stat.requests === 0 && stat.revenue === 0 && stat.cost === 0) return null;
+        return {
+          siteSlug: site.slug,
+          siteLabel: site.label,
+          accountId: acc.id,
+          accountName: acc.name,
+          requests: stat.requests,
+          tokens: stat.tokens,
+          revenue: stat.revenue,
+          cost: stat.cost,
+          avgDailyCost: stat.avgDailyCost,
+        };
+      });
+      out.push(...(rows.filter(Boolean) as FinanceAccountRow[]));
+    }
+    return out;
+  }
+
+  /**
+   * 充值(现金到账)跨站汇总：各站 payment/dashboard(days=从 from 到今天) → 今日充值 + 区间充值(按 daily 过滤 [from,to])。
+   * 口径=现金流入(RMB)，非营收/消费。单站失败静默跳过；全失败 ok=false（前端不展示）。5min 缓存。
+   */
+  async financeRecharge(ctx: SessionCtx, fromDate: string, toDate: string): Promise<FinanceRecharge> {
+    const visible = await this.visibleSites(ctx);
+    const bjToday = beijingTodayStr();
+    const days = enumerateBjDates(fromDate, bjToday).length; // 覆盖 from..今天，供 daily 过滤 [from,to]
+    let periodAmount = 0;
+    let anyOk = false;
+    const byDate: Record<string, number> = {};
+    await Promise.all(
+      visible.map(async (site) => {
+        const key = `recharge:${site.slug}:${days}`;
+        const cached = financeBreakdownCache.get(key);
+        const nowMs = Date.now();
+        let sum: RechargeSummary;
+        if (cached && nowMs - cached.at < FINANCE_TTL_MS) {
+          sum = cached.body as RechargeSummary;
+        } else {
+          try {
+            const c = await this.client(site);
+            if (!c.stats.rechargeSummary) return;
+            sum = await c.stats.rechargeSummary(days);
+            cachePut(financeBreakdownCache, key, { at: nowMs, body: sum });
+          } catch {
+            return;
+          }
+        }
+        anyOk = true;
+        for (const p of sum.daily) {
+          if (p.date >= fromDate && p.date <= toDate) {
+            byDate[p.date] = (byDate[p.date] ?? 0) + p.amount;
+            periodAmount += p.amount;
+          }
+        }
+      }),
+    );
+    return { periodAmount, byDate, ok: anyOk };
   }
 
   /** 该站审计流水（写入时已过 redact，原样返回） */
@@ -914,8 +1330,16 @@ export class SitesService {
           await db.orm.delete(credentials).where(eq(credentials.ref, site.credentialRef));
         }
         latestSnapshotCache.delete(site.slug);
-        for (const key of [...usageCache.keys()]) {
-          if (key.startsWith(`${site.slug}:`)) usageCache.delete(key);
+        // 清该站在各 finance 缓存的残留条目（key 前缀 slug: 或含 :slug: 段）
+        const slugPrefix = `${site.slug}:`;
+        const slugSegment = `:${site.slug}:`;
+        for (const cache of [usageCache, financeUsageCache, financeDailyCache]) {
+          for (const key of [...cache.keys()]) {
+            if (key.startsWith(slugPrefix)) cache.delete(key);
+          }
+        }
+        for (const key of [...financeBreakdownCache.keys()]) {
+          if (key.includes(slugSegment)) financeBreakdownCache.delete(key);
         }
       }
       probeCache.delete(site.slug);

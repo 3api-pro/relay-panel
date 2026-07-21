@@ -117,6 +117,94 @@ export interface LedgerResponse {
   totals: LedgerTotals;
 }
 
+/** ---- 经营概览（FinanceView 专属）---- */
+
+/** 成本来源：engine=引擎真实账户成本；ratio=成本率覆盖；null=均无 */
+export type CostSource = 'engine' | 'ratio' | null;
+
+/** GET /api/finance/summary 单站行；cost/profit 无成本口径时为 null */
+export interface FinanceSummaryRow {
+  slug: string;
+  label: string;
+  ok: boolean;
+  requests: number;
+  tokens: number;
+  revenue: number;
+  costRatio: number | null;
+  costSource: CostSource;
+  cost: number | null;
+  profit: number | null;
+  error?: string;
+}
+
+export interface FinanceTotals {
+  requests: number;
+  tokens: number;
+  revenue: number;
+  /** 仅累加已配成本率的站点 */
+  cost: number;
+  profit: number;
+  /** 充值(现金到账)区间合计；全站取不到为 null。与营收(消费)不同口径 */
+  recharge: number | null;
+}
+
+/** 走势/每日明细单日点：充值/营收(消耗)/成本/毛利/请求/token 均为该北京日历日真实值。recharge 全站无数据为 null */
+export interface FinanceTrendPoint {
+  date: string;
+  revenue: number;
+  requests: number;
+  tokens: number;
+  cost: number;
+  profit: number;
+  recharge: number | null;
+}
+
+export interface FinanceSummaryResponse {
+  /** 北京日历日闭区间 YYYY-MM-DD */
+  from: string;
+  to: string;
+  costUnit: string;
+  rows: FinanceSummaryRow[];
+  totals: FinanceTotals;
+  /** 全部站点都有成本口径时 true（否则成本/毛利仅为部分合计） */
+  allCosted: boolean;
+  /** 按天走势/每日明细（已补齐区间内每一天，含充值） */
+  trend: FinanceTrendPoint[];
+}
+
+/** GET/PUT /api/finance/cost-ratios */
+export interface CostRatiosResponse {
+  ratios: Record<string, number>;
+}
+
+/** ---- 经营下钻（FinanceView 内嵌）---- */
+export type BreakdownDim = 'model' | 'customer' | 'account';
+
+/** GET /api/finance/breakdown 单行（营收=标准计费，成本=上游账户成本，毛利=营收−成本） */
+export interface FinanceBreakdownRow {
+  key: string;
+  label: string;
+  sublabel?: string;
+  revenue: number;
+  cost: number;
+  profit: number;
+  margin: number | null;
+  loss: boolean;
+  requests: number;
+  tokens: number;
+}
+
+export interface FinanceBreakdownResponse {
+  dim: BreakdownDim;
+  from?: string;
+  to?: string;
+  days?: number;
+  rows: FinanceBreakdownRow[];
+  totals: { revenue: number; cost: number; profit: number; requests: number; tokens: number };
+  /** 仅 customer 维度：大客户集中度 */
+  concentration?: { top3Share: number | null; count: number };
+}
+
 /** POST /api/marketplace/ledger/import 单条补账行（source 固定 manual） */
 export interface LedgerImportRow {
   periodStart: string;

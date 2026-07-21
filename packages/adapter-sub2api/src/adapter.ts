@@ -13,6 +13,11 @@ import type {
   SiteBranding,
   SiteUserRecord,
   UsageSummary,
+  ModelUsageStat,
+  CustomerUsageStat,
+  CustomerRanking,
+  AccountUsageStat,
+  RechargeSummary,
 } from '@relay-panel/adapter-core';
 import { Sub2apiHttp, type PaginatedData } from './http.js';
 import { ensureCompliance, loginAdmin } from './auth.js';
@@ -286,7 +291,12 @@ export class Sub2apiAdminClient implements EngineAdminClient {
         total_requests: number;
         total_input_tokens: number;
         total_output_tokens: number;
+        /** 标准计费（1 倍标价，参考口径，非真实营收） */
         total_cost: number;
+        /** 实际扣费=客户钱包真实扣走（含分组倍率）=消费流水=真实营收口径 */
+        total_actual_cost?: number;
+        /** 上游账户实际成本（真实 COGS）；sub2api 在 usage/stats 直接给出 */
+        total_account_cost?: number;
         by_model?: unknown;
       }>(
         `/api/v1/admin/usage/stats?start_date=${fmt(from)}&end_date=${fmt(to)}&timezone=Asia/Shanghai`,
@@ -298,7 +308,129 @@ export class Sub2apiAdminClient implements EngineAdminClient {
         promptTokens: s.total_input_tokens ?? 0,
         completionTokens: s.total_output_tokens ?? 0,
         costUnit: 'USD',
+        // 🔴 营收口径=实际扣费(actual_cost，客户真付)，非标准计费(total_cost，仅 1 倍标价参考)。
+        cost: s.total_actual_cost ?? s.total_cost ?? 0,
+        ...(typeof s.total_account_cost === 'number' ? { accountCost: s.total_account_cost } : {}),
+      };
+    },
+
+    // 经营下钻。🔴 revenue=actual_cost(实际扣费/客户真付)，cost=account_cost(上游账户成本)。
+    modelBreakdown: async (from: Date, to: Date): Promise<ModelUsageStat[]> => {
+      const fmt = (d: Date) => d.toISOString().slice(0, 10);
+      const d = await this.http.get<{
+        models?: {
+          model: string;
+          requests: number;
+          total_tokens: number;
+          cost: number;
+          actual_cost: number;
+          account_cost: number;
+        }[];
+      }>(`/api/v1/admin/dashboard/models?start_date=${fmt(from)}&end_date=${fmt(to)}&timezone=Asia/Shanghai`);
+      return (d.models ?? []).map((m) => ({
+        model: m.model,
+        requests: m.requests ?? 0,
+        tokens: m.total_tokens ?? 0,
+        revenue: m.actual_cost ?? 0,
+        actualCost: m.actual_cost ?? 0,
+        cost: m.account_cost ?? 0,
+      }));
+    },
+
+    customerBreakdown: async (from: Date, to: Date, limit = 50): Promise<CustomerUsageStat[]> => {
+      const fmt = (d: Date) => d.toISOString().slice(0, 10);
+      const capped = Math.min(Math.max(1, Math.floor(limit)), 200);
+      const d = await this.http.get<{
+        users?: {
+          user_id: number;
+          email: string;
+          requests: number;
+          total_tokens: number;
+          cost: number;
+          actual_cost: number;
+          account_cost: number;
+        }[];
+      }>(
+        `/api/v1/admin/dashboard/user-breakdown?start_date=${fmt(from)}&end_date=${fmt(to)}&limit=${capped}&timezone=Asia/Shanghai`,
+      );
+      return (d.users ?? []).map((u) => ({
+        userId: u.user_id,
+        email: u.email ?? '',
+        requests: u.requests ?? 0,
+        tokens: u.total_tokens ?? 0,
+        revenue: u.actual_cost ?? 0,
+        actualCost: u.actual_cost ?? 0,
+        cost: u.account_cost ?? 0,
+      }));
+    },
+
+    customerRanking: async (from: Date, to: Date, limit = 50): Promise<CustomerRanking> => {
+      const fmt = (d: Date) => d.toISOString().slice(0, 10);
+      const capped = Math.min(Math.max(1, Math.floor(limit)), 50); // 引擎硬上限 50
+      const d = await this.http.get<{
+        ranking?: { user_id: number; email: string; actual_cost: number; requests: number; tokens: number }[];
+        total_actual_cost?: number;
+        total_requests?: number;
+        total_tokens?: number;
+      }>(
+        `/api/v1/admin/dashboard/users-ranking?start_date=${fmt(from)}&end_date=${fmt(to)}&limit=${capped}&timezone=Asia/Shanghai`,
+      );
+      return {
+        items: (d.ranking ?? []).map((r) => ({
+          userId: r.user_id,
+          email: r.email ?? '',
+          actualCost: r.actual_cost ?? 0,
+          requests: r.requests ?? 0,
+          tokens: r.tokens ?? 0,
+        })),
+        totalActualCost: d.total_actual_cost ?? 0,
+        totalRequests: d.total_requests ?? 0,
+        totalTokens: d.total_tokens ?? 0,
+      };
+    },
+
+    // 🔴 端点是 /accounts/:id/stats（不是 /usage，后者是配额窗口探针）；只吃 days，终点为今天。
+    // revenue=total_user_cost(用户口径=实际扣费，与其它维度同口径)，cost=total_cost(账号口径成本)。
+    accountStats: async (accountId: string, days: number): Promise<AccountUsageStat> => {
+      const d = Math.min(Math.max(1, Math.floor(days)), 90);
+      const res = await this.http.get<{
+        summary?: {
+          total_cost?: number;
+          total_user_cost?: number;
+          total_standard_cost?: number;
+          total_requests?: number;
+          total_tokens?: number;
+          avg_daily_cost?: number;
+          days?: number;
+        };
+      }>(`/api/v1/admin/accounts/${accountId}/stats?days=${d}`);
+      const s = res.summary ?? {};
+      return {
+        requests: s.total_requests ?? 0,
+        tokens: s.total_tokens ?? 0,
+        revenue: s.total_user_cost ?? 0,
         cost: s.total_cost ?? 0,
+        avgDailyCost: s.avg_daily_cost ?? 0,
+        days: s.days ?? d,
+      };
+    },
+
+    // 充值(现金到账)：源 /admin/payment/dashboard?days=N（今日+每日走势）。金额=站点结算货币(RMB)，非营收。
+    rechargeSummary: async (days: number): Promise<RechargeSummary> => {
+      const d = Math.min(Math.max(1, Math.floor(days)), 366);
+      const r = await this.http.get<{
+        today_amount?: number;
+        today_count?: number;
+        daily_series?: { date: string; amount: number; count: number }[];
+      }>(`/api/v1/admin/payment/dashboard?days=${d}`);
+      return {
+        todayAmount: r.today_amount ?? 0,
+        todayCount: r.today_count ?? 0,
+        daily: (r.daily_series ?? []).map((x) => ({
+          date: x.date,
+          amount: x.amount ?? 0,
+          count: x.count ?? 0,
+        })),
       };
     },
   };

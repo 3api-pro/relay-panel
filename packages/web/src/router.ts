@@ -35,6 +35,7 @@ const routes: RouteRecordRaw[] = [
     component: Shell,
     children: [
       { path: '', component: OverviewView, meta: { title: '总览' } },
+      { path: 'finance', component: () => import('./views/FinanceView.vue'), meta: { title: '经营' } },
       { path: 'sites', component: () => import('./views/SitesView.vue'), meta: { title: '站点' } },
       { path: 'sites/:slug', component: () => import('./views/SiteDetailView.vue'), meta: { title: '站点详情' } },
       { path: 'marketplace', component: () => import('./views/MarketplaceView.vue'), meta: { title: '渠道市场' } },

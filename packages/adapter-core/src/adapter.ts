@@ -13,6 +13,11 @@ import type {
   SiteSpec,
   SiteUserRecord,
   UsageSummary,
+  ModelUsageStat,
+  CustomerUsageStat,
+  CustomerRanking,
+  AccountUsageStat,
+  RechargeSummary,
 } from './types.js';
 
 /**
@@ -68,6 +73,14 @@ export interface EngineAdminClient {
 
   stats: {
     usage(from: Date, to: Date): Promise<UsageSummary>;
+    /** 经营下钻（可选：引擎支持才实现）。按 from/to 日历日闭区间聚合。 */
+    modelBreakdown?(from: Date, to: Date): Promise<ModelUsageStat[]>;
+    customerBreakdown?(from: Date, to: Date, limit?: number): Promise<CustomerUsageStat[]>;
+    customerRanking?(from: Date, to: Date, limit?: number): Promise<CustomerRanking>;
+    /** 上游账户区间盈利。🔴 只吃 days(1..90，终点为今天)，不支持任意区间。 */
+    accountStats?(accountId: string, days: number): Promise<AccountUsageStat>;
+    /** 充值(现金到账)汇总。days 窗口终点为今天。口径=现金流入，非营收/消费。 */
+    rechargeSummary?(days: number): Promise<RechargeSummary>;
   };
 }
 

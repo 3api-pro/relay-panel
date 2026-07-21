@@ -16,6 +16,7 @@ import { registerSitesRoutes } from './sites/routes.js';
 import { registerBatchRoutes } from './batch/routes.js';
 import { registerEngineVersionRoutes } from './engines/versions.js';
 import { registerMarketplaceRoutes } from './marketplace/routes.js';
+import { registerFinanceRoutes } from './finance/routes.js';
 import { registerAlertsRoutes } from './alerts/routes.js';
 import { registerBillingRoutes } from './billing/routes.js';
 import { registerPaymentRoutes, registerPaymentWebhooks } from './billing/payments/routes.js';
@@ -170,6 +171,7 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
   registerBatchRoutes(app, deps);
   registerEngineVersionRoutes(app);
   registerMarketplaceRoutes(app, deps);
+  registerFinanceRoutes(app, deps);
   registerAlertsRoutes(app, deps);
   registerBillingRoutes(app, deps);
   registerPaymentRoutes(app, deps);

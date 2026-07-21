@@ -276,6 +276,8 @@ export function demoUsage(slug: string, from: Date, to: Date): UsageSummary {
     completionTokens: total.completionTokens,
     costUnit: 'USD',
     cost: Math.round(total.cost * 100) / 100,
+    // 演示：上游账户成本约为对客价流水的 55%（毛利率 ~45%，贴近真实站点观测）
+    accountCost: Math.round(total.cost * 55) / 100,
     byModel: total.byModel,
   };
 }

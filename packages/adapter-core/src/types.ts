@@ -135,8 +135,79 @@ export interface UsageSummary {
   completionTokens: number;
   /** 引擎记账货币口径由 adapter 归一为字符串说明 */
   costUnit: string;
+  /** 对客计费额（用户被扣费用，对客价）——运营视角即营收流水 */
   cost: number;
+  /**
+   * 上游账户实际成本（引擎按上游账户计费口径记账的真实 COGS）。
+   * 引擎不提供该口径时为 undefined（此时成本需由上层用成本率估算）。
+   */
+  accountCost?: number;
   byModel?: Record<string, { requests: number; tokens: number; cost: number }>;
+}
+
+/**
+ * 经营下钻通用口径：revenue=实际扣费（actual_cost，客户钱包真实扣走=消费流水=真实营收，含分组倍率）；
+ * cost=上游账户实际成本（真实 COGS）；actualCost=同 revenue（保留原始字段）。
+ */
+export interface ModelUsageStat {
+  model: string;
+  requests: number;
+  tokens: number;
+  revenue: number;
+  actualCost: number;
+  cost: number;
+}
+
+/** 单客户用量+盈利（口径同 ModelUsageStat） */
+export interface CustomerUsageStat {
+  userId: number;
+  email: string;
+  requests: number;
+  tokens: number;
+  revenue: number;
+  actualCost: number;
+  cost: number;
+}
+
+/** 客户消费榜单行（引擎 users-ranking 仅 actualCost 口径） */
+export interface CustomerRankingItem {
+  userId: number;
+  email: string;
+  actualCost: number;
+  requests: number;
+  tokens: number;
+}
+export interface CustomerRanking {
+  items: CustomerRankingItem[];
+  totalActualCost: number;
+  totalRequests: number;
+  totalTokens: number;
+}
+
+/** 充值(现金到账)单日点。amount 为站点结算货币(llmapi 系为 RMB)，非 USD。 */
+export interface RechargePoint {
+  date: string;
+  amount: number;
+  count: number;
+}
+/** 充值汇总（源 sub2api payment/dashboard，days 窗口终点为今天）。amount 口径=现金到账，非营收/消费。 */
+export interface RechargeSummary {
+  todayAmount: number;
+  todayCount: number;
+  daily: RechargePoint[];
+}
+
+/**
+ * 上游渠道(账户)区间用量+盈利。revenue=实际扣费(total_user_cost，与其它维度同口径)，cost=账号口径成本(total_cost)。
+ * 🔴 引擎按 days 取（1..90，窗口终点固定为今天），不支持任意 from/to 闭区间。
+ */
+export interface AccountUsageStat {
+  requests: number;
+  tokens: number;
+  revenue: number;
+  cost: number;
+  avgDailyCost: number;
+  days: number;
 }
 
 // ---------- capability ----------
