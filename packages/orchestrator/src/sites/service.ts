@@ -861,8 +861,11 @@ export class SitesService {
       const accountStats = client.stats.accountStats;
       const rows = await mapPool(balances, 5, async (b): Promise<SiteChannelBalanceRow> => {
         let avgDailyCost: number | undefined;
-        // kind!=='none' 的行取账号口径日均（供 quota 算撑几天 / window·none 做估算参考）
-        if (b.kind !== 'none' && accountStats) {
+        // 🔴 所有渠道都取账号口径日均消耗（不再只对 kind!=='none'）：
+        // 上游多为 apikey 中转且不配本地 quota（kind='none'），若因此跳过则"日均消耗"列永远空=页面无用；
+        // 实际消耗对所有账号都可取(accounts/:id/stats)，是该页对未配额渠道唯一有意义的信号。
+        // quota 型据此算撑几天；none/window 型 remaining=null 故撑几天仍为 null(不编造)，但日均消耗如实展示。
+        if (accountStats) {
           const statKey = `stat:${site.slug}:${b.id}:${days}`;
           const cached = upstreamBalanceCache.get(statKey);
           const nowMs = Date.now();
