@@ -37,7 +37,13 @@
     "site_down": "Site unreachable",
     "channel_disabled": "Channel disabled",
     "low_balance": "Low upstream balance",
-    "job_failed": "Job failed"
+    "job_failed": "Job failed",
+    "margin_low": "Low gross margin",
+    "cost_spike": "Cost spike",
+    "spend_spike": "Spend spike",
+    "quota_breach": "Quota breach",
+    "customer_churn": "Customer churn",
+    "channel_low_balance": "Low channel quota"
   },
   "relTime": {
     "justNow": "just now",

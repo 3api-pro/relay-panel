@@ -57,10 +57,38 @@ export interface Config {
   monitorIntervalMs: number;
   /** >0 时启用 low_balance 规则 */
   balanceThreshold: number;
+  /**
+   * 🔴 上游渠道额度不足告警阈值（F5，USD）：>0 才启用 channel_low_balance 告警（仅对 quota 型 apikey/bedrock，
+   * remaining=quotaLimit-quotaUsed < 此值即告警；window/none 零覆盖永不误报）。默认 0=告警关闭。
+   */
+  channelBalanceThreshold: number;
   /** 订阅宽限期天数（到期后配额仍按原计划生效的窗口）；0=关闭宽限 */
   billingGraceDays: number;
   /** 计费扫描循环周期（收敛过期状态 + 到期提醒邮件）；0=关闭该后台循环 */
   billingSweepIntervalMs: number;
+  /** 经营日报开关（master default，与 app_settings['finance_report'].daily 逻辑与） */
+  reportDaily: boolean;
+  /** 经营周报开关（master default，与 app_settings['finance_report'].weekly 逻辑与） */
+  reportWeekly: boolean;
+  /**
+   * 经营报告扫描循环周期；0=关闭整个报告循环（master kill switch，默认关）。
+   * 🔴 默认 0：首次受控重启不自动评估阈值/发送日周报，避免对薄利站误发 margin_low/cost_spike 噪音；
+   * 由 root 显式设 >0（配合 app_settings['finance_report'].daily/weekly）才启用，与 F3 风控扫描默认关对齐。
+   */
+  reportSweepIntervalMs: number;
+  /**
+   * 🔴 风控限额写回开关（F3）：默认 false（仅告警模式）。false 时只侦测+告警+出「将限额」预览，
+   * 绝不调用 platform-quotas 写回；true 才允许写回（UI 动作亦受此门控）。改需受控重启生效。
+   */
+  riskEnforce: boolean;
+  /** 风控骤增后台扫描周期（毫秒）；0=不起自动扫描循环（默认，避免线上突现骤增告警噪音，仅按需 POST 触发）。 */
+  riskScanIntervalMs: number;
+  /**
+   * 客户 CRM 每日快照循环周期（毫秒，F4）；0=关闭快照循环（默认关）。
+   * 只做只读 GET /admin/users(翻页)+写我方 customer_snapshots，绝不触碰引擎/客户额度/余额；demo 模式不起。
+   * 🔴 默认 0：首次受控重启不自动翻页拉生产 admin API/不写库，由 root 观察后显式设 >0（建议 21_600_000=6h）再开。
+   */
+  crmSnapshotIntervalMs: number;
   /** managed 渠道市场网关；未配置=managed 模板不可启用 */
   meteringGatewayUrl?: string;
   meteringGatewayToken?: string;
@@ -99,8 +127,15 @@ const envSchema = z.object({
   RP_DOCKER_VIA_WSL: z.enum(['0', '1']).default('0'),
   RP_MONITOR_INTERVAL_MS: z.coerce.number().int().min(0).default(60_000),
   RP_BALANCE_THRESHOLD: z.coerce.number().min(0).default(0),
+  RP_CHANNEL_BALANCE_THRESHOLD: z.coerce.number().min(0).default(0),
   RP_BILLING_GRACE_DAYS: z.coerce.number().int().min(0).max(365).default(3),
   RP_BILLING_SWEEP_INTERVAL_MS: z.coerce.number().int().min(0).default(3_600_000),
+  RP_REPORT_DAILY: z.enum(['0', '1']).default('1'),
+  RP_REPORT_WEEKLY: z.enum(['0', '1']).default('1'),
+  RP_REPORT_SWEEP_INTERVAL_MS: z.coerce.number().int().min(0).default(0),
+  RP_RISK_ENFORCE: z.enum(['0', '1']).default('0'),
+  RP_RISK_SCAN_INTERVAL_MS: z.coerce.number().int().min(0).default(0),
+  RP_CRM_SNAPSHOT_INTERVAL_MS: z.coerce.number().int().min(0).default(0),
   RP_METERING_GATEWAY_URL: z.string().url().optional(),
   RP_METERING_GATEWAY_TOKEN: z.string().min(1).optional(),
   RP_LEDGER_PULL_INTERVAL_MS: z.coerce.number().int().min(0).default(3_600_000),
@@ -170,8 +205,15 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     dockerViaWsl: e.RP_DOCKER_VIA_WSL === '1',
     monitorIntervalMs: e.RP_MONITOR_INTERVAL_MS,
     balanceThreshold: e.RP_BALANCE_THRESHOLD,
+    channelBalanceThreshold: e.RP_CHANNEL_BALANCE_THRESHOLD,
     billingGraceDays: e.RP_BILLING_GRACE_DAYS,
     billingSweepIntervalMs: e.RP_BILLING_SWEEP_INTERVAL_MS,
+    reportDaily: e.RP_REPORT_DAILY === '1',
+    reportWeekly: e.RP_REPORT_WEEKLY === '1',
+    reportSweepIntervalMs: e.RP_REPORT_SWEEP_INTERVAL_MS,
+    riskEnforce: e.RP_RISK_ENFORCE === '1',
+    riskScanIntervalMs: e.RP_RISK_SCAN_INTERVAL_MS,
+    crmSnapshotIntervalMs: e.RP_CRM_SNAPSHOT_INTERVAL_MS,
     ...(e.RP_METERING_GATEWAY_URL !== undefined ? { meteringGatewayUrl: e.RP_METERING_GATEWAY_URL } : {}),
     ...(e.RP_METERING_GATEWAY_TOKEN !== undefined
       ? { meteringGatewayToken: e.RP_METERING_GATEWAY_TOKEN }

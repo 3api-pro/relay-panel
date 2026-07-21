@@ -11,6 +11,9 @@ import { lifecycleStepSink, makeStoreCredential } from './sites/service.js';
 import { startMonitor } from './alerts/engine.js';
 import { EmailNotifier, FanoutNotifier, WebhookNotifier } from './alerts/notify.js';
 import { startBillingSweep } from './billing/sweep.js';
+import { startFinanceReports } from './finance/scheduler.js';
+import { startRiskScan } from './risk/service.js';
+import { startCustomerSnapshot } from './customers/snapshot.js';
 import { HttpMeteringGateway } from './marketplace/gateway.js';
 import { startPullLoop } from './marketplace/ledger.js';
 import { buildServer, type Notifier } from './server.js';
@@ -122,8 +125,35 @@ const billingSweep =
     ? startBillingSweep({ config, db, smtp: config.smtp ?? null }, config.billingSweepIntervalMs)
     : null;
 
+// F2: 经营日报/周报扫描循环（阈值预警邮件 + margin_low/cost_spike 告警扇出）。
+// reportSweepIntervalMs=0 时不起（master kill switch）；demo 模式不起（罐装数据不发信）。
+// SMTP 未配或无收件人时报告发信静默跳过，阈值 openAlert 仍走已配 webhook/email 扇出。
+const financeReports =
+  !config.demo && config.reportSweepIntervalMs > 0
+    ? startFinanceReports(
+        { config, db, adapters, lifecycles, jobs, notifier, smtp: config.smtp ?? null },
+        config.reportSweepIntervalMs,
+      )
+    : null;
+
+// F3: 风控骤增扫描。riskScanIntervalMs=0 时不起自动循环（默认，避免线上骤增告警噪音）；
+// 仅 root 可 POST /api/risk/scan 按需触发或显式设正值开启。demo 模式不启用。
+// 🔴 限额写回受 config.riskEnforce（RP_RISK_ENFORCE，默认 off）门控，扫描本身绝不写回引擎。
+const riskScan = !config.demo ? startRiskScan({ config, db, adapters, notifier }, config.riskScanIntervalMs) : null;
+
+// F4: 客户 CRM 每日快照循环（逐日为每站每客户落 customer_snapshots，供消费骤降/流失侦测）。
+// crmSnapshotIntervalMs=0 时不起（可关闭）；demo 模式不起（罐装数据不采集）。
+// 🔴 只做只读 GET /admin/users(翻页)+写我方新表，绝不触碰引擎/客户额度/余额；churn 告警默认关闭。
+const customerSnapshot =
+  !config.demo && config.crmSnapshotIntervalMs > 0
+    ? startCustomerSnapshot({ config, db, adapters, notifier }, config.crmSnapshotIntervalMs)
+    : null;
+
 async function shutdown(): Promise<void> {
   stopLedgerPull?.();
+  customerSnapshot?.stop();
+  riskScan?.stop();
+  financeReports?.stop();
   billingSweep?.stop();
   monitor.stop();
   jobs.stop();

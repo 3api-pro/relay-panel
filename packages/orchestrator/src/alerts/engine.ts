@@ -1,7 +1,9 @@
 import { and, eq, isNull, ne } from 'drizzle-orm';
 import type {
+  ChannelBalance,
   ChannelRecord,
   EngineAdapter,
+  EngineAdminClient,
   EngineKind,
   InstanceInfo,
 } from '@relay-panel/adapter-core';
@@ -11,6 +13,7 @@ import { alerts, sites, type AlertRow, type JobRow, type SiteRow } from '../db/s
 import { toPgTimestamp } from '../auth/sessions.js';
 import { makeCredentialStoreV2 } from '../credstore.js';
 import { redactText, type JobEngine } from '../jobs/engine.js';
+import { evaluateChannelLowBalance } from '../upstream/service.js';
 import type { Notifier } from './notify.js';
 
 /**
@@ -20,7 +23,17 @@ import type { Notifier } from './notify.js';
  * open 去重语义：同 (kind, site_id) 最多一条 open，重复触发只刷 last_seen_at/detail、不重复通知。
  */
 
-export type AlertKind = 'site_down' | 'job_failed' | 'channel_disabled' | 'low_balance';
+export type AlertKind =
+  | 'site_down'
+  | 'job_failed'
+  | 'channel_disabled'
+  | 'low_balance'
+  | 'margin_low'
+  | 'cost_spike'
+  | 'spend_spike'
+  | 'quota_breach'
+  | 'customer_churn'
+  | 'channel_low_balance';
 export type AlertSeverity = 'critical' | 'warning' | 'info';
 
 /** 通知事件里携带的站点摘要——只给 slug/label，绝不带凭据/端口拓扑之外的运维细节 */
@@ -289,6 +302,41 @@ export function startMonitor(deps: MonitorDeps, intervalMs: number): Monitor {
     }
   }
 
+  // ---- channel_low_balance（F5）：仅对 kind='quota'(apikey/bedrock 真实额度) remaining<阈值命中；
+  //      window/none(OAuth/号池零覆盖) 永不误报。引擎无 channelBalances 能力即跳过。默认阈值 0 时本函数不被调用。 ----
+  async function checkChannelLowBalance(
+    site: SiteRow,
+    siteRef: AlertSiteRef,
+    client: EngineAdminClient,
+  ): Promise<void> {
+    const fn = client.stats.channelBalances;
+    if (!fn) return; // 引擎不支持余额口径（newapi）：跳过
+    let balances: ChannelBalance[];
+    try {
+      balances = await fn();
+    } catch (err) {
+      console.warn(`[alerts] 站点 ${site.slug} 渠道额度巡检失败:`, redactText(errText(err)));
+      return;
+    }
+    const low = evaluateChannelLowBalance(balances, config.channelBalanceThreshold);
+    if (low.length > 0) {
+      const detail = low
+        .map((b) => `${b.name}(${((b.quotaLimit ?? 0) - (b.quotaUsed ?? 0)).toFixed(2)} USD)`)
+        .join(', ');
+      await openAlert(db, notifier, {
+        kind: 'channel_low_balance',
+        siteId: site.id,
+        severity: 'warning',
+        title: '渠道额度不足',
+        detail: `低于阈值 ${config.channelBalanceThreshold} USD: ${detail}`,
+        site: siteRef,
+      });
+    } else {
+      const open = await findOpenAlert(db, 'channel_low_balance', site.id);
+      if (open) await resolveAlert(db, notifier, open, siteRef);
+    }
+  }
+
   async function probeSite(site: SiteRow, channelRound: boolean): Promise<void> {
     const adapter = deps.adapters[site.engine as EngineKind];
     if (!adapter) return;
@@ -331,8 +379,9 @@ export function startMonitor(deps: MonitorDeps, intervalMs: number): Monitor {
     if (!healthy) return;
 
     let channels: ChannelRecord[];
+    let client: EngineAdminClient;
     try {
-      const client = await adapter.connect(inst, credentials);
+      client = await adapter.connect(inst, credentials);
       channels = await client.channels.list();
     } catch (err) {
       console.warn(`[alerts] 站点 ${site.slug} 渠道巡检失败:`, redactText(errText(err)));
@@ -341,6 +390,8 @@ export function startMonitor(deps: MonitorDeps, intervalMs: number): Monitor {
 
     await checkChannelDisabled(site, siteRef, channels);
     if (config.balanceThreshold > 0) await checkLowBalance(site, siteRef, channels);
+    // F5：渠道额度不足（复用已构造的 client；默认阈值 0 时不触发，主循环行为零变化）
+    if (config.channelBalanceThreshold > 0) await checkChannelLowBalance(site, siteRef, client);
   }
 
   async function tick(): Promise<void> {

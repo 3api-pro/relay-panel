@@ -12,12 +12,16 @@ import type {
   InstanceInfo,
   SiteBranding,
   SiteUserRecord,
+  SiteCustomerRecord,
   UsageSummary,
   ModelUsageStat,
   CustomerUsageStat,
   CustomerRanking,
   AccountUsageStat,
+  ChannelBalance,
   RechargeSummary,
+  PlatformQuota,
+  PlatformQuotaInput,
 } from '@relay-panel/adapter-core';
 import { Sub2apiHttp, type PaginatedData } from './http.js';
 import { ensureCompliance, loginAdmin } from './auth.js';
@@ -39,6 +43,12 @@ interface S2ARawAccount {
   group_ids?: number[];
   credentials?: Record<string, unknown>;
   extra?: Record<string, unknown>;
+  // F5 上游余额/可用度（DTO 顶层，omitempty）：
+  //  quota_limit/quota_used 仅 apikey/bedrock 且管理员配置>0 时返回（USD，真实可用额度）；
+  //  window_cost_limit 仅 Anthropic OAuth/setup_token 且>0 时返回（USD，5h 窗口成本闸，非余额）。
+  quota_limit?: number;
+  quota_used?: number;
+  window_cost_limit?: number;
 }
 
 interface S2ARawGroup {
@@ -56,6 +66,43 @@ interface S2ARawUser {
   role: string;
   balance?: number;
   status: string;
+  // CRM 富字段（F4）：list 与 listAll 复用同一原始结构，均可选（additive，不破坏既有 users.list 映射）
+  frozen_balance?: number;
+  total_recharged?: number;
+  created_at?: string;
+  last_active_at?: string | null;
+  last_used_at?: string | null;
+  subscriptions?: { id: number; status?: string }[];
+}
+
+/** GET/PUT /admin/users/:id/platform-quotas 的原始行（各窗口 *_usage_usd / *_limit_usd(null=不限) / *_window_resets_at） */
+interface S2ARawPlatformQuota {
+  platform: string;
+  daily_usage_usd?: number;
+  daily_limit_usd?: number | null;
+  daily_window_resets_at?: string;
+  weekly_usage_usd?: number;
+  weekly_limit_usd?: number | null;
+  weekly_window_resets_at?: string;
+  monthly_usage_usd?: number;
+  monthly_limit_usd?: number | null;
+  monthly_window_resets_at?: string;
+}
+
+/** 原始平台限额行 → adapter-core PlatformQuota（limit 的 null=不限原样保留，与 0=禁用区分） */
+function rawToPlatformQuota(q: S2ARawPlatformQuota): PlatformQuota {
+  const win = (usage: number | undefined, limit: number | null | undefined, resetsAt: string | undefined) => ({
+    usageUsd: usage ?? 0,
+    // 🔴 null=不限 原样保留（不可折成 0=禁用）；缺字段视为不限
+    limitUsd: limit === undefined ? null : limit,
+    ...(resetsAt !== undefined ? { resetsAt } : {}),
+  });
+  return {
+    platform: q.platform,
+    daily: win(q.daily_usage_usd, q.daily_limit_usd, q.daily_window_resets_at),
+    weekly: win(q.weekly_usage_usd, q.weekly_limit_usd, q.weekly_window_resets_at),
+    monthly: win(q.monthly_usage_usd, q.monthly_limit_usd, q.monthly_window_resets_at),
+  };
 }
 
 const PROTOCOL_TO_PLATFORM: Record<ChannelSpec['protocol'], string> = {
@@ -251,6 +298,56 @@ export class Sub2apiAdminClient implements EngineAdminClient {
     setStatus: async (id: string, status: 'active' | 'disabled'): Promise<void> => {
       await this.http.put(`/api/v1/admin/users/${id}`, { status });
     },
+
+    // CRM 全量拉取（F4）：翻完全部分页 /admin/users，映射富字段 + subscriptions?.length>0→hasSubscription。
+    // 🔴 只读端点，不触碰额度/余额；balance/frozen_balance/total_recharged 归一为 number。
+    listAll: async (opts?: { includeSubscriptions?: boolean }): Promise<SiteCustomerRecord[]> => {
+      const inc = opts?.includeSubscriptions !== false; // 默认带订阅（判 hasSubscription）
+      const path = `/api/v1/admin/users?sort_by=created_at&sort_order=desc${
+        inc ? '&include_subscriptions=true' : ''
+      }`;
+      const raw = await this.http.listAll<S2ARawUser>(path);
+      return raw.map((u) => ({
+        userId: u.id,
+        role: u.role === 'admin' ? 'admin' : 'user',
+        status: u.status === 'active' ? 'active' : 'disabled',
+        ...(u.email ? { email: u.email } : {}),
+        ...(u.username ? { username: u.username } : {}),
+        ...(u.balance !== undefined ? { balance: Number(u.balance) } : {}),
+        ...(u.frozen_balance !== undefined ? { frozenBalance: Number(u.frozen_balance) } : {}),
+        ...(u.total_recharged !== undefined ? { totalRecharged: Number(u.total_recharged) } : {}),
+        ...(u.created_at ? { createdAt: u.created_at } : {}),
+        ...(u.last_active_at ? { lastActiveAt: u.last_active_at } : {}),
+        ...(u.last_used_at ? { lastUsedAt: u.last_used_at } : {}),
+        hasSubscription: Array.isArray(u.subscriptions) && u.subscriptions.length > 0,
+      }));
+    },
+
+    // 平台限额读（F3 风控护栏）：GET → http 已剥 data 信封 → 读 platform_quotas[]。
+    getPlatformQuotas: async (id: string): Promise<PlatformQuota[]> => {
+      const d = await this.http.get<{ platform_quotas?: S2ARawPlatformQuota[] }>(
+        `/api/v1/admin/users/${id}/platform-quotas`,
+      );
+      return (d.platform_quotas ?? []).map(rawToPlatformQuota);
+    },
+
+    // 平台限额写：PUT 同路径【全量替换】，body={quotas:[{platform,daily_limit_usd,weekly_limit_usd,monthly_limit_usd}]}。
+    // nil/0/>0 语义原样透传（undefined→null=不限、0=禁用、>0=USD 上限）；回读返回最新。
+    setPlatformQuotas: async (id: string, quotas: PlatformQuotaInput[]): Promise<PlatformQuota[]> => {
+      const body = {
+        quotas: quotas.map((q) => ({
+          platform: q.platform,
+          daily_limit_usd: q.dailyLimitUsd ?? null,
+          weekly_limit_usd: q.weeklyLimitUsd ?? null,
+          monthly_limit_usd: q.monthlyLimitUsd ?? null,
+        })),
+      };
+      const d = await this.http.put<{ platform_quotas?: S2ARawPlatformQuota[] }>(
+        `/api/v1/admin/users/${id}/platform-quotas`,
+        body,
+      );
+      return (d.platform_quotas ?? []).map(rawToPlatformQuota);
+    },
   };
 
   settings = {
@@ -432,6 +529,39 @@ export class Sub2apiAdminClient implements EngineAdminClient {
           count: x.count ?? 0,
         })),
       };
+    },
+
+    // F5 上游渠道"余额/可用度"：复用 /admin/accounts 列表，逐账户按覆盖度分类。
+    // 🔴 绝不触碰 accountToChannelRecord（monitor/finance/channels.list 共用）；绝不新增 reset-quota 等写调用。
+    //  - typeof quota_limit==='number'（apikey/bedrock 且管理员配>0）→ kind='quota'（带 quotaLimit/quotaUsed，真实可用额度）；
+    //  - 否则 window_cost_limit 有值 或 type∈{oauth,setup_token}（Anthropic OAuth/号池）→ kind='window'（仅窗口成本闸，非余额）；
+    //  - 否则 → kind='none'（零覆盖）。
+    channelBalances: async (): Promise<ChannelBalance[]> => {
+      const accounts = await this.http.listAll<S2ARawAccount>('/api/v1/admin/accounts');
+      return accounts.map((a): ChannelBalance => {
+        const base = {
+          id: String(a.id),
+          name: a.name,
+          accountType: a.type,
+          enabled: a.status === 'active',
+        };
+        if (typeof a.quota_limit === 'number') {
+          return {
+            ...base,
+            kind: 'quota',
+            quotaLimit: a.quota_limit,
+            ...(typeof a.quota_used === 'number' ? { quotaUsed: a.quota_used } : {}),
+          };
+        }
+        if (typeof a.window_cost_limit === 'number' || a.type === 'oauth' || a.type === 'setup_token') {
+          return {
+            ...base,
+            kind: 'window',
+            ...(typeof a.window_cost_limit === 'number' ? { windowCostLimit: a.window_cost_limit } : {}),
+          };
+        }
+        return { ...base, kind: 'none' };
+      });
     },
   };
 }

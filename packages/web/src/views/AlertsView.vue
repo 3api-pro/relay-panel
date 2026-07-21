@@ -96,7 +96,7 @@ function severityText(sev: string): string {
   return t('alerts.severity.info');
 }
 
-const KIND_KEYS = ['site_down', 'channel_disabled', 'low_balance', 'job_failed'];
+const KIND_KEYS = ['site_down', 'channel_disabled', 'low_balance', 'job_failed', 'margin_low', 'cost_spike', 'spend_spike', 'quota_breach', 'customer_churn', 'channel_low_balance'];
 function kindText(kind: string): string {
   return KIND_KEYS.includes(kind) ? t(`alerts.kind.${kind}`) : kind;
 }

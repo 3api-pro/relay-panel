@@ -17,7 +17,10 @@ import { registerBatchRoutes } from './batch/routes.js';
 import { registerEngineVersionRoutes } from './engines/versions.js';
 import { registerMarketplaceRoutes } from './marketplace/routes.js';
 import { registerFinanceRoutes } from './finance/routes.js';
+import { registerUpstreamRoutes } from './upstream/routes.js';
+import { registerCustomersRoutes } from './customers/routes.js';
 import { registerAlertsRoutes } from './alerts/routes.js';
+import { registerRiskRoutes } from './risk/routes.js';
 import { registerBillingRoutes } from './billing/routes.js';
 import { registerPaymentRoutes, registerPaymentWebhooks } from './billing/payments/routes.js';
 import { registerDomainsRoutes } from './domains/routes.js';
@@ -172,7 +175,10 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
   registerEngineVersionRoutes(app);
   registerMarketplaceRoutes(app, deps);
   registerFinanceRoutes(app, deps);
+  registerUpstreamRoutes(app, deps);
+  registerCustomersRoutes(app, deps);
   registerAlertsRoutes(app, deps);
+  registerRiskRoutes(app, deps);
   registerBillingRoutes(app, deps);
   registerPaymentRoutes(app, deps);
   registerPaymentWebhooks(app, deps); // /webhooks/*：免认证 + 原始 body（验签）

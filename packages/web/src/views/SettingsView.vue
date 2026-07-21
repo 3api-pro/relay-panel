@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { ArrowRight, KeyRound, ServerCog, UserRound } from 'lucide-vue-next';
-import { post } from '../api/client';
+import { ArrowRight, KeyRound, LineChart, ServerCog, UserRound } from 'lucide-vue-next';
+import { get, post, put } from '../api/client';
 import { session } from '../api/session';
-import type { Me, OperatorRole } from '../api/types';
+import type { FinanceReportConfig, Me, OperatorRole } from '../api/types';
 import { Badge, Button, Card, EmptyState, Field, Input, Skeleton, toast } from '../components/ui';
 
 /**
@@ -26,6 +26,7 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+  if (isRoot.value) await loadReportConfig();
 });
 
 const me = computed<Me | null>(() => session.state.user);
@@ -76,6 +77,78 @@ async function submitPassword(): Promise<void> {
     // client 已弹错误 toast（如原密码不正确）
   } finally {
     submitting.value = false;
+  }
+}
+
+// ---- 经营报告配置（root · F2）----
+const reportLoading = ref(false);
+const reportSaving = ref(false);
+const recipients = ref('');
+const marginLowPctInput = ref<number | string>(20); // 展示为百分比（0..100），提交转 0..1
+const costSpikeFactor = ref<number | string>(1.5);
+const reportDaily = ref(true);
+const reportWeekly = ref(true);
+const recipientsError = ref('');
+const thresholdError = ref('');
+
+const REPORT_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function parseRecipients(): string[] {
+  return recipients.value
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s !== '');
+}
+
+async function loadReportConfig(): Promise<void> {
+  reportLoading.value = true;
+  try {
+    const cfg = await get<FinanceReportConfig>('/api/settings/finance-report', { silent: true });
+    recipients.value = (cfg.recipients ?? []).join(', ');
+    marginLowPctInput.value = Math.round((cfg.marginLowPct ?? 0.2) * 100);
+    costSpikeFactor.value = cfg.costSpikeFactor ?? 1.5;
+    reportDaily.value = cfg.daily ?? true;
+    reportWeekly.value = cfg.weekly ?? true;
+  } catch {
+    toast.error(t('settings.report.loadFailed'));
+  } finally {
+    reportLoading.value = false;
+  }
+}
+
+async function saveReportConfig(): Promise<void> {
+  recipientsError.value = '';
+  thresholdError.value = '';
+  const list = parseRecipients();
+  if (list.some((e) => !REPORT_EMAIL_RE.test(e))) {
+    recipientsError.value = t('settings.report.recipientsInvalid');
+    return;
+  }
+  const pct = Number(marginLowPctInput.value);
+  if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+    thresholdError.value = t('settings.report.marginLowInvalid');
+    return;
+  }
+  const factor = Number(costSpikeFactor.value);
+  if (!Number.isFinite(factor) || factor < 1) {
+    thresholdError.value = t('settings.report.costSpikeInvalid');
+    return;
+  }
+  reportSaving.value = true;
+  try {
+    const saved = await put<FinanceReportConfig>('/api/settings/finance-report', {
+      recipients: list,
+      marginLowPct: pct / 100,
+      costSpikeFactor: factor,
+      daily: reportDaily.value,
+      weekly: reportWeekly.value,
+    });
+    recipients.value = (saved.recipients ?? []).join(', ');
+    toast.success(t('settings.report.saved'));
+  } catch {
+    // client 已弹错误 toast
+  } finally {
+    reportSaving.value = false;
   }
 }
 </script>
@@ -171,6 +244,76 @@ async function submitPassword(): Promise<void> {
             </span>
             <ArrowRight :size="14" class="shrink-0 text-accent" />
           </RouterLink>
+        </Card>
+
+        <!-- root：经营报告配置（F2） -->
+        <Card v-if="isRoot">
+          <template #title>
+            <span class="flex items-center gap-2">
+              <LineChart :size="15" class="text-muted" /> {{ t('settings.report.title') }}
+            </span>
+          </template>
+
+          <div v-if="reportLoading" class="py-2">
+            <Skeleton :lines="3" />
+          </div>
+          <div v-else class="space-y-4">
+            <p class="text-[13px] leading-relaxed text-muted">{{ t('settings.report.desc') }}</p>
+
+            <Field
+              :label="t('settings.report.recipientsLabel')"
+              :error="recipientsError"
+              :hint="t('settings.report.recipientsHint')"
+            >
+              <Input
+                v-model="recipients"
+                mono
+                placeholder="ops@example.com, finance@example.com"
+                :disabled="reportSaving"
+                autocomplete="off"
+              />
+            </Field>
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field
+                :label="t('settings.report.marginLowLabel')"
+                :error="thresholdError"
+                :hint="t('settings.report.marginLowHint')"
+              >
+                <div class="flex items-center gap-1.5">
+                  <Input v-model="marginLowPctInput" type="number" :disabled="reportSaving" />
+                  <span class="text-xs text-muted">%</span>
+                </div>
+              </Field>
+              <Field :label="t('settings.report.costSpikeLabel')" :hint="t('settings.report.costSpikeHint')">
+                <div class="flex items-center gap-1.5">
+                  <Input v-model="costSpikeFactor" type="number" :disabled="reportSaving" />
+                  <span class="text-xs text-muted">×</span>
+                </div>
+              </Field>
+            </div>
+
+            <div class="flex items-center gap-5 border-t border-border/60 pt-3">
+              <label class="flex items-center gap-2 text-[13px] text-text/90">
+                <input v-model="reportDaily" type="checkbox" class="accent-accent" :disabled="reportSaving" />
+                {{ t('settings.report.dailyLabel') }}
+              </label>
+              <label class="flex items-center gap-2 text-[13px] text-text/90">
+                <input v-model="reportWeekly" type="checkbox" class="accent-accent" :disabled="reportSaving" />
+                {{ t('settings.report.weeklyLabel') }}
+              </label>
+            </div>
+
+            <p class="text-xs text-muted/80">
+              {{ t('settings.report.usdNote') }} · {{ t('settings.report.noResolveNote') }}
+            </p>
+
+            <div class="flex justify-end border-t border-border/60 pt-3">
+              <Button variant="primary" :loading="reportSaving" @click="saveReportConfig">
+                {{ t('settings.report.save') }}
+              </Button>
+            </div>
+          </div>
         </Card>
       </div>
     </div>

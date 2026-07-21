@@ -92,6 +92,12 @@ const KIND_LABEL: Record<string, string> = {
   job_failed: '任务失败',
   channel_disabled: '渠道被禁用',
   low_balance: '渠道余额不足',
+  margin_low: '毛利率偏低',
+  cost_spike: '成本环比异常',
+  spend_spike: '消费骤增',
+  quota_breach: '限额触发',
+  customer_churn: '客户流失预警',
+  channel_low_balance: '渠道额度不足',
 };
 const SEVERITY_LABEL: Record<string, string> = {
   critical: '严重',

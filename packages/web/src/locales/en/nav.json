@@ -1,10 +1,13 @@
 {
   "overview": "Overview",
   "finance": "Finance",
+  "upstream": "Upstream",
   "sites": "Sites",
   "marketplace": "Marketplace",
   "ledger": "Ledger",
   "alerts": "Alerts",
+  "risk": "Risk control",
+  "customers": "Customers",
   "jobs": "Jobs",
   "operators": "Operators",
   "billing": "Billing",

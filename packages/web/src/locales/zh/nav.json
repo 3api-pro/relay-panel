@@ -1,10 +1,13 @@
 {
   "overview": "总览",
   "finance": "经营",
+  "upstream": "上游余额",
   "sites": "站点",
   "marketplace": "渠道市场",
   "ledger": "账本",
   "alerts": "告警",
+  "risk": "风控",
+  "customers": "客户",
   "jobs": "任务",
   "operators": "操作员",
   "billing": "计费",

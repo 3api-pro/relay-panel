@@ -13,9 +13,12 @@ import {
   LogOut,
   Server,
   Settings,
+  ShieldAlert,
   Store,
   TrendingUp,
+  UserRound,
   Users,
+  Wallet,
 } from 'lucide-vue-next';
 import { session } from '../api/session';
 import Badge from '../components/ui/Badge.vue';
@@ -42,11 +45,14 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/', key: 'overview', icon: LayoutDashboard },
   { to: '/finance', key: 'finance', icon: TrendingUp },
+  { to: '/upstream', key: 'upstream', icon: Wallet, rootOnly: true },
   { to: '/sites', key: 'sites', icon: Server },
   { to: '/batch', key: 'batch', icon: Layers },
   { to: '/marketplace', key: 'marketplace', icon: Store },
   { to: '/ledger', key: 'ledger', icon: BookOpen },
   { to: '/alerts', key: 'alerts', icon: Bell },
+  { to: '/risk', key: 'risk', icon: ShieldAlert, rootOnly: true },
+  { to: '/customers', key: 'customers', icon: UserRound, rootOnly: true },
   { to: '/jobs', key: 'jobs', icon: ListChecks },
   { to: '/operators', key: 'operators', icon: Users, rootOnly: true },
   { to: '/billing', key: 'billing', icon: CreditCard },

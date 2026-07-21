@@ -2,6 +2,8 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   boolean,
+  date,
+  index,
   integer,
   jsonb,
   numeric,
@@ -283,6 +285,36 @@ export const appSettings = pgTable('app_settings', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
 });
 
+/**
+ * 客户 CRM 每日快照（F4）。与 migrations/004_customer_snapshots.sql 完全同构（改一边必须同步另一边）。
+ * 逐日为每站每客户落一行；相邻日 period_cost 之差=当日消耗，供消费骤降/流失侦测。
+ * period_cost = 累计净消耗代理 = total_recharged - balance - frozen_balance（近似，UI 标估算）。
+ * 去重键 UNIQUE(site_slug,user_id,captured_date)：每站每人每北京日历日一行（一天多次 tick 幂等只更今日）。
+ * balance/frozen_balance = 客户预付余额（对客负债），与上游 channel 余额严格区分。
+ */
+export const customerSnapshots = pgTable(
+  'customer_snapshots',
+  {
+    id: serial('id').primaryKey(),
+    siteSlug: text('site_slug').notNull(),
+    userId: integer('user_id').notNull(),
+    email: text('email'),
+    // 金额 numeric(14,6) mode:'number'（读出归一 number，写入精确入库），对齐 usage_ledger 口径
+    balance: numeric('balance', { precision: 14, scale: 6, mode: 'number' }).notNull().default(0),
+    frozenBalance: numeric('frozen_balance', { precision: 14, scale: 6, mode: 'number' }).notNull().default(0),
+    totalRecharged: numeric('total_recharged', { precision: 14, scale: 6, mode: 'number' }).notNull().default(0),
+    periodCost: numeric('period_cost', { precision: 14, scale: 6, mode: 'number' }).notNull().default(0),
+    status: text('status'),
+    // 北京日历日 'YYYY-MM-DD'（date mode:'string'）
+    capturedDate: date('captured_date', { mode: 'string' }).notNull(),
+    capturedAt: timestamp('captured_at', { mode: 'string' }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('customer_snapshots_site_user_date_uk').on(t.siteSlug, t.userId, t.capturedDate),
+    index('customer_snapshots_site_user_date_idx').on(t.siteSlug, t.userId, t.capturedDate),
+  ],
+);
+
 /** 迁移记账表；由 runMigrations 以 IF NOT EXISTS 先建（001_init.sql 里同样 IF NOT EXISTS） */
 export const schemaMigrations = pgTable('schema_migrations', {
   name: text('name').primaryKey(),
@@ -305,3 +337,4 @@ export type PlanRow = typeof plans.$inferSelect;
 export type SubscriptionRow = typeof subscriptions.$inferSelect;
 export type PaymentProviderRow = typeof paymentProviders.$inferSelect;
 export type PaymentOrderRow = typeof paymentOrders.$inferSelect;
+export type CustomerSnapshotRow = typeof customerSnapshots.$inferSelect;

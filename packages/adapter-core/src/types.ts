@@ -126,6 +126,35 @@ export interface SiteUserRecord {
   status: 'active' | 'disabled';
 }
 
+/**
+ * CRM 专用客户记录（F4 客户 CRM + 流失预警）。比 SiteUserRecord 富：含余额/冻结/累计充值/
+ * 创建与活跃时间/订阅标记，供客户资产·活跃·流失分析与每日快照使用。
+ * 🔴 balance/frozenBalance = 客户预付余额（对客钱包负债，站点结算货币口径，本行业 USD:RMB 1:1），
+ *    与上游 channel balance（渠道账户余额）严格区分，绝不混用。
+ * 纯新增导出，绝不改动既有 SiteUserRecord（users.list / UsersTab 仍用它）。
+ */
+export interface SiteCustomerRecord {
+  userId: number;
+  email?: string;
+  username?: string;
+  role: 'admin' | 'user';
+  status: 'active' | 'disabled';
+  /** 客户预付余额（对客负债），全字段可选：引擎未返回即缺省 */
+  balance?: number;
+  /** 冻结余额（进行中订单占用等） */
+  frozenBalance?: number;
+  /** 累计充值（现金到账合计） */
+  totalRecharged?: number;
+  /** 账号创建时间（引擎原样时间串，可能为 ISO） */
+  createdAt?: string;
+  /** 最近活跃（登录/请求）时间 */
+  lastActiveAt?: string;
+  /** API key 最近使用时间 */
+  lastUsedAt?: string;
+  /** 是否持有站内订阅（需 includeSubscriptions 拉取时才可靠填充） */
+  hasSubscription?: boolean;
+}
+
 export interface UsageSummary {
   /** 统计窗口 */
   from: Date;
@@ -208,6 +237,69 @@ export interface AccountUsageStat {
   cost: number;
   avgDailyCost: number;
   days: number;
+}
+
+/**
+ * 上游渠道"余额/可用度"读模型（F5）。
+ * 🔴 引擎【从不】提供上游钱包真实余额；本类型是能拿到的最接近口径，按覆盖度分三类：
+ *  - kind='quota'：apikey/bedrock 类型，管理员手配的额度上限 quotaLimit(USD) 与已用 quotaUsed(USD)，
+ *    remaining = quotaLimit − quotaUsed 是【真实可用额度】。
+ *  - kind='window'：Anthropic OAuth/号池，仅有 5h 窗口成本闸 windowCostLimit(USD，非余额，无池总额)→零余额口径。
+ *  - kind='none'：零覆盖（无 quota 上限、无窗口闸），只能靠账号口径日均消耗估算，绝不编造余额。
+ * accountType=引擎账户 type 原样字符串(apikey|bedrock|oauth|setup_token…)，enabled=账户是否启用。
+ */
+export interface ChannelBalance {
+  id: string;
+  name: string;
+  /** 引擎账户 type 原样字符串（apikey/bedrock/oauth/setup_token…） */
+  accountType: string;
+  enabled: boolean;
+  /** 余额口径：quota=真实额度上限；window=仅窗口成本闸(非余额)；none=零覆盖 */
+  kind: 'quota' | 'window' | 'none';
+  /** kind='quota' 时的额度上限(USD，管理员手配) */
+  quotaLimit?: number;
+  /** kind='quota' 时的已用额度(USD) */
+  quotaUsed?: number;
+  /** kind='window' 时的 5h 窗口成本上限(USD，非余额，不可当撑几天算) */
+  windowCostLimit?: number;
+}
+
+// ---------- 平台限额（风控护栏 F3；user × platform 粒度，日/周/月窗口）----------
+
+/**
+ * 单窗口限额状态（读模型）。金额单位 USD。
+ *  - usageUsd：当前窗口已用量（USD）。
+ *  - limitUsd：窗口上限（USD）；null=不限。
+ *  - resetsAt：窗口重置时刻（引擎原样时间串，可能为 ISO）。
+ */
+export interface QuotaWindowState {
+  usageUsd: number;
+  limitUsd: number | null;
+  resetsAt?: string;
+}
+
+/**
+ * 平台限额读模型（GET /users/:id/platform-quotas 映射）：某平台的日/周/月三窗口用量与上限。
+ * platform ∈ 引擎允许集合（如 anthropic/openai/gemini/codex/grok）。
+ */
+export interface PlatformQuota {
+  platform: string;
+  daily: QuotaWindowState;
+  weekly: QuotaWindowState;
+  monthly: QuotaWindowState;
+}
+
+/**
+ * 平台限额写模型（PUT /users/:id/platform-quotas —— 🔴【全量替换】该用户所有平台限额，
+ * 缺失的 platform 会被软删）。每窗口 limit 语义：
+ *   undefined/null = 不限；0 = 完全禁用；>0 = USD 上限。金额单位 USD。
+ * 调用方必须先 getPlatformQuotas 合并（保留未涉及 platform 与同 platform 其它窗口）再写回。
+ */
+export interface PlatformQuotaInput {
+  platform: string;
+  dailyLimitUsd?: number | null;
+  weeklyLimitUsd?: number | null;
+  monthlyLimitUsd?: number | null;
 }
 
 // ---------- capability ----------

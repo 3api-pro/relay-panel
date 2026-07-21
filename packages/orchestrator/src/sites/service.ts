@@ -17,6 +17,7 @@ import type {
   ModelUsageStat,
   CustomerUsageStat,
   AccountUsageStat,
+  ChannelBalance,
   RechargeSummary,
 } from '@relay-panel/adapter-core';
 import type { Config } from '../config.js';
@@ -88,6 +89,9 @@ const FINANCE_DAILY_TODAY_TTL_MS = 120_000;
 /** 经营下钻缓存 5min；key 形如 model:<slug>:<from>:<to> / customer:<slug>:<from>:<to>:<limit> / account:<slug>:<id>:<days> */
 const financeBreakdownCache = new Map<string, { at: number; body: unknown }>();
 
+/** 上游余额（F5）缓存 5min；key 形如 list:<slug>（channelBalances 列表）/ stat:<slug>:<id>:<days>（avgDailyCost） */
+const upstreamBalanceCache = new Map<string, { at: number; body: unknown }>();
+
 /** finance 缓存条目上限（key 含用户可控 from/to/days，需容量护栏防进程长跑内存单调增长） */
 const FINANCE_CACHE_MAX = 4000;
 
@@ -150,6 +154,7 @@ export function clearSiteCaches(): void {
   financeUsageCache.clear();
   financeDailyCache.clear();
   financeBreakdownCache.clear();
+  upstreamBalanceCache.clear();
   latestSnapshotCache.clear();
 }
 
@@ -340,6 +345,27 @@ export interface FinanceAccountRow {
   revenue: number;
   cost: number;
   avgDailyCost: number;
+}
+
+/**
+ * 上游渠道"余额/可用度"单行（F5）。siteOk=false 为站点降级 marker 行（连不上，id/name 为空）。
+ * kind/quotaLimit/quotaUsed/windowCostLimit 源自引擎 ChannelBalance；avgDailyCost 来自账号口径 accountStats。
+ * 🔴 只读呈现；号池/OAuth 只有 window/none 口径，绝不含真实余额。
+ */
+export interface SiteChannelBalanceRow {
+  siteSlug: string;
+  siteLabel: string;
+  siteOk: boolean;
+  id: string;
+  name: string;
+  accountType: string;
+  enabled: boolean;
+  kind: 'quota' | 'window' | 'none';
+  quotaLimit?: number;
+  quotaUsed?: number;
+  windowCostLimit?: number;
+  /** 账号口径日均消耗(USD)；kind!=='none' 且引擎支持 accountStats 时填充 */
+  avgDailyCost?: number;
 }
 
 /** 充值(现金到账)跨站汇总。金额为站点结算货币(RMB=本行业 1:1 于 USD)，与营收(消费)口径不同。 */
@@ -789,6 +815,85 @@ export class SitesService {
         };
       });
       out.push(...(rows.filter(Boolean) as FinanceAccountRow[]));
+    }
+    return out;
+  }
+
+  /**
+   * 上游渠道"余额/可用度"（F5）：镜像 financeAccountBreakdown。对每个可见站：
+   *  - connect + channelBalances?.()（引擎无此能力如 newapi → 跳过该站，不产出行）；
+   *  - 对 kind!=='none' 的行调 accountStats?.(id,days) 取 avgDailyCost（5 并发 mapPool + 5min 缓存）；
+   *  - 单站连不上 → 产出一条 siteOk=false 降级 marker 行，不阻塞他站。
+   * 🔴 只读；不改 financeAccountBreakdown 等 finance* 方法。复用 client()/visibleSites()/mapPool()。
+   */
+  async listSiteChannelBalances(ctx: SessionCtx, days: number): Promise<SiteChannelBalanceRow[]> {
+    const visible = await this.visibleSites(ctx);
+    const out: SiteChannelBalanceRow[] = [];
+    for (const site of visible) {
+      let client: EngineAdminClient;
+      let balances: ChannelBalance[];
+      try {
+        client = await this.client(site);
+        if (!client.stats.channelBalances) continue; // 引擎不支持余额口径（newapi）：跳过该站
+        const listKey = `list:${site.slug}`;
+        const cachedList = upstreamBalanceCache.get(listKey);
+        const nowMs = Date.now();
+        if (cachedList && nowMs - cachedList.at < FINANCE_TTL_MS) {
+          balances = cachedList.body as ChannelBalance[];
+        } else {
+          balances = await client.stats.channelBalances();
+          cachePut(upstreamBalanceCache, listKey, { at: nowMs, body: balances });
+        }
+      } catch {
+        // 站点连不上：降级 marker 行（siteOk=false），不阻塞他站
+        out.push({
+          siteSlug: site.slug,
+          siteLabel: site.label,
+          siteOk: false,
+          id: '',
+          name: '',
+          accountType: '',
+          enabled: false,
+          kind: 'none',
+        });
+        continue;
+      }
+      const accountStats = client.stats.accountStats;
+      const rows = await mapPool(balances, 5, async (b): Promise<SiteChannelBalanceRow> => {
+        let avgDailyCost: number | undefined;
+        // kind!=='none' 的行取账号口径日均（供 quota 算撑几天 / window·none 做估算参考）
+        if (b.kind !== 'none' && accountStats) {
+          const statKey = `stat:${site.slug}:${b.id}:${days}`;
+          const cached = upstreamBalanceCache.get(statKey);
+          const nowMs = Date.now();
+          if (cached && nowMs - cached.at < FINANCE_TTL_MS) {
+            avgDailyCost = cached.body as number;
+          } else {
+            try {
+              const s = await accountStats(b.id, days);
+              avgDailyCost = s.avgDailyCost;
+              cachePut(upstreamBalanceCache, statKey, { at: nowMs, body: avgDailyCost });
+            } catch {
+              // 取不到 avgDailyCost 不阻塞：quota 行 daysLeft 会为 null（不编造）
+            }
+          }
+        }
+        return {
+          siteSlug: site.slug,
+          siteLabel: site.label,
+          siteOk: true,
+          id: b.id,
+          name: b.name,
+          accountType: b.accountType,
+          enabled: b.enabled,
+          kind: b.kind,
+          ...(b.quotaLimit !== undefined ? { quotaLimit: b.quotaLimit } : {}),
+          ...(b.quotaUsed !== undefined ? { quotaUsed: b.quotaUsed } : {}),
+          ...(b.windowCostLimit !== undefined ? { windowCostLimit: b.windowCostLimit } : {}),
+          ...(avgDailyCost !== undefined ? { avgDailyCost } : {}),
+        };
+      });
+      out.push(...rows);
     }
     return out;
   }

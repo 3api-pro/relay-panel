@@ -15,7 +15,14 @@ import type {
   SiteBranding,
   SiteSpec,
   SiteUserRecord,
+  SiteCustomerRecord,
   UsageSummary,
+  CustomerRanking,
+  CustomerRankingItem,
+  PlatformQuota,
+  PlatformQuotaInput,
+  ChannelBalance,
+  AccountUsageStat,
 } from '@relay-panel/adapter-core';
 
 /**
@@ -41,6 +48,17 @@ export interface FakeSiteState {
   rawSettings: Map<string, string>;
   usage: FakeUsageBase;
   nextId: number;
+  /** 客户消费榜单（F3 风控）：单日窗口(from===to)返回 recent，多日窗口返回 baseline */
+  rankingRecent: CustomerRankingItem[];
+  rankingBaseline: CustomerRankingItem[];
+  /** 平台限额（F3 风控护栏）：userId → 该用户全量平台限额（PUT 全量替换写这里） */
+  platformQuotas: Map<string, PlatformQuota[]>;
+  /** CRM 客户全量（F4）：users.listAll 返回；未设置时回落 undefined→listAll 返回空 */
+  customers?: SiteCustomerRecord[];
+  /** 上游渠道余额/可用度（F5）：stats.channelBalances 返回；未设置=空 */
+  channelBalances?: ChannelBalance[];
+  /** 账号口径日均消耗（F5）：stats.accountStats 返回的 avgDailyCost（accountId → USD）；缺省 0 */
+  accountAvgDailyCost?: Map<string, number>;
 }
 
 function defaultState(slug: string): FakeSiteState {
@@ -52,6 +70,9 @@ function defaultState(slug: string): FakeSiteState {
     rawSettings: new Map(),
     usage: { requests: 0, promptTokens: 0, completionTokens: 0, cost: 0, costUnit: 'USD' },
     nextId: 1,
+    rankingRecent: [],
+    rankingBaseline: [],
+    platformQuotas: new Map(),
   };
 }
 
@@ -98,6 +119,34 @@ export class FakeAdapter implements EngineAdapter {
   setUnreachable(slug: string, down = true): void {
     if (down) this.unreachable.add(slug);
     else this.unreachable.delete(slug);
+  }
+
+  /** 设某站两窗口客户消费榜单（F3 风控骤增侦测；recent=今日单日窗口，baseline=多日基线窗口） */
+  setRanking(slug: string, recent: CustomerRankingItem[], baseline: CustomerRankingItem[]): void {
+    const s = this.stateFor(slug);
+    s.rankingRecent = recent;
+    s.rankingBaseline = baseline;
+  }
+
+  /** 设某用户全量平台限额（F3 风控护栏；PUT 全量替换回读的初值） */
+  setPlatformQuotas(slug: string, userId: string, quotas: PlatformQuota[]): void {
+    this.stateFor(slug).platformQuotas.set(userId, quotas);
+  }
+
+  /** 设某站 CRM 客户全量（F4 客户 CRM；users.listAll 返回该列表） */
+  setCustomers(slug: string, customers: SiteCustomerRecord[]): void {
+    this.stateFor(slug).customers = customers;
+  }
+
+  /** 设某站上游渠道余额/可用度（F5；stats.channelBalances 返回该列表） */
+  setChannelBalances(slug: string, balances: ChannelBalance[]): void {
+    this.stateFor(slug).channelBalances = balances;
+  }
+
+  /** 设某站某账户账号口径日均消耗（F5；stats.accountStats 的 avgDailyCost，USD） */
+  setAccountAvgDailyCost(slug: string, accountId: string, usd: number): void {
+    const s = this.stateFor(slug);
+    (s.accountAvgDailyCost ??= new Map()).set(accountId, usd);
   }
 
   private check(op: string): void {
@@ -214,6 +263,41 @@ export class FakeAdapter implements EngineAdapter {
           if (!u) throw new Error(`user not found: ${id}`);
           u.status = status;
         },
+        // F4 CRM：全量客户拉取（深拷贝防外部改动；未设置 customers 时返回空）
+        listAll: async (_opts?: { includeSubscriptions?: boolean }): Promise<SiteCustomerRecord[]> => {
+          track('users.listAll');
+          return (state.customers ?? []).map((c) => ({ ...c }));
+        },
+        // F3 风控护栏：平台限额读（返回该用户全量限额，深拷贝防外部改动）
+        getPlatformQuotas: async (id: string): Promise<PlatformQuota[]> => {
+          track('users.getPlatformQuotas');
+          return (state.platformQuotas.get(id) ?? []).map((q) => ({
+            platform: q.platform,
+            daily: { ...q.daily },
+            weekly: { ...q.weekly },
+            monthly: { ...q.monthly },
+          }));
+        },
+        // F3 风控护栏：平台限额写（【全量替换】，limit 从 input 取、usage 从既有回搬，回读返回）
+        setPlatformQuotas: async (id: string, quotas: PlatformQuotaInput[]): Promise<PlatformQuota[]> => {
+          track('users.setPlatformQuotas');
+          const prev = new Map((state.platformQuotas.get(id) ?? []).map((q) => [q.platform, q]));
+          const next: PlatformQuota[] = quotas.map((q) => {
+            const old = prev.get(q.platform);
+            const win = (limit: number | null | undefined, usage: number | undefined) => ({
+              usageUsd: usage ?? 0,
+              limitUsd: limit === undefined ? null : limit,
+            });
+            return {
+              platform: q.platform,
+              daily: win(q.dailyLimitUsd, old?.daily.usageUsd),
+              weekly: win(q.weeklyLimitUsd, old?.weekly.usageUsd),
+              monthly: win(q.monthlyLimitUsd, old?.monthly.usageUsd),
+            };
+          });
+          state.platformQuotas.set(id, next);
+          return next.map((q) => ({ platform: q.platform, daily: { ...q.daily }, weekly: { ...q.weekly }, monthly: { ...q.monthly } }));
+        },
       },
       settings: {
         getBranding: async (): Promise<SiteBranding> => {
@@ -238,6 +322,29 @@ export class FakeAdapter implements EngineAdapter {
           track('stats.usage');
           const { byModel, ...base } = state.usage;
           return { from, to, ...base, ...(byModel !== undefined ? { byModel } : {}) };
+        },
+        // F3 风控：单日窗口(from===to 同一日历日)返回 recent，多日窗口返回 baseline
+        customerRanking: async (from: Date, to: Date, limit = 50): Promise<CustomerRanking> => {
+          track('stats.customerRanking');
+          const single = from.toISOString().slice(0, 10) === to.toISOString().slice(0, 10);
+          const items = (single ? state.rankingRecent : state.rankingBaseline).slice(0, limit).map((r) => ({ ...r }));
+          return {
+            items,
+            totalActualCost: items.reduce((a, r) => a + r.actualCost, 0),
+            totalRequests: items.reduce((a, r) => a + r.requests, 0),
+            totalTokens: items.reduce((a, r) => a + r.tokens, 0),
+          };
+        },
+        // F5 上游余额：返回该站预置的 channelBalances（深拷贝防外部改动；未设置=空）
+        channelBalances: async (): Promise<ChannelBalance[]> => {
+          track('stats.channelBalances');
+          return (state.channelBalances ?? []).map((b) => ({ ...b }));
+        },
+        // F5 账号口径日均：avgDailyCost 从预置 map 取（缺省 0）；其余字段占位
+        accountStats: async (accountId: string, days: number): Promise<AccountUsageStat> => {
+          track('stats.accountStats');
+          const avg = state.accountAvgDailyCost?.get(accountId) ?? 0;
+          return { requests: 0, tokens: 0, revenue: 0, cost: 0, avgDailyCost: avg, days };
         },
       },
     };

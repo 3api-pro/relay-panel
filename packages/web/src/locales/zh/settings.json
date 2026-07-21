@@ -31,5 +31,25 @@
     "invite": "仅邀请注册",
     "open": "开放注册"
   },
-  "alertsHint": "告警通知 webhook 在「告警」页配置，站点异常时推送通知。"
+  "alertsHint": "告警通知 webhook 在「告警」页配置，站点异常时推送通知。",
+  "report": {
+    "title": "经营报告",
+    "desc": "定时汇总各站营收/成本/毛利并发送邮件，成本异常时触发告警。须服务端配置 SMTP 后方可实际发信。",
+    "recipientsLabel": "收件人",
+    "recipientsHint": "多个邮箱用逗号分隔；留空则回落到告警邮箱。",
+    "recipientsInvalid": "收件人中包含非法邮箱地址",
+    "marginLowLabel": "毛利率阈值",
+    "marginLowHint": "低于此毛利率的站点触发预警。",
+    "marginLowInvalid": "毛利率阈值须在 0 到 100 之间",
+    "costSpikeLabel": "成本环比倍数",
+    "costSpikeHint": "当期成本超过上期该倍数时触发预警。",
+    "costSpikeInvalid": "成本环比倍数须不小于 1",
+    "dailyLabel": "日报",
+    "weeklyLabel": "周报",
+    "save": "保存报告配置",
+    "saved": "经营报告配置已保存",
+    "loadFailed": "读取报告配置失败",
+    "usdNote": "金额单位 USD",
+    "noResolveNote": "毛利率/成本预警需人工在告警页处理，无自动恢复。"
+  }
 }

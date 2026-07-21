@@ -435,3 +435,229 @@ export interface AlertResolveResponse {
   ok: boolean;
   alert: AlertView;
 }
+
+/** GET/PUT /api/settings/finance-report（root · F2 经营报告配置） */
+export interface FinanceReportConfig {
+  /** 收件人邮箱；留空 = 回落告警邮箱 alert_email_to。须服务端配置 RP_SMTP_* 才实际发信 */
+  recipients: string[];
+  /** 毛利率阈值（0..1）：毛利率低于此值触发 margin_low 告警 */
+  marginLowPct: number;
+  /** 成本环比倍数（>=1）：当期/上期成本高于此倍数触发 cost_spike 告警 */
+  costSpikeFactor: number;
+  /** 日报开关 */
+  daily: boolean;
+  /** 周报开关 */
+  weekly: boolean;
+}
+
+// ============================================================
+// 风控 / 异常消费告警 + 限额护栏（F3，RiskView 专属 · root only）
+// ============================================================
+
+/** 骤增侦测规则（存 app_settings['risk_rules']，root 可编辑） */
+export interface RiskRules {
+  /** 骤增倍率：近期日消费 / 基线日均 ≥ 此值判骤增 */
+  spikeMultiplier: number;
+  /** 绝对下限（USD）：近期消费须 ≥ 此值才告警 */
+  absFloorUsd: number;
+  /** 基线天数：取近 N 日均值作基线 */
+  baselineDays: number;
+}
+
+/** GET/PUT /api/risk/rules 响应（enforce=写回开关快照，前端每次读实时值，勿缓存） */
+export interface RiskRulesResponse {
+  rules: RiskRules;
+  /** RP_RISK_ENFORCE=on 时 true；false=仅告警模式（写回按钮禁用） */
+  enforce: boolean;
+}
+
+/** POST /api/risk/scan 骤增行（金额 USD；ratio=null 表示无基线/新增大额消费者） */
+export interface RiskSpikeRow {
+  siteSlug: string;
+  siteLabel: string;
+  userId: number;
+  email: string;
+  /** 近期窗口消费（USD） */
+  recentCost: number;
+  /** 基线日均消费（USD） */
+  baselineDaily: number;
+  /** 近期/基线倍数；null=无基线（新增） */
+  ratio: number | null;
+}
+
+export interface RiskScanResponse {
+  spikes: RiskSpikeRow[];
+  enforce: boolean;
+  costUnit: string;
+}
+
+export type QuotaWindow = 'daily' | 'weekly' | 'monthly';
+
+/** 平台限额窗口状态（USD；limitUsd null=不限） */
+export interface QuotaWindowState {
+  usageUsd: number;
+  limitUsd: number | null;
+  resetsAt?: string;
+}
+
+/** 平台限额读模型（per-platform 三窗口） */
+export interface PlatformQuota {
+  platform: string;
+  daily: QuotaWindowState;
+  weekly: QuotaWindowState;
+  monthly: QuotaWindowState;
+}
+
+/** 平台限额写模型（PUT 全量替换输入；limit null=不限/0=禁用/>0=USD 上限） */
+export interface PlatformQuotaInput {
+  platform: string;
+  dailyLimitUsd?: number | null;
+  weeklyLimitUsd?: number | null;
+  monthlyLimitUsd?: number | null;
+}
+
+/** POST /api/risk/users/:slug/:userId/quota-preview 响应（GET-合并预览，不写） */
+export interface QuotaPreviewResponse {
+  platform: string;
+  window: QuotaWindow;
+  /** 当前全量限额 */
+  current: PlatformQuota[];
+  /** 合并后将写回的全量输入（仅 enforce=on 时才会实际 PUT） */
+  merged: PlatformQuotaInput[];
+  enforce: boolean;
+  costUnit: string;
+}
+
+// ---------------------------------------------------------------------------
+// 客户 CRM + 流失预警（F4；与 orchestrator/src/customers/routes.ts 返回同构，前端手工维护）
+// ---------------------------------------------------------------------------
+
+/** 分层：大/中/小 R */
+export type CustomerTier = 'big' | 'mid' | 'small';
+/** 流失理由：无活跃 / 消费骤降 */
+export type ChurnReason = 'inactive' | 'spend_drop';
+
+/** CRM 配置（分层门槛 + 流失阈值；金额 USD） */
+export interface CustomerCrmConfig {
+  tierBigUsd: number;
+  tierMidUsd: number;
+  churnInactiveDays: number;
+  dropWindowDays: number;
+  dropThresholdPct: number;
+  minSnapshotDays: number;
+  churnAlertsEnabled: boolean;
+}
+
+/** 单客户 CRM 行（余额=客户预付负债，USD；与上游 channel 余额无关） */
+export interface CustomerCrmRow {
+  /** 跨站不合并唯一键 siteSlug:userId（table row-key） */
+  key: string;
+  siteSlug: string;
+  siteLabel: string;
+  userId: number;
+  email: string | null;
+  balance: number;
+  frozenBalance: number;
+  totalRecharged: number;
+  status: 'active' | 'disabled';
+  lastActiveAt: string | null;
+  lastUsedAt: string | null;
+  tier: CustomerTier;
+  windowSpend: number;
+  dailySpendRecent: number;
+  dailySpendPrior: number;
+  dropPct: number;
+  churnRisk: boolean;
+  churnReasons: ChurnReason[];
+  hasSubscription: boolean;
+  enoughHistory: boolean;
+}
+
+export interface CustomerTotals {
+  customers: number;
+  /** 负债合计=Σbalance（🔴 跨站同一人重复计，USD） */
+  liabilityTotal: number;
+  tierBig: number;
+  tierMid: number;
+  tierSmall: number;
+  churnCount: number;
+  subscriptionCount: number;
+}
+
+/** 降级站（无 listAll 引擎 / 连不上）——从聚合剔除 */
+export interface CustomerDegradedSite {
+  siteSlug: string;
+  siteLabel: string;
+  reason: string;
+}
+
+export interface CustomersResponse {
+  generatedAt: string;
+  config: CustomerCrmConfig;
+  /** 已积累快照天数；< minSnapshotDays 时提示需继续积累 */
+  snapshotDaysAvailable: number;
+  rows: CustomerCrmRow[];
+  totals: CustomerTotals;
+  degradedSites: CustomerDegradedSite[];
+  costUnit: string;
+}
+
+// ============================================================
+// 上游渠道余额 + 低余额预警 + 快捷充值（F5，ChannelBalanceView 专属 · root only）
+// ============================================================
+
+/** 单渠道余额/可用度行（与 orchestrator upstream/service.ts 的 ChannelBalanceView 同构）
+ * 🔴 kind=quota 才有真实额度(quotaLimit/quotaUsed/remaining/daysLeft)；window/none 只有估算(avgDailyCost/windowCostLimit)，daysLeft 恒 null。 */
+export interface ChannelBalanceView {
+  id: string;
+  name: string;
+  accountType: string;
+  enabled: boolean;
+  kind: 'quota' | 'window' | 'none';
+  /** 覆盖度：exact=有真实额度；estimate=仅窗口估算；none=零覆盖/站点降级 */
+  coverage: 'exact' | 'estimate' | 'none';
+  quotaLimit?: number;
+  quotaUsed?: number;
+  /** 剩余可用额度(USD)，仅 quota 型有 */
+  remaining?: number;
+  windowCostLimit?: number;
+  /** 账号口径日均消耗(USD) */
+  avgDailyCost?: number;
+  /** 还能撑几天：仅 quota 且 avgDailyCost>0 才有；window/none 恒 null（不编造） */
+  daysLeft?: number | null;
+  /** 低余额红标：仅 quota 型可 true */
+  low?: boolean;
+  siteSlug: string;
+  siteLabel: string;
+  siteOk: boolean;
+}
+
+/** 覆盖度汇总 */
+export interface UpstreamCoverage {
+  withQuota: number;
+  windowOnly: number;
+  zeroCoverage: number;
+  degradedSites: number;
+}
+
+/** GET /api/upstream/balances 响应 */
+export interface UpstreamBalancesResponse {
+  days: number;
+  /** channel_low_balance 告警阈值(USD)；0=告警关闭 */
+  thresholdUsd: number;
+  costUnit: string;
+  coverage: UpstreamCoverage;
+  rows: ChannelBalanceView[];
+}
+
+/** 充值外链条目 */
+export interface RechargeLink {
+  label: string;
+  url: string;
+  note?: string;
+}
+
+/** GET/PUT /api/upstream/recharge-links 响应 */
+export interface RechargeLinksResponse {
+  links: RechargeLink[];
+}

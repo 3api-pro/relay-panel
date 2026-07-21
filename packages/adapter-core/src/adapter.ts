@@ -12,12 +12,16 @@ import type {
   SiteBranding,
   SiteSpec,
   SiteUserRecord,
+  SiteCustomerRecord,
   UsageSummary,
   ModelUsageStat,
   CustomerUsageStat,
   CustomerRanking,
   AccountUsageStat,
+  ChannelBalance,
   RechargeSummary,
+  PlatformQuota,
+  PlatformQuotaInput,
 } from './types.js';
 
 /**
@@ -61,6 +65,24 @@ export interface EngineAdminClient {
   users: {
     list(query?: { search?: string; page?: number }): Promise<SiteUserRecord[]>;
     setStatus(id: string, status: 'active' | 'disabled'): Promise<void>;
+    /**
+     * 全量拉取客户（CRM，F4）：可选——引擎支持才实现（adapter-newapi 不实现→undefined，
+     * CRM 侧判为不支持并把该站标 degraded 跳过）。翻完全部分页返回富客户记录
+     * （余额/充值/活跃时间/订阅标记）。includeSubscriptions 决定是否附 hasSubscription。
+     * 🔴 只读，绝不触碰客户额度/余额；与既有 list/setStatus 签名完全独立。
+     */
+    listAll?(opts?: { includeSubscriptions?: boolean }): Promise<SiteCustomerRecord[]>;
+    /**
+     * 读某用户各平台限额（可选：引擎支持才实现，F3 风控护栏用）。
+     * 金额单位 USD；limitUsd null=不限。
+     */
+    getPlatformQuotas?(id: string): Promise<PlatformQuota[]>;
+    /**
+     * 写某用户平台限额（可选）。🔴 PUT 是【全量替换】：缺失的 platform 会被软删，
+     * 调用方必须先 getPlatformQuotas 合并（保留未涉及 platform 与同 platform 其它窗口）再写回。
+     * 回读返回最新。nil/0/>0 语义见 PlatformQuotaInput。
+     */
+    setPlatformQuotas?(id: string, quotas: PlatformQuotaInput[]): Promise<PlatformQuota[]>;
   };
 
   settings: {
@@ -81,6 +103,12 @@ export interface EngineAdminClient {
     accountStats?(accountId: string, days: number): Promise<AccountUsageStat>;
     /** 充值(现金到账)汇总。days 窗口终点为今天。口径=现金流入，非营收/消费。 */
     rechargeSummary?(days: number): Promise<RechargeSummary>;
+    /**
+     * 上游渠道"余额/可用度"（F5，可选：引擎支持才实现，adapter-newapi 未实现即 undefined）。
+     * 🔴 引擎从不提供上游钱包真实余额；本方法按覆盖度返回 quota/window/none 分类（见 ChannelBalance），
+     * 绝不编造余额。只读，绝不写回/砍余额。
+     */
+    channelBalances?(): Promise<ChannelBalance[]>;
   };
 }
 

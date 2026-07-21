@@ -52,6 +52,38 @@ const settingsBody = z.object({
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
 
+/**
+ * 仅 root 维度的敏感告警 kind：其 detail 内嵌客户邮箱(PII)/上游成本毛利金额/上游渠道名，
+ * 对应的 Risk(F3)/CRM(F4)/Upstream(F5) 页面本身即 rootOnly。这些告警虽按 (kind,siteId)
+ * 对 own 站 operator / 全量 viewer 可见（保留告警存在性感知），但 detail 必须对非 root 脱敏，
+ * 使 detail 可见性与源视图的 rootOnly 一致，杜绝经告警旁路把客户 PII / 上游成本 / 渠道名泄露给非 root。
+ *  - spend_spike       骤增客户邮箱 + 消费金额（risk/service.ts）
+ *  - customer_churn    流失客户邮箱（customers/snapshot.ts）
+ *  - margin_low        站点营收/成本/毛利（finance/scheduler.ts）
+ *  - cost_spike        站点当期/上期成本金额（finance/scheduler.ts）
+ *  - channel_low_balance 上游渠道名 + 余额（alerts/engine.ts）
+ */
+const SENSITIVE_ALERT_KINDS: ReadonlySet<string> = new Set([
+  'spend_spike',
+  'customer_churn',
+  'margin_low',
+  'cost_spike',
+  'channel_low_balance',
+]);
+/** 非 root 看敏感告警时 detail 的替换文案（不含任何 PII/金额/渠道名） */
+const REDACTED_DETAIL = '（详情含敏感经营/客户数据，仅 root 可见）';
+
+/**
+ * 非 root 访问敏感 kind 时把 detail 脱敏（原 detail 为 null 则保持 null，不注入占位）。
+ * root 与非敏感 kind 原样返回。title/severity 等非敏感字段不动，保留告警存在性感知。
+ */
+function redactAlertForCtx<T extends { kind: string; detail: string | null }>(ctx: SessionCtx, alert: T): T {
+  if (ctx.role === 'root') return alert;
+  if (!SENSITIVE_ALERT_KINDS.has(alert.kind)) return alert;
+  if (alert.detail === null) return alert;
+  return { ...alert, detail: REDACTED_DETAIL };
+}
+
 function requireCtx(req: FastifyRequest): SessionCtx {
   const ctx = req.ctx;
   if (!ctx) throw new ApiError(401, '未登录或会话已过期');
@@ -113,7 +145,8 @@ export function registerAlertsRoutes(app: FastifyInstance, deps: AlertsRoutesDep
     const visible = rows.filter((r) => canSeeAlert(ctx, r.alert, r.siteOperatorId));
     return {
       alerts: visible.map((r) => ({
-        ...r.alert,
+        // 敏感 kind 的 detail 对非 root 脱敏（客户 PII / 上游成本 / 渠道名仅 root 可见）
+        ...redactAlertForCtx(ctx, r.alert),
         siteSlug: r.siteSlug,
         siteLabel: r.siteLabel,
       })),
@@ -149,7 +182,8 @@ export function registerAlertsRoutes(app: FastifyInstance, deps: AlertsRoutesDep
       payload: { alertId: id, kind: row.alert.kind },
       ok: true,
     });
-    return { ok: true, alert: updated ?? row.alert };
+    // 回包同 GET：敏感 kind 的 detail 对非 root 脱敏（operator resolve own 站告警亦不回泄敏感 detail）
+    return { ok: true, alert: redactAlertForCtx(ctx, updated ?? row.alert) };
   });
 
   /** 读某设置行的单字段字符串值（缺失/空串归一为 null） */

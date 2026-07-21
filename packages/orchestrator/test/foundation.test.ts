@@ -97,7 +97,12 @@ describe('config: loadConfig', () => {
 describe('db: runMigrations + schema', () => {
   it('跑两遍幂等，记账一条', async () => {
     const first = await runMigrations(db);
-    expect(first).toEqual(['001_init.sql', '002_saas_payments.sql', '003_subscription_lifecycle.sql']);
+    expect(first).toEqual([
+      '001_init.sql',
+      '002_saas_payments.sql',
+      '003_subscription_lifecycle.sql',
+      '004_customer_snapshots.sql',
+    ]);
     const second = await runMigrations(db);
     expect(second).toEqual([]);
     const rows = await db.query<{ name: string }>(`SELECT name FROM schema_migrations ORDER BY name`);
@@ -105,6 +110,7 @@ describe('db: runMigrations + schema', () => {
       { name: '001_init.sql' },
       { name: '002_saas_payments.sql' },
       { name: '003_subscription_lifecycle.sql' },
+      { name: '004_customer_snapshots.sql' },
     ]);
   });
 

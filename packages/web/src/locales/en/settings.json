@@ -31,5 +31,25 @@
     "invite": "Invite only",
     "open": "Open"
   },
-  "alertsHint": "Configure the alert webhook on the Alerts page to get notified when a site goes down."
+  "alertsHint": "Configure the alert webhook on the Alerts page to get notified when a site goes down.",
+  "report": {
+    "title": "Business reports",
+    "desc": "Periodically summarize per-site revenue/cost/margin and email a digest, with alerts on cost anomalies. Requires SMTP configured on the server to actually send.",
+    "recipientsLabel": "Recipients",
+    "recipientsHint": "Separate multiple emails with commas; leave empty to fall back to the alert email.",
+    "recipientsInvalid": "Recipients contain an invalid email address",
+    "marginLowLabel": "Low-margin threshold",
+    "marginLowHint": "Sites below this gross margin trigger a warning.",
+    "marginLowInvalid": "Margin threshold must be between 0 and 100",
+    "costSpikeLabel": "Cost spike factor",
+    "costSpikeHint": "Warn when current cost exceeds the previous period by this factor.",
+    "costSpikeInvalid": "Cost spike factor must be at least 1",
+    "dailyLabel": "Daily report",
+    "weeklyLabel": "Weekly report",
+    "save": "Save report settings",
+    "saved": "Business report settings saved",
+    "loadFailed": "Failed to load report settings",
+    "usdNote": "Amounts in USD",
+    "noResolveNote": "Margin/cost warnings need manual handling on the Alerts page; they do not auto-resolve."
+  }
 }

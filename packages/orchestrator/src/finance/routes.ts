@@ -5,7 +5,16 @@ import { appSettings } from '../db/schema.js';
 import { ApiError, requireRoot } from '../auth/rbac.js';
 import { toPgTimestamp } from '../auth/sessions.js';
 import { writeAudit } from '../audit.js';
-import { SitesService, type SitesServiceDeps, type FinanceSiteUsage } from '../sites/service.js';
+import { SitesService, type SitesServiceDeps } from '../sites/service.js';
+import { COST_RATIOS_KEY, readCostRatios, resolveSummaryRows, summaryTotals } from './summary.js';
+import {
+  FINANCE_REPORT_SETTINGS_KEY,
+  parseReportConfig,
+  type FinanceReportConfig,
+} from './report.js';
+
+// 口径类型的单一定义已迁入 summary.ts；此处 re-export 保持既有 web/api·其它 import 兼容
+export type { CostSource, FinanceSummaryRow } from './summary.js';
 
 /**
  * 经营概览路由：跨站营收/成本/毛利汇总。
@@ -20,8 +29,6 @@ import { SitesService, type SitesServiceDeps, type FinanceSiteUsage } from '../s
  *   或运营方想以固定比例口径核算的场景。未配置即用引擎真实账户成本。
  *   引擎也未给账户成本且无成本率时 cost/profit 返回 null（前端显示「—」）。
  */
-
-const COST_RATIOS_KEY = 'finance_cost_ratios';
 
 /** 区间最大跨度（天），护栏：避免一次拉过多按天走势 */
 const MAX_RANGE_DAYS = 92;
@@ -72,43 +79,6 @@ function requireCtx(req: FastifyRequest): NonNullable<FastifyRequest['ctx']> {
   const ctx = req.ctx;
   if (!ctx) throw new ApiError(401, '未登录或会话已过期');
   return ctx;
-}
-
-/** app_settings['finance_cost_ratios'] → { [slug]: number }（容错：非法结构回落空表） */
-async function readCostRatios(deps: SitesServiceDeps): Promise<Record<string, number>> {
-  const row = await deps.db.orm
-    .select({ value: appSettings.value })
-    .from(appSettings)
-    .where(eq(appSettings.key, COST_RATIOS_KEY))
-    .limit(1);
-  const raw = row[0]?.value;
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
-  const out: Record<string, number> = {};
-  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    const n = Number(v);
-    if (Number.isFinite(n) && n >= 0 && n <= 1) out[k] = n;
-  }
-  return out;
-}
-
-export type CostSource = 'engine' | 'ratio' | null;
-
-export interface FinanceSummaryRow {
-  slug: string;
-  label: string;
-  ok: boolean;
-  requests: number;
-  tokens: number;
-  revenue: number;
-  /** 成本率覆盖值（0..1）；未配置为 null */
-  costRatio: number | null;
-  /** 成本来源：engine=引擎真实账户成本；ratio=成本率覆盖；null=均无 */
-  costSource: CostSource;
-  /** 成本（真实账户成本或成本率覆盖算得）；均无为 null */
-  cost: number | null;
-  /** revenue − cost；cost 为 null 时 null */
-  profit: number | null;
-  error?: string;
 }
 
 export interface FinanceBreakdownRow {
@@ -191,52 +161,17 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: SitesServiceDe
       service.financeTrend(ctx, from, to),
       service.financeRecharge(ctx, from, to),
     ]);
-    const ratios = await readCostRatios(deps);
+    const ratios = await readCostRatios(deps.db);
 
-    const rows: FinanceSummaryRow[] = usage.map((u) => {
-      const ratio = u.slug in ratios ? (ratios[u.slug] as number) : null;
-      // 成本率覆盖优先；否则用引擎真实账户成本；都没有则 null
-      let cost: number | null;
-      let costSource: CostSource;
-      if (ratio !== null) {
-        cost = u.revenue * ratio;
-        costSource = 'ratio';
-      } else if (u.accountCost !== null) {
-        cost = u.accountCost;
-        costSource = 'engine';
-      } else {
-        cost = null;
-        costSource = null;
-      }
-      const profit = cost === null ? null : u.revenue - cost;
-      return {
-        slug: u.slug,
-        label: u.label,
-        ok: u.ok,
-        requests: u.requests,
-        tokens: u.tokens,
-        revenue: u.revenue,
-        costRatio: ratio,
-        costSource,
-        cost,
-        profit,
-        ...(u.error !== undefined ? { error: u.error } : {}),
-      };
-    });
+    // 口径抽取（summary.ts 单一实现，routes 与报告 scheduler 共用，行为逐字节不变）
+    const rows = resolveSummaryRows(usage, ratios);
 
     const costUnit = usage.find((u) => u.ok)?.costUnit ?? 'USD';
     // 成本/毛利合计只累加「有成本口径」的站点；是否所有站都有成本一并返回给前端提示
     const costed = rows.filter((r) => r.cost !== null);
     const allCosted = rows.length > 0 && costed.length === rows.length;
-    const totals = {
-      requests: rows.reduce((a, r) => a + r.requests, 0),
-      tokens: rows.reduce((a, r) => a + r.tokens, 0),
-      revenue: rows.reduce((a, r) => a + r.revenue, 0),
-      cost: costed.reduce((a, r) => a + (r.cost as number), 0),
-      profit: costed.reduce((a, r) => a + (r.profit as number), 0),
-      // 充值(现金到账)区间合计；全站取不到时 null（不同口径，与营收并列展示）
-      recharge: recharge.ok ? recharge.periodAmount : null,
-    };
+    // 充值(现金到账)区间合计；全站取不到时 null（不同口径，与营收并列展示）
+    const totals = summaryTotals(rows, recharge.ok ? recharge.periodAmount : null);
 
     // 走势：跨站按日期汇总每日精确营收 + 每日精确成本（成本率覆盖优先，否则引擎当日账户成本）。
     // 营收/成本/毛利/请求每日均为真实值（非分摊），区间合计与表格/卡片一致。
@@ -344,7 +279,7 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: SitesServiceDe
   app.get('/api/finance/cost-ratios', async (req) => {
     const ctx = requireCtx(req);
     requireRoot(ctx);
-    return { ratios: await readCostRatios(deps) };
+    return { ratios: await readCostRatios(deps.db) };
   });
 
   app.put('/api/finance/cost-ratios', async (req) => {
@@ -354,7 +289,7 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: SitesServiceDe
     if (!parsed.success) throw new ApiError(400, parsed.error.issues[0]?.message ?? '参数无效');
     const { slug, ratio } = parsed.data;
 
-    const current = await readCostRatios(deps);
+    const current = await readCostRatios(deps.db);
     if (ratio === null) delete current[slug];
     else current[slug] = ratio;
 
@@ -373,5 +308,75 @@ export function registerFinanceRoutes(app: FastifyInstance, deps: SitesServiceDe
     });
 
     return { ratios: current };
+  });
+
+  // ---- 经营报告配置读写（仅 root；F2）----
+  // app_settings['finance_report']：收件人/阈值/日报周报开关。仅这一个 key，
+  // 绝不触碰 finance_report_state（发送标记，scheduler 独占，两 key 拆开防盲覆盖互踩）。
+  const reportConfigBody = z.object({
+    recipients: z.array(z.string().email('收件人须为合法邮箱')).max(50).optional(),
+    /** 毛利率阈值 0..1 */
+    marginLowPct: z.number().min(0).max(1).optional(),
+    /** 成本环比倍数 >=1 */
+    costSpikeFactor: z.number().min(1).optional(),
+    daily: z.boolean().optional(),
+    weekly: z.boolean().optional(),
+  });
+
+  async function readReportConfigRaw(): Promise<unknown> {
+    const rows = await deps.db.orm
+      .select({ value: appSettings.value })
+      .from(appSettings)
+      .where(eq(appSettings.key, FINANCE_REPORT_SETTINGS_KEY))
+      .limit(1);
+    return rows[0]?.value;
+  }
+
+  app.get('/api/settings/finance-report', async (req) => {
+    const ctx = requireCtx(req);
+    requireRoot(ctx);
+    return parseReportConfig(await readReportConfigRaw());
+  });
+
+  app.put('/api/settings/finance-report', async (req) => {
+    const ctx = requireCtx(req);
+    requireRoot(ctx);
+    const parsed = reportConfigBody.safeParse(req.body);
+    if (!parsed.success) throw new ApiError(400, parsed.error.issues[0]?.message ?? '参数无效');
+
+    // 合并现值：只覆盖传入字段（PUT 盲 upsert 仅 finance_report 一个 key）
+    const current = parseReportConfig(await readReportConfigRaw());
+    const next: FinanceReportConfig = {
+      recipients: parsed.data.recipients ?? current.recipients,
+      marginLowPct: parsed.data.marginLowPct ?? current.marginLowPct,
+      costSpikeFactor: parsed.data.costSpikeFactor ?? current.costSpikeFactor,
+      daily: parsed.data.daily ?? current.daily,
+      weekly: parsed.data.weekly ?? current.weekly,
+    };
+
+    const now = toPgTimestamp(new Date());
+    const valueJson = next as unknown as Record<string, unknown>;
+    await deps.db.orm
+      .insert(appSettings)
+      .values({ key: FINANCE_REPORT_SETTINGS_KEY, value: valueJson, updatedAt: now })
+      .onConflictDoUpdate({ target: appSettings.key, set: { value: valueJson, updatedAt: now } });
+
+    // 🔴 审计只记 hasRecipients/数量/阈值/开关，绝不记邮箱原值
+    await writeAudit(deps.db, {
+      siteId: null,
+      actor: ctx.email,
+      action: 'finance.report_config.set',
+      payload: {
+        hasRecipients: next.recipients.length > 0,
+        recipientCount: next.recipients.length,
+        marginLowPct: next.marginLowPct,
+        costSpikeFactor: next.costSpikeFactor,
+        daily: next.daily,
+        weekly: next.weekly,
+      },
+      ok: true,
+    });
+
+    return next;
   });
 }
