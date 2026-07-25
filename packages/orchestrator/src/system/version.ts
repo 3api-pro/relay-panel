@@ -188,7 +188,8 @@ export function resetVersionCacheForTests(): void {
 export async function getVersionInfo(
   opts: { force?: boolean; repo?: string; fetchImpl?: typeof fetch } = {},
 ): Promise<VersionInfo> {
-  const repo = opts.repo ?? process.env.RP_RELEASE_REPO ?? DEFAULT_REPO;
+  // repo 来自 config.releaseRepo（RP_RELEASE_REPO，空串在 loadConfig 已按未设处理）
+  const repo = opts.repo ?? DEFAULT_REPO;
   const current = await readCurrentVersion();
   const fresh = releaseCache !== null && Date.now() - releaseCacheAt < CACHE_TTL_MS;
   let cached = false;
@@ -217,7 +218,7 @@ function requireCtx(req: FastifyRequest): NonNullable<FastifyRequest['ctx']> {
 
 export function registerSystemRoutes(
   app: FastifyInstance,
-  deps: { fetchImpl?: typeof fetch } = {},
+  deps: { config?: { releaseRepo?: string }; fetchImpl?: typeof fetch } = {},
 ): void {
   app.get('/api/system/version', async (req) => {
     // root only：更新提示是部署者的事，托管版的 operator 站长管不到面板本体
@@ -226,6 +227,7 @@ export function registerSystemRoutes(
     const force = q.force === '1' || q.force === 'true';
     return getVersionInfo({
       force,
+      ...(deps.config?.releaseRepo ? { repo: deps.config.releaseRepo } : {}),
       ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
     });
   });

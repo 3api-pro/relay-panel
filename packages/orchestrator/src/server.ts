@@ -192,7 +192,7 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
   registerDomainsRoutes(app, deps);
   registerMetricsRoutes(app, deps);
   registerSupportRoutes(app, deps);
-  registerSystemRoutes(app); // GET /api/system/version：面板自身版本 + 可用更新提示
+  registerSystemRoutes(app, { config }); // GET /api/system/version：面板自身版本 + 可用更新提示
   // 演示路由仅在 demo 模式挂载（GET /api/demo 一键账号 + POST /api/demo/login）
   if (config.demo) registerDemoRoutes(app, deps);
 

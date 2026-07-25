@@ -49,6 +49,27 @@ services:
       RP_CADDY_ADMIN_URL: ${RP_CADDY_ADMIN_URL:-}
       # Prometheus 抓取 token（可选）
       RP_METRICS_TOKEN: ${RP_METRICS_TOKEN:-}
+      # 订阅生命周期（宽限期 + 到期提醒扫描）
+      RP_BILLING_GRACE_DAYS: ${RP_BILLING_GRACE_DAYS:-3}
+      RP_BILLING_SWEEP_INTERVAL_MS: ${RP_BILLING_SWEEP_INTERVAL_MS:-3600000}
+      # 告警/报告出信 SMTP（可选；不配则邮件类功能静默跳过）
+      RP_SMTP_HOST: ${RP_SMTP_HOST:-}
+      RP_SMTP_PORT: ${RP_SMTP_PORT:-465}
+      RP_SMTP_USER: ${RP_SMTP_USER:-}
+      RP_SMTP_PASS: ${RP_SMTP_PASS:-}
+      RP_SMTP_FROM: ${RP_SMTP_FROM:-}
+      RP_SMTP_ALLOW_INSECURE: ${RP_SMTP_ALLOW_INSECURE:-0}
+      # 站长洞察套件：全部默认关（opt-in），开关语义见 .env.example
+      RP_REPORT_SWEEP_INTERVAL_MS: ${RP_REPORT_SWEEP_INTERVAL_MS:-0}
+      RP_REPORT_DAILY: ${RP_REPORT_DAILY:-1}
+      RP_REPORT_WEEKLY: ${RP_REPORT_WEEKLY:-1}
+      RP_RISK_SCAN_INTERVAL_MS: ${RP_RISK_SCAN_INTERVAL_MS:-0}
+      RP_RISK_ENFORCE: ${RP_RISK_ENFORCE:-0}
+      RP_CRM_SNAPSHOT_INTERVAL_MS: ${RP_CRM_SNAPSHOT_INTERVAL_MS:-0}
+      RP_CHANNEL_BALANCE_THRESHOLD: ${RP_CHANNEL_BALANCE_THRESHOLD:-0}
+      RP_UPSTREAM_RESET_ENABLED: ${RP_UPSTREAM_RESET_ENABLED:-0}
+      # 版本更新检查的发行仓库（fork 自建可改；留空=官方仓库）
+      RP_RELEASE_REPO: ${RP_RELEASE_REPO:-}
     volumes:
       # 经宿主 docker 编排引擎站点
       - /var/run/docker.sock:/var/run/docker.sock

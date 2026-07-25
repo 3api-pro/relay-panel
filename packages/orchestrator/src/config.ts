@@ -108,6 +108,8 @@ export interface Config {
   metricsToken?: string;
   /** 告警邮件出信设置；未配齐（host/port/from）时为 undefined，EmailNotifier 静默跳过 */
   smtp?: SmtpSettings;
+  /** 版本更新检查的发行仓库（owner/repo）；未配=官方仓库，fork 自建可指向自己的 */
+  releaseRepo?: string;
   /** RP_DEMO==='1' 时进入演示模式：纯罐装数据、不连生产、不起容器、公开一键登录（见 src/demo/*） */
   demo: boolean;
 }
@@ -155,6 +157,10 @@ const envSchema = z.object({
   RP_SMTP_PASS: z.string().min(1).optional(),
   RP_SMTP_FROM: z.string().email('RP_SMTP_FROM 须为合法邮箱地址').optional(),
   RP_SMTP_ALLOW_INSECURE: z.string().optional(),
+  RP_RELEASE_REPO: z
+    .string()
+    .regex(/^[\w.-]+\/[\w.-]+$/, '形如 owner/repo')
+    .optional(),
   RP_DEMO: z.enum(['0', '1']).default('0'),
 });
 
@@ -231,6 +237,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     webDist: e.RP_WEB_DIST,
     ...(e.RP_METRICS_TOKEN !== undefined ? { metricsToken: e.RP_METRICS_TOKEN } : {}),
     ...(smtp !== undefined ? { smtp } : {}),
+    ...(e.RP_RELEASE_REPO !== undefined ? { releaseRepo: e.RP_RELEASE_REPO } : {}),
     demo: e.RP_DEMO === '1',
   };
 }

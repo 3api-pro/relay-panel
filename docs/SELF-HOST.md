@@ -65,6 +65,16 @@ docker compose up -d
 | `RP_SMTP_USER` / `RP_SMTP_PASS` | 无 | SMTP AUTH LOGIN 账号口令（可选；两者留空则不做认证）。**凭据只在内存，绝不入库/日志** |
 | `RP_SMTP_FROM` | 无 | 告警邮件发件地址（须为合法邮箱） |
 | `RP_SMTP_ALLOW_INSECURE` | `0` | 🔴 默认拒绝在未加密连接上发送 AUTH 凭据（防 STARTTLS-stripping：上游未通告/被中间人剥掉 STARTTLS 时直接报错而非明文发口令）。仅本机/内网调试可设 `1` 放行 |
+| `RP_BILLING_GRACE_DAYS` | 3 | 订阅到期后仍按原计划生效的宽限天数；0=到期即回落 free。宽限只影响新建站配额，绝不停站 |
+| `RP_BILLING_SWEEP_INTERVAL_MS` | 3600000 | 计费扫描周期：收敛过期订阅 + 发到期提醒邮件；0=关闭该循环 |
+| `RP_REPORT_SWEEP_INTERVAL_MS` | `0`（关） | 日报/周报自动发送 + 毛利/成本阈值评估的循环周期。**默认关**，避免刚上线就对薄利站发噪音；页面内"发送测试报告"不受此开关限制 |
+| `RP_REPORT_DAILY` / `RP_REPORT_WEEKLY` | `1` | 上面循环开启后，分别控制日报/周报是否发送 |
+| `RP_RISK_SCAN_INTERVAL_MS` | `0`（关） | 风控骤增扫描周期；关闭时仍可在 `/risk` 页手动扫描 |
+| `RP_RISK_ENFORCE` | `0`（仅告警） | `1` 解锁「把限额写回引擎」的 root 手动按钮（逐客户、先预览）。**开启也不会自动限额任何人**，只是解锁按钮 |
+| `RP_CRM_SNAPSHOT_INTERVAL_MS` | `0`（关） | 客户快照周期（流失预警靠相邻快照差值，需积累）。关闭时 `/customers` 仍可实时拉活客户 |
+| `RP_CHANNEL_BALANCE_THRESHOLD` | `0`（关） | 渠道余额低于该值（USD）触发 `channel_low_balance` 告警；仅对引擎真给出额度的渠道生效 |
+| `RP_UPSTREAM_RESET_ENABLED` | `0`（只读） | `1` 解锁上游渠道「重置额度」写操作。🔴 不可逆，且仍需 root + 站点非只读 + 逐字输入渠道名确认 |
+| `RP_RELEASE_REPO` | 无（官方仓库） | 顶栏版本徽章查询更新的发行仓库，形如 `owner/repo`；fork 自建可指向自己的仓库 |
 
 > 邮件通知还需在面板「告警 → 通知设置」里填收件人（存 `app_settings['alert_email_to']`，可随时改，即时生效）。SMTP 环境变量与收件人任一缺失即静默不发信。见 [OPERATIONS.md](OPERATIONS.md) §1.3。
 

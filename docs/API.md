@@ -65,6 +65,29 @@ relay-panel 编排器（orchestrator）的 HTTP API 全表。默认监听 `http:
 | 方法 | 路径 | 角色 | 说明 |
 |---|---|---|---|
 | GET | `/healthz` | 免认证 | 存活探测 → `{"ok":true,"service":"relay-panel-orchestrator"}` |
+| GET | `/api/system/version` | root | 当前版本 + GitHub 上最新发行版（6h 缓存，`?force=1` 跳缓存） |
+
+### GET /api/system/version
+
+```json
+{
+  "current": "2.1.0-beta.1",
+  "latest": "2.1.0-beta.1",
+  "hasUpdate": false,
+  "url": "https://github.com/3api-pro/relay-panel/releases/tag/v2.1.0-beta.1",
+  "name": "v2.1.0-beta.1 — ...",
+  "publishedAt": "2026-07-26T00:00:00Z",
+  "prerelease": true,
+  "error": null,
+  "checkedAt": "2026-07-26T01:00:00.000Z",
+  "cached": false,
+  "repo": "3api-pro/relay-panel"
+}
+```
+
+- `latest` 取**发行列表第一条**而非 `/releases/latest`——后者跳过 prerelease，会把 beta 线的最新版误报成更旧的正式版。
+- 查询失败：`latest=null`、`error` 给中文原因、`hasUpdate=false`（**绝不把"查不到"当成"已是最新"**），且失败结果不写缓存。
+- 仅提示，面板不自更新；发行仓库可用 `RP_RELEASE_REPO` 指向 fork。
 
 ## 3. 认证与账号（/api/auth、/api/invites、/api/operators）
 
