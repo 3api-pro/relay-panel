@@ -82,7 +82,7 @@ onBeforeUnmount(() => {
     <Transition name="rp-pop">
       <div
         v-if="open"
-        class="rp-glass rp-glass-strong !absolute right-0 top-[calc(100%+8px)] z-50 w-[268px] p-3"
+        class="rp-glass rp-glass-strong rp-ver-pop !absolute right-0 top-[calc(100%+8px)] z-50 w-[268px] p-3"
         role="dialog"
       >
         <div class="flex items-center justify-between gap-2">
@@ -143,6 +143,16 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* 弹层内是密集小字，光靠玻璃透明度会让底层卡片文字透上来叠字；再压一层近实底保证可读 */
+.rp-ver-pop {
+  background:
+    linear-gradient(
+      color-mix(in oklab, var(--color-panel) 92%, transparent),
+      color-mix(in oklab, var(--color-panel) 92%, transparent)
+    ),
+    var(--glass-bg-strong);
+}
+
 .rp-ver-chip {
   display: inline-flex;
   align-items: center;
