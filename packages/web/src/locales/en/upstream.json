@@ -56,5 +56,18 @@
   "resetConfirmMessage": "Irreversible: this zeroes the used-quota counter for this upstream channel, used after a top-up or renewal. It cannot be undone.",
   "resetConfirmAction": "Reset used quota",
   "resetSuccess": "Used quota reset",
-  "loadFailed": "Failed to load"
+  "loadFailed": "Failed to load",
+  "vendorTitle": "Upstream vendor wallets",
+  "vendorSubtitle": "Procurement view: real wallet balance at each upstream vendor, folded to one row per vendor (the table below is per site × channel, so one vendor appears once per site). Balances come from each vendor’s own billing API.",
+  "vendorLowCount": "{n} running low",
+  "vendorOk": "OK",
+  "vendorLow": "Low",
+  "vendorNA": "Unavailable",
+  "vendorMonthCost": "Month to date",
+  "vendorAvgDaily": "Avg / day",
+  "vendorDaysLeft": "Days left",
+  "vendorDivisor": "(site shows ×{n})",
+  "vendorEmpty": "No upstream vendors configured yet",
+  "vendorFetchedAt": "as of {time}",
+  "vendorFooter": "{withBalance}/{total} vendors report a real balance · month-to-date upstream cost {cost} {unit} · flagged red below {days} days of runway"
 }

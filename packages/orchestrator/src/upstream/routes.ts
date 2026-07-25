@@ -6,6 +6,7 @@ import { toPgTimestamp } from '../auth/sessions.js';
 import { writeAudit } from '../audit.js';
 import { SitesService, type SitesServiceDeps } from '../sites/service.js';
 import { RECHARGE_LINKS_KEY, buildBalanceOverview, isHttpUrl, readRechargeLinks } from './service.js';
+import { listVendorBalances } from './vendors.js';
 
 /**
  * 上游渠道"余额/可用度" + 快捷充值路由（F5，口径风险最高，全部 requireRoot——含上游账户结构/成本，nav 亦 rootOnly）：
@@ -68,6 +69,19 @@ export function registerUpstreamRoutes(app: FastifyInstance, deps: SitesServiceD
       coverage: overview.coverage,
       rows: overview.rows,
     };
+  });
+
+  // ---- 上游【供应商】钱包余额（仅 root）----
+  // 与上面 /balances 的区别：那个是「我方站点 × 渠道」的额度口径（同一家上游会在 4 个站各出现一次），
+  // 这个是「采购视角」——每家上游那里还剩多少钱、按当前烧钱速度还能撑几天，按供应商折叠成一行。
+  // 数据直连上游自己的账单接口（见 vendors.ts），5min 缓存；?force=1 跳过缓存。
+  app.get<{ Querystring: { force?: string } }>('/api/upstream/vendors', async (req) => {
+    const ctx = requireCtx(req);
+    requireRoot(ctx);
+    return listVendorBalances(
+      { db: deps.db, ...(deps.config.secretKey !== undefined ? { secretKey: deps.config.secretKey } : {}) },
+      { force: req.query.force === '1' },
+    );
   });
 
   // ---- 充值外链读（仅 root）----

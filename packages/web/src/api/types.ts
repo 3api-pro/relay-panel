@@ -683,6 +683,42 @@ export interface ResetQuotaResponse {
   row: ChannelBalanceView | null;
 }
 
+// ---------------------------------------------------------------------------
+// 上游【供应商】钱包（采购视角，与上面「站点×渠道」额度视图并列，见 orchestrator upstream/vendors.ts）
+// ---------------------------------------------------------------------------
+
+/** 单个上游供应商的钱包行（不含任何凭据） */
+export interface VendorBalanceView {
+  vendor: string;
+  label: string;
+  system: 'sub2api' | 'newapi';
+  /** 真实钱包余额（已按 balanceDivisor 修正）；null=取不到，前端显示"不可用"而非 0 */
+  balance: number | null;
+  available: boolean;
+  /** 取不到余额的原因（直接展示，便于自查配置） */
+  unavailableReason?: string;
+  /** 本月累计消耗（自然月，上游账单口径） */
+  costMonthToDate: number | null;
+  avgDailyCost: number | null;
+  /** 还能撑几天；null=无法推算（不编造） */
+  daysLeft: number | null;
+  low: boolean;
+  note?: string;
+  /** 显示修正系数；!=1 时前端标注，避免与上游站点显示对不上 */
+  balanceDivisor: number;
+}
+
+/** GET /api/upstream/vendors 响应 */
+export interface UpstreamVendorsResponse {
+  rows: VendorBalanceView[];
+  withBalance: number;
+  total: number;
+  totalCostMonthToDate: number;
+  lowDaysThreshold: number;
+  costUnit: string;
+  fetchedAt: string;
+}
+
 /** 充值外链条目 */
 export interface RechargeLink {
   label: string;
@@ -693,4 +729,28 @@ export interface RechargeLink {
 /** GET/PUT /api/upstream/recharge-links 响应 */
 export interface RechargeLinksResponse {
   links: RechargeLink[];
+}
+
+// ============================================================
+// 面板自身版本 / 可用更新（VersionBadge · root only，见 orchestrator system/version.ts）
+// ============================================================
+
+/** GET /api/system/version[?force=1] 响应 */
+export interface SystemVersionResponse {
+  /** 当前运行版本（package.json）；取不到为 'unknown' */
+  current: string;
+  /** GitHub 上最新发行版（已去前导 v）；null=没查到，此时 hasUpdate 恒 false */
+  latest: string | null;
+  hasUpdate: boolean;
+  url: string | null;
+  name: string | null;
+  publishedAt: string | null;
+  /** 最新版是否为预发布（beta） */
+  prerelease: boolean;
+  /** 查询失败原因（中文）；成功为 null */
+  error: string | null;
+  checkedAt: string;
+  /** 本次是否命中 6h 缓存 */
+  cached: boolean;
+  repo: string;
 }

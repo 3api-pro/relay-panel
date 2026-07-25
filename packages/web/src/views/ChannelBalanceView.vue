@@ -19,6 +19,7 @@ import type {
   RechargeLinksResponse,
   ResetQuotaResponse,
   UpstreamBalancesResponse,
+  UpstreamVendorsResponse,
 } from '../api/types';
 import {
   Badge,
@@ -47,6 +48,42 @@ import {
  */
 
 const { t } = useI18n();
+
+// ---- 上游供应商钱包（采购视角：每家上游那里还剩多少钱、还能撑几天）----
+// 与下方「站点×渠道」额度表是两个口径：同一家上游被 4 个站共用时，下表出现 4 行、这里只有 1 行。
+const vendors = ref<UpstreamVendorsResponse | null>(null);
+const vendorsLoading = ref(false);
+const vendorsError = ref('');
+
+async function loadVendors(force = false) {
+  vendorsLoading.value = true;
+  vendorsError.value = '';
+  try {
+    vendors.value = await get<UpstreamVendorsResponse>(`/api/upstream/vendors${force ? '?force=1' : ''}`);
+  } catch (e) {
+    vendorsError.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    vendorsLoading.value = false;
+  }
+}
+
+/**
+ * 纯数字金额（单位在模板里单独渲染，故不带后缀；下方 fmtUsd 会附 " USD" 且不收 null，此处不复用）。
+ * 🔴 null → '—'：余额/成本取不到时绝不显示 0（0 会被误读成"没钱了"或"没花钱"）。
+ */
+function fmtNum(v: number | null | undefined): string {
+  return typeof v === 'number' ? v.toFixed(2) : '—';
+}
+// 天数格式化直接复用下方已有的 fmtDays（同样 null → '—'，不编造）
+/** 告急家数（用于顶部提示） */
+const lowVendorCount = computed(() => vendors.value?.rows.filter((r) => r.low).length ?? 0);
+/** 数据截至时刻（本地时间 HH:MM） */
+const vendorsFetchedAt = computed(() => {
+  const iso = vendors.value?.fetchedAt;
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+});
 
 // ---- 天数窗口 ----
 const daysMode = ref<string | number>(7);
@@ -230,6 +267,7 @@ async function doReset(): Promise<void> {
 }
 
 onMounted(() => {
+  void loadVendors();
   void loadBalances();
   void loadLinks();
 });
@@ -260,6 +298,100 @@ onMounted(() => {
         </Button>
       </div>
     </div>
+
+    <!-- ── 上游供应商钱包（采购视角，按供应商聚合，不按站点）───────────────────── -->
+    <section class="rounded-lg border border-subtle bg-surface p-4">
+      <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 class="flex items-center gap-2 text-sm font-semibold">
+            <Wallet :size="15" />
+            {{ t('upstream.vendorTitle') }}
+            <Badge v-if="lowVendorCount > 0" tone="red">
+              {{ t('upstream.vendorLowCount', { n: lowVendorCount }) }}
+            </Badge>
+          </h2>
+          <p class="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted">
+            {{ t('upstream.vendorSubtitle') }}
+          </p>
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          <span v-if="vendorsFetchedAt" class="text-[11px] text-muted">
+            {{ t('upstream.vendorFetchedAt', { time: vendorsFetchedAt }) }}
+          </span>
+          <Button size="sm" variant="ghost" :loading="vendorsLoading" @click="loadVendors(true)">
+            <RefreshCw :size="14" />
+            {{ t('upstream.refresh') }}
+          </Button>
+        </div>
+      </div>
+
+      <div v-if="vendorsError" class="rounded border border-red-500/30 bg-red-500/5 p-3 text-[12px] text-red-500">
+        {{ vendorsError }}
+      </div>
+      <div v-else-if="vendorsLoading && !vendors" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Skeleton v-for="i in 6" :key="i" class="h-[104px]" />
+      </div>
+      <EmptyState v-else-if="vendors && vendors.total === 0" :title="t('upstream.vendorEmpty')" />
+      <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div
+          v-for="v in vendors?.rows ?? []"
+          :key="v.vendor"
+          class="rounded-md border p-3"
+          :class="v.low ? 'border-red-500/40 bg-red-500/5' : 'border-subtle bg-elevated'"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <span class="truncate text-[13px] font-medium">{{ v.label }}</span>
+            <Badge :tone="v.low ? 'red' : v.available ? 'green' : 'muted'">
+              {{ v.available ? (v.low ? t('upstream.vendorLow') : t('upstream.vendorOk')) : t('upstream.vendorNA') }}
+            </Badge>
+          </div>
+
+          <!-- 余额：主数字。取不到显示原因，绝不用 0 冒充 -->
+          <div class="mt-2 flex items-baseline gap-1">
+            <span class="text-[22px] font-semibold tabular-nums" :class="v.low ? 'text-red-500' : ''">
+              {{ fmtNum(v.balance) }}
+            </span>
+            <span class="text-[11px] text-muted">{{ vendors?.costUnit }}</span>
+            <span v-if="v.balanceDivisor !== 1" class="ml-1 text-[11px] text-muted">
+              {{ t('upstream.vendorDivisor', { n: v.balanceDivisor }) }}
+            </span>
+          </div>
+          <p v-if="!v.available && v.unavailableReason" class="mt-1 text-[11px] leading-snug text-amber-500">
+            {{ v.unavailableReason }}
+          </p>
+
+          <div class="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+            <div>
+              <div class="text-muted">{{ t('upstream.vendorMonthCost') }}</div>
+              <div class="tabular-nums">{{ fmtNum(v.costMonthToDate) }}</div>
+            </div>
+            <div>
+              <div class="text-muted">{{ t('upstream.vendorAvgDaily') }}</div>
+              <div class="tabular-nums">{{ fmtNum(v.avgDailyCost) }}</div>
+            </div>
+            <div>
+              <div class="text-muted">{{ t('upstream.vendorDaysLeft') }}</div>
+              <div class="tabular-nums" :class="v.low ? 'font-semibold text-red-500' : ''">
+                {{ fmtDays(v.daysLeft) }}
+              </div>
+            </div>
+          </div>
+          <p v-if="v.note" class="mt-2 truncate text-[11px] text-muted" :title="v.note">{{ v.note }}</p>
+        </div>
+      </div>
+
+      <p v-if="vendors && vendors.total > 0" class="mt-3 text-[11px] text-muted">
+        {{
+          t('upstream.vendorFooter', {
+            withBalance: vendors.withBalance,
+            total: vendors.total,
+            cost: vendors.totalCostMonthToDate.toFixed(2),
+            unit: vendors.costUnit,
+            days: vendors.lowDaysThreshold,
+          })
+        }}
+      </p>
+    </section>
 
     <!-- 覆盖度横幅 -->
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

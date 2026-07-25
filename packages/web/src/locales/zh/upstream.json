@@ -56,5 +56,18 @@
   "resetConfirmMessage": "不可逆：将清零该上游渠道的已用额度计数（充值/续杯后重置用量用），无法撤销。",
   "resetConfirmAction": "重置已用额度",
   "resetSuccess": "已重置已用额度",
-  "loadFailed": "加载失败"
+  "loadFailed": "加载失败",
+  "vendorTitle": "上游供应商钱包",
+  "vendorSubtitle": "采购视角：每一家上游那里还剩多少钱，按供应商折叠成一行（下方表格是「站点 × 渠道」口径，同一家上游被几个站共用就会出现几行）。余额直接取自各上游自己的账单接口。",
+  "vendorLowCount": "{n} 家告急",
+  "vendorOk": "正常",
+  "vendorLow": "告急",
+  "vendorNA": "不可用",
+  "vendorMonthCost": "本月消耗",
+  "vendorAvgDaily": "日均",
+  "vendorDaysLeft": "可撑天数",
+  "vendorDivisor": "（站点显示为 {n} 倍）",
+  "vendorEmpty": "尚未配置上游供应商",
+  "vendorFetchedAt": "数据截至 {time}",
+  "vendorFooter": "{total} 家中 {withBalance} 家可取到真实余额 · 本月上游成本合计 {cost} {unit} · 可撑天数低于 {days} 天标红"
 }
