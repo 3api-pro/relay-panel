@@ -24,6 +24,7 @@ import { session } from '../api/session';
 import Badge from '../components/ui/Badge.vue';
 import ThemeToggle from '../components/ThemeToggle.vue';
 import LanguageSwitcher from '../components/LanguageSwitcher.vue';
+import VersionBadge from '../components/VersionBadge.vue';
 
 /**
  * 应用壳：玻璃侧导航轨 + 玻璃顶栏。
@@ -68,6 +69,7 @@ function isActive(item: NavItem): boolean {
 }
 
 const user = computed(() => session.state.user);
+const isRoot = session.isRoot;
 
 const roleBadge = computed(() => {
   switch (user.value?.role) {
@@ -164,6 +166,8 @@ async function onLogout(): Promise<void> {
         <div class="flex items-center gap-2">
           <span class="hidden max-w-[220px] truncate text-xs text-muted sm:inline">{{ user?.email }}</span>
           <div class="mx-1 hidden h-4 w-px bg-[var(--glass-border)] sm:block" />
+          <!-- 版本徽章：仅 root（部署者）可见，有新版发行时琥珀提示 -->
+          <VersionBadge v-if="isRoot" />
           <LanguageSwitcher />
           <ThemeToggle />
         </div>

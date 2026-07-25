@@ -1,0 +1,12 @@
+{
+  "currentVersion": "Current version",
+  "latestVersion": "Latest version",
+  "updateAvailable": "Update available",
+  "upToDate": "Up to date",
+  "checking": "Checking for updates…",
+  "checkFailed": "Update check failed",
+  "refresh": "Check again",
+  "published": "Released",
+  "releaseNotes": "Release notes",
+  "upgradeHint": "Pull the new release and redeploy to upgrade."
+}
