@@ -19,6 +19,12 @@ import type {
   CustomerRanking,
   AccountUsageStat,
   ChannelBalance,
+  UpstreamWalletCandidate,
+  UpstreamWalletCostCoverage,
+  UpstreamWalletMode,
+  UpstreamWalletProtocol,
+  UpstreamWalletSnapshot,
+  UpstreamWalletSnapshotStatus,
   RechargeSummary,
   PlatformQuota,
   PlatformQuotaInput,
@@ -43,12 +49,147 @@ interface S2ARawAccount {
   group_ids?: number[];
   credentials?: Record<string, unknown>;
   extra?: Record<string, unknown>;
+  /** 服务端探测后的脱敏钱包快照；旧版本没有该字段。 */
+  upstream_wallet?: unknown;
   // F5 上游余额/可用度（DTO 顶层，omitempty）：
   //  quota_limit/quota_used 仅 apikey/bedrock 且管理员配置>0 时返回（USD，真实可用额度）；
   //  window_cost_limit 仅 Anthropic OAuth/setup_token 且>0 时返回（USD，5h 窗口成本闸，非余额）。
   quota_limit?: number;
   quota_used?: number;
   window_cost_limit?: number;
+}
+
+const UPSTREAM_WALLET_PROBE_BATCH_PATH = '/api/v1/admin/accounts/upstream-wallet-probe/batch';
+const UPSTREAM_WALLET_PROBE_BATCH_SIZE = 20;
+
+function recordOf(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * 只保留 http(s) origin + path：去尾斜杠、query/hash/userinfo，避免把 URL 内嵌凭据带出 adapter。
+ * 非法或非 http(s) 地址不是可探测候选，返回 null。
+ */
+function normalizeUpstreamBaseUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.trim() === '') return null;
+  try {
+    const url = new URL(raw.trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (url.username !== '' || url.password !== '') return null;
+    url.search = '';
+    url.hash = '';
+    const path = url.pathname.replace(/\/+$/, '');
+    return `${url.origin}${path === '' || path === '/' ? '' : path}`;
+  } catch {
+    return null;
+  }
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function nonNegativeInt(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+function safeTimestamp(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 64) return undefined;
+  return Number.isFinite(Date.parse(value)) ? value : undefined;
+}
+
+/** 只接收稳定枚举形态，拒绝把任意上游错误正文带进 Relay。 */
+function safeReasonCode(value: unknown): string | undefined {
+  return typeof value === 'string' && /^[a-z0-9][a-z0-9_.-]{0,63}$/.test(value)
+    ? value
+    : undefined;
+}
+
+function snapshotStatus(value: unknown): UpstreamWalletSnapshotStatus | undefined {
+  return value === 'ok' || value === 'unsupported' || value === 'failed' ? value : undefined;
+}
+
+function snapshotProtocol(value: unknown): UpstreamWalletProtocol {
+  if (value === 'sub2api_v1_usage' || value === 'newapi_billing') return value;
+  return 'unknown';
+}
+
+function snapshotMode(value: unknown): UpstreamWalletMode | undefined {
+  return value === 'unrestricted' || value === 'quota_limited' ? value : undefined;
+}
+
+function costCoverage(value: unknown): UpstreamWalletCostCoverage | undefined {
+  return value === 'exact' || value === 'partial' || value === 'none' ? value : undefined;
+}
+
+/** 宽容读取已知字段、忽略未来新增字段；任何 raw/credentials/错误正文都不会进入结果。 */
+function parseUpstreamWalletSnapshot(value: unknown): UpstreamWalletSnapshot | undefined {
+  const raw = recordOf(value);
+  if (!raw) return undefined;
+  const status = snapshotStatus(raw.status);
+  if (!status) return undefined;
+
+  const out: UpstreamWalletSnapshot = {
+    status,
+    protocol: snapshotProtocol(raw.protocol),
+  };
+  const schemaVersion = nonNegativeInt(raw.schema_version);
+  const mode = snapshotMode(raw.mode);
+  const balance = finiteNumber(raw.balance);
+  const remaining = finiteNumber(raw.remaining);
+  const costMonthToDate = finiteNumber(raw.cost_month_to_date);
+  const coverage = costCoverage(raw.cost_coverage);
+  const stale = raw.stale === true;
+  const observedAt = safeTimestamp(raw.probed_at);
+  const freshUntil = safeTimestamp(raw.fresh_until);
+  const nextProbeAt = safeTimestamp(raw.next_probe_at);
+  const failureCount = nonNegativeInt(raw.failure_count);
+  const httpStatus = nonNegativeInt(raw.http_status);
+  const reasonCode = safeReasonCode(raw.last_error);
+
+  if (schemaVersion !== undefined) out.schemaVersion = schemaVersion;
+  if (mode !== undefined) out.mode = mode;
+  // quota_limited 只能表达额度 remaining，绝不把额度/订阅上限冒充真实钱包 balance。
+  if (balance !== undefined && mode !== 'quota_limited') out.balance = balance;
+  if (remaining !== undefined && mode === 'quota_limited') out.remaining = remaining;
+  if (costMonthToDate !== undefined) out.costMonthToDate = costMonthToDate;
+  if (coverage !== undefined) out.costCoverage = coverage;
+  if (stale) out.stale = true;
+  if (raw.currency === 'USD') out.currency = 'USD';
+  if (raw.unit === 'USD') out.unit = 'USD';
+  if (observedAt !== undefined) out.observedAt = observedAt;
+  if (freshUntil !== undefined) out.freshUntil = freshUntil;
+  if (nextProbeAt !== undefined) out.nextProbeAt = nextProbeAt;
+  if (failureCount !== undefined) out.failureCount = failureCount;
+  if (httpStatus !== undefined && httpStatus >= 100 && httpStatus <= 599) out.httpStatus = httpStatus;
+  if (reasonCode !== undefined) out.reasonCode = reasonCode;
+  return out;
+}
+
+function walletSystem(protocol: UpstreamWalletProtocol): UpstreamWalletCandidate['system'] {
+  if (protocol === 'sub2api_v1_usage') return 'sub2api';
+  if (protocol === 'newapi_billing') return 'newapi';
+  return 'unknown';
+}
+
+function accountToUpstreamWalletCandidate(a: S2ARawAccount): UpstreamWalletCandidate | null {
+  if (a.status !== 'active') return null;
+  const baseUrl = normalizeUpstreamBaseUrl(a.credentials?.base_url);
+  if (!baseUrl) return null;
+  // 新 DTO 顶层优先；旧服务端持久化值仍可从 extra.upstream_wallet_probe 回读。
+  const topLevel = parseUpstreamWalletSnapshot(a.upstream_wallet);
+  const fallback = topLevel ?? parseUpstreamWalletSnapshot(a.extra?.upstream_wallet_probe);
+  return {
+    accountId: String(a.id),
+    accountName: a.name,
+    enabled: true,
+    baseUrl,
+    system: walletSystem(fallback?.protocol ?? 'unknown'),
+    discovery: fallback ? 'server-snapshot' : 'metadata-only',
+    ...(fallback ? { snapshot: fallback } : {}),
+  };
 }
 
 interface S2ARawGroup {
@@ -536,6 +677,40 @@ export class Sub2apiAdminClient implements EngineAdminClient {
           count: x.count ?? 0,
         })),
       };
+    },
+
+    /**
+     * 从正常 accounts DTO 提取启用账号的无凭据钱包候选。
+     * force=true 时先让新引擎按最多 20 个 apikey 账号一批刷新快照；旧引擎没有端点或任一批失败时
+     * 直接降级回读已有 DTO，不让整站发现失败。
+     */
+    upstreamWalletCandidates: async (opts?: { force?: boolean }): Promise<UpstreamWalletCandidate[]> => {
+      let accounts = await this.http.listAll<S2ARawAccount>('/api/v1/admin/accounts');
+      if (opts?.force === true) {
+        const ids = [
+          ...new Set(
+            accounts
+              .filter((a) => a.status === 'active' && a.type === 'apikey' && Number.isInteger(a.id) && a.id > 0)
+              .map((a) => a.id),
+          ),
+        ];
+        if (ids.length > 0) {
+          for (let i = 0; i < ids.length; i += UPSTREAM_WALLET_PROBE_BATCH_SIZE) {
+            try {
+              await this.http.post(UPSTREAM_WALLET_PROBE_BATCH_PATH, {
+                account_ids: ids.slice(i, i + UPSTREAM_WALLET_PROBE_BATCH_SIZE),
+              });
+            } catch {
+              // 404/405=旧引擎；其它批量探测错误同样只影响本轮刷新，已有快照仍可回读。
+              break;
+            }
+          }
+          accounts = await this.http.listAll<S2ARawAccount>('/api/v1/admin/accounts');
+        }
+      }
+      return accounts
+        .map(accountToUpstreamWalletCandidate)
+        .filter((candidate): candidate is UpstreamWalletCandidate => candidate !== null);
     },
 
     // F5 上游渠道"余额/可用度"：复用 /admin/accounts 列表，逐账户按覆盖度分类（纯只读）。

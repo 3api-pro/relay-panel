@@ -1,7 +1,16 @@
-import { eq, like } from 'drizzle-orm';
+import { isIP } from 'node:net';
+import { like } from 'drizzle-orm';
+import { assertPublicUrl, isBlockedIp } from '../net/guard.js';
+import type { SiteUpstreamWalletCandidate } from '../sites/service.js';
 import type { Db } from '../db/client.js';
 import { credentials } from '../db/schema.js';
 import { decryptSecret } from '../secrets.js';
+import {
+  parseNewApiBillingUsageResponse,
+  parseNewApiBillingWalletResponses,
+  parseSub2ApiUsageResponse,
+  type RawWalletResponse,
+} from './wallet-response.js';
 
 /**
  * 上游【供应商】钱包视图（2026-07-25 新增，与同目录 service.ts 的「站点×渠道」视图并存、互不影响）。
@@ -35,6 +44,8 @@ export const VENDOR_CRED_KIND = 'upstream-vendor';
 
 /** 上游账单系统类型 */
 export type VendorSystem = 'sub2api' | 'newapi';
+export type VendorViewSystem = VendorSystem | 'unknown';
+export type VendorDiscovery = 'automatic' | 'manual' | 'automatic+override';
 
 /** 解密后的供应商配置（明文，仅内存） */
 export interface VendorConfig {
@@ -75,7 +86,15 @@ export interface VendorConfig {
 export interface VendorBalanceView {
   vendor: string;
   label: string;
-  system: VendorSystem;
+  system: VendorViewSystem;
+  /** 数据来源：自动发现是默认路径；旧 upstream:* 仅作为兼容覆盖。 */
+  discovery: VendorDiscovery;
+  /** 归并进本钱包的站点×账号来源数；手工独立配置为 0。 */
+  sourceCount: number;
+  /** 引擎最近一次成功生成脱敏快照的时间。 */
+  snapshotAt?: string;
+  /** 最近一轮刷新失败，当前数值来自上一次成功快照。 */
+  stale: boolean;
   /** 真实钱包余额（已按 balanceDivisor 修正）；取不到=null，前端显示"不可用"而非 0 */
   balance: number | null;
   /** 余额是否可信取到 */
@@ -84,6 +103,8 @@ export interface VendorBalanceView {
   unavailableReason?: string;
   /** 本月累计消耗（自然月，上游账单口径） */
   costMonthToDate: number | null;
+  /** 成本是否覆盖完整；partial 绝不能被误读成完整采购成本。 */
+  costCoverage: 'exact' | 'partial' | 'none';
   /** 日均消耗（本月累计 ÷ 已过天数） */
   avgDailyCost: number | null;
   /** 还能撑几天 = balance / avgDailyCost；任一为 null 或日均<=0 → null（不编造） */
@@ -179,25 +200,74 @@ export async function readVendorConfigs(deps: { db: Db; secretKey?: string }): P
 interface ProbeResult {
   balance: number | null;
   costMonthToDate: number | null;
+  costCoverage?: 'exact' | 'partial' | 'none';
   reason?: string;
 }
 
 const TIMEOUT_MS = 15_000;
+const MAX_RESPONSE_BYTES = 64 * 1024;
+
+async function getWalletResponse(url: string, headers: Record<string, string>): Promise<RawWalletResponse> {
+  await assertPublicUrl(url, { failClosed: true });
+  const res = await fetch(url, {
+    headers: { Accept: 'application/json', ...headers },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    redirect: 'manual',
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const declared = Number(res.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) throw new Error('response_too_large');
+  if (!res.body) throw new Error('empty_response');
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const part = await reader.read();
+    if (part.done) break;
+    total += part.value.byteLength;
+    if (total > MAX_RESPONSE_BYTES) {
+      await reader.cancel();
+      throw new Error('response_too_large');
+    }
+    chunks.push(part.value);
+  }
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return {
+    contentType: res.headers.get('content-type'),
+    body: new TextDecoder().decode(body),
+  };
+}
 
 async function getJson(url: string, headers: Record<string, string>): Promise<unknown> {
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return (await res.json()) as unknown;
+  const raw = await getWalletResponse(url, headers);
+  const mediaType = (raw.contentType ?? '').split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  if (mediaType !== 'application/json' && !(mediaType.startsWith('application/') && mediaType.endsWith('+json'))) {
+    throw new Error('invalid_content_type');
+  }
+  try {
+    return JSON.parse(raw.body.replace(/^\uFEFF/, '')) as unknown;
+  } catch {
+    throw new Error('invalid_json');
+  }
 }
 
 /** 单把 key 的 /v1/usage 结果 */
 async function sub2apiUsage(baseUrl: string, key: string, monthStart: string):
   Promise<{ balance: number | null; cost: number | null }> {
-  const j = (await getJson(`${baseUrl}/v1/usage`, {
-    'x-api-key': key,
+  const raw = await getWalletResponse(`${baseUrl}/v1/usage`, {
     Authorization: `Bearer ${key}`,
-  })) as { balance?: unknown; daily_usage?: unknown };
-  const balance = typeof j.balance === 'number' ? j.balance : null;
+  });
+  const parsed = parseSub2ApiUsageResponse(raw);
+  if (parsed.protocol !== 'sub2api' || !['ok', 'partial'].includes(parsed.status)) {
+    throw new Error(parsed.status);
+  }
+  const j = JSON.parse(raw.body.replace(/^\uFEFF/, '')) as { daily_usage?: unknown };
+  const balance = parsed.balance;
   let cost: number | null = null;
   if (Array.isArray(j.daily_usage)) {
     cost = 0;
@@ -215,17 +285,19 @@ async function sub2apiUsage(baseUrl: string, key: string, monthStart: string):
 async function probeSub2api(cfg: VendorConfig, monthStart: string): Promise<ProbeResult> {
   const primary = await sub2apiUsage(cfg.baseUrl, cfg.apiKey, monthStart);
   let cost = primary.cost;
+  let partial = false;
   for (const k of cfg.costKeys ?? []) {
     try {
       const extra = await sub2apiUsage(cfg.baseUrl, k, monthStart);
       if (extra.cost !== null) cost = (cost ?? 0) + extra.cost;
     } catch {
-      /* 单把辅助 key 取不到不影响余额与其余成本 */
+      partial = true;
     }
   }
   return {
     balance: primary.balance,
     costMonthToDate: cost,
+    costCoverage: cost === null ? 'none' : partial ? 'partial' : 'exact',
     ...(primary.balance === null ? { reason: '接口未返回 balance' } : {}),
   };
 }
@@ -237,18 +309,18 @@ async function probeSub2api(cfg: VendorConfig, monthStart: string): Promise<Prob
  *  hard_limit_usd >= 1e8 视为上游屏蔽额度的占位值 → 余额判定为不可用（绝不当成"有一亿"）。
  */
 const NEWAPI_QUOTA_PER_USD = 500_000;
-const NEWAPI_PLACEHOLDER_LIMIT = 1e8;
 
 async function probeNewapi(cfg: VendorConfig, monthStart: string, today: string): Promise<ProbeResult> {
   // 本月成本（两条路都用得上）；账单接口用 billingKey，缺省回落主凭据
   const billingKey = cfg.billingKey ?? cfg.apiKey;
   let cost: number | null = null;
   try {
-    const u = (await getJson(
+    const raw = await getWalletResponse(
       `${cfg.baseUrl}/dashboard/billing/usage?start_date=${monthStart}&end_date=${today}`,
       { Authorization: `Bearer ${billingKey}` },
-    )) as { total_usage?: unknown };
-    if (typeof u.total_usage === 'number') cost = u.total_usage / 100;
+    );
+    const parsed = parseNewApiBillingUsageResponse(raw);
+    if (parsed.status === 'ok') cost = parsed.usage;
   } catch {
     /* 成本取不到不影响余额 */
   }
@@ -260,7 +332,13 @@ async function probeNewapi(cfg: VendorConfig, monthStart: string, today: string)
         'New-Api-User': cfg.userId,
       })) as { success?: unknown; data?: { quota?: unknown } };
       const q = j.data?.quota;
-      if (typeof q === 'number') return { balance: q / NEWAPI_QUOTA_PER_USD, costMonthToDate: cost };
+      if (j.success === true && typeof q === 'number' && Number.isFinite(q)) {
+        return {
+          balance: q / NEWAPI_QUOTA_PER_USD,
+          costMonthToDate: cost,
+          costCoverage: cost === null ? 'none' : 'exact',
+        };
+      }
     } catch (e) {
       return {
         balance: null,
@@ -272,19 +350,24 @@ async function probeNewapi(cfg: VendorConfig, monthStart: string, today: string)
 
   // 回退：额度上限 − 累计已用（用 billingKey，sk key 即可）
   try {
-    const s = (await getJson(`${cfg.baseUrl}/dashboard/billing/subscription`, {
+    const subscription = await getWalletResponse(`${cfg.baseUrl}/dashboard/billing/subscription`, {
       Authorization: `Bearer ${billingKey}`,
-    })) as { hard_limit_usd?: unknown };
-    const limit = s.hard_limit_usd;
-    if (typeof limit !== 'number') return { balance: null, costMonthToDate: cost, reason: '接口未返回额度' };
-    if (limit >= NEWAPI_PLACEHOLDER_LIMIT) {
-      return { balance: null, costMonthToDate: cost, reason: '上游屏蔽额度(返回占位值)，需配置管理令牌+用户ID' };
+    });
+    const lifetimeUsage = await getWalletResponse(`${cfg.baseUrl}/dashboard/billing/usage?start_date=2020-01-01&end_date=${today}`, {
+      Authorization: `Bearer ${billingKey}`,
+    });
+    const parsed = parseNewApiBillingWalletResponses({ subscription, lifetimeUsage });
+    if (parsed.status === 'placeholder_limit') {
+      return { balance: null, costMonthToDate: cost, costCoverage: cost === null ? 'none' : 'exact', reason: '上游屏蔽额度(返回占位值)，需配置管理令牌+用户ID' };
     }
-    const ua = (await getJson(`${cfg.baseUrl}/dashboard/billing/usage?start_date=2020-01-01&end_date=${today}`, {
-      Authorization: `Bearer ${billingKey}`,
-    })) as { total_usage?: unknown };
-    const usedAll = typeof ua.total_usage === 'number' ? ua.total_usage / 100 : 0;
-    return { balance: limit - usedAll, costMonthToDate: cost };
+    if (parsed.status !== 'ok' || parsed.balance === null) {
+      return { balance: null, costMonthToDate: cost, costCoverage: cost === null ? 'none' : 'exact', reason: '账单响应格式无法识别' };
+    }
+    return {
+      balance: parsed.balance,
+      costMonthToDate: cost,
+      costCoverage: cost === null ? 'none' : 'exact',
+    };
   } catch (e) {
     return { balance: null, costMonthToDate: cost, reason: e instanceof Error ? e.message : '账单接口不可达' };
   }
@@ -309,6 +392,13 @@ export function buildVendorView(
   probe: ProbeResult,
   lowDaysThreshold: number,
   now: Date = new Date(),
+  meta: {
+    discovery?: VendorDiscovery;
+    sourceCount?: number;
+    snapshotAt?: string;
+    stale?: boolean;
+    system?: VendorViewSystem;
+  } = {},
 ): VendorBalanceView {
   const divisor = cfg.balanceDivisor ?? 1;
   const balance = probe.balance === null ? null : probe.balance / divisor;
@@ -319,17 +409,297 @@ export function buildVendorView(
   return {
     vendor: cfg.vendor,
     label: cfg.label,
-    system: cfg.system,
+    system: meta.system ?? cfg.system,
+    discovery: meta.discovery ?? 'manual',
+    sourceCount: meta.sourceCount ?? 0,
+    ...(meta.snapshotAt ? { snapshotAt: meta.snapshotAt } : {}),
+    stale: meta.stale === true,
     balance,
     available: balance !== null,
     ...(probe.reason ? { unavailableReason: probe.reason } : {}),
     costMonthToDate: probe.costMonthToDate,
+    costCoverage: probe.costCoverage ?? (probe.costMonthToDate === null ? 'none' : 'exact'),
     avgDailyCost,
     daysLeft,
     low: daysLeft !== null && lowDaysThreshold > 0 && daysLeft < lowDaysThreshold,
     ...(cfg.note ? { note: cfg.note } : {}),
     balanceDivisor: divisor,
   };
+}
+
+interface ResolvedVendorSource {
+  config: VendorConfig;
+  candidates: SiteUpstreamWalletCandidate[];
+  discovery: VendorDiscovery;
+  system: VendorViewSystem;
+}
+
+/**
+ * 供应商身份只取 URL origin；路径、query、fragment 和 userinfo 都不参与匹配。
+ * 这让四个站里同一个 https://fuyao.shop/v1 账号自动折叠成一个钱包，同时不会把 URL 内嵌凭据带出。
+ */
+export function normalizeVendorOrigin(raw: string): string | null {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (url.username !== '' || url.password !== '') return null;
+    return url.origin.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function automaticOrigin(raw: string): string | null {
+  const origin = normalizeVendorOrigin(raw);
+  if (!origin) return null;
+  const url = new URL(origin);
+  // 自动发现只呈现公网 HTTPS 供应商。127.0.0.1/V3 等内部 relay 节点不是采购钱包，不能混进供应商卡片。
+  if (url.protocol !== 'https:') return null;
+  const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost')) return null;
+  if (isIP(host) !== 0 && isBlockedIp(host)) return null;
+  return origin;
+}
+
+function autoVendorId(origin: string): string {
+  const url = new URL(origin);
+  return `auto-${url.host.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+}
+
+function autoVendorLabel(origin: string): string {
+  const host = new URL(origin).hostname.toLowerCase();
+  return host.replace(/^(?:api|www)\./, '');
+}
+
+function automaticVendorLabel(
+  origin: string,
+  candidates: SiteUpstreamWalletCandidate[],
+): string {
+  const manifest = bestCandidate(candidates.filter((candidate) => candidate.siteEngine === 'manifest'));
+  return manifest?.siteLabel.trim() || autoVendorLabel(origin);
+}
+
+function protocolSystem(candidate: SiteUpstreamWalletCandidate): VendorViewSystem {
+  if (candidate.snapshot?.protocol === 'sub2api_v1_usage') return 'sub2api';
+  if (candidate.snapshot?.protocol === 'newapi_billing') return 'newapi';
+  return candidate.system;
+}
+
+function candidateTime(candidate: SiteUpstreamWalletCandidate): number {
+  const parsed = candidate.snapshot?.observedAt ? Date.parse(candidate.snapshot.observedAt) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function snapshotRank(candidate: SiteUpstreamWalletCandidate): number {
+  const snapshot = candidate.snapshot;
+  if (!snapshot) return 0;
+  if (snapshot.status === 'ok' && typeof snapshot.balance === 'number' && snapshot.mode !== 'quota_limited') return 4;
+  if (snapshot.status === 'ok') return 3;
+  if (snapshot.status === 'failed') return 2;
+  return 1;
+}
+
+function bestCandidate(candidates: SiteUpstreamWalletCandidate[]): SiteUpstreamWalletCandidate | undefined {
+  return [...candidates].sort((a, b) => snapshotRank(b) - snapshotRank(a) || candidateTime(b) - candidateTime(a))[0];
+}
+
+const SNAPSHOT_REASON: Record<string, string> = {
+  placeholder_limit: '已自动发现；上游只返回占位额度，真实余额需要面板令牌和用户 ID',
+  missing_user_id: '已自动发现；真实余额还需要上游用户 ID',
+  needs_user_id: '已自动发现；真实余额还需要上游用户 ID',
+  credential_not_exported: '已自动发现；引擎不会导出该渠道密钥，暂时无法自动读取钱包余额',
+  no_credentials: '已自动发现；当前运行实例没有可用于只读账单查询的渠道凭据',
+  auth_failed: '已自动发现；上游余额凭据无效或已过期',
+  credential_invalid: '已自动发现；上游余额凭据无效或已过期',
+  credential_rejected: '已自动发现；上游余额凭据无效或无账单读取权限',
+  blocked_target: '已自动发现；目标地址未通过安全校验',
+  invalid_base_url: '已自动发现；上游地址格式无效',
+  insecure_base_url: '已自动发现；上游地址不是 HTTPS，已拒绝自动探测',
+  redirect_blocked: '已自动发现；上游账单接口发生重定向，已按安全策略拒绝跟随',
+  timeout: '已自动发现；上游余额接口暂时超时',
+  request_failed: '已自动发现；上游余额接口暂时不可达',
+  network_error: '已自动发现；上游余额接口暂时不可达',
+  rate_limited: '已自动发现；上游账单接口触发限流，将自动重试',
+  upstream_error: '已自动发现；上游账单服务暂时异常，将自动重试',
+  response_too_large: '已自动发现；上游账单响应超过安全上限',
+  invalid_payload: '已自动发现；上游账单响应格式无法识别',
+  invalid_response: '已自动发现；上游账单响应格式无法识别',
+  invalid_content_type: '已自动发现；上游账单接口没有返回 JSON',
+  invalid_json: '已自动发现；上游账单接口返回了无效 JSON',
+  schema_mismatch: '已自动发现；上游账单响应格式无法识别',
+  invalid_number: '已自动发现；上游账单金额字段无效',
+  ambiguous_protocol: '已自动发现；上游同时匹配多种账单协议，已拒绝采用不确定余额',
+  endpoint_not_found: '已自动发现；上游没有可用的只读余额接口',
+  unsupported_protocol: '已自动发现；上游没有可用的只读余额接口',
+  balance_unavailable: '已自动发现；账单接口未返回真实钱包余额',
+};
+
+function snapshotProbeOne(candidates: SiteUpstreamWalletCandidate[]): {
+  probe: ProbeResult;
+  snapshotAt?: string;
+  stale: boolean;
+  system: VendorViewSystem;
+} {
+  const candidate = bestCandidate(candidates);
+  if (!candidate?.snapshot) {
+    return {
+      probe: { balance: null, costMonthToDate: null, costCoverage: 'none', reason: '已自动发现，等待引擎生成钱包快照' },
+      stale: false,
+      system: candidate?.system ?? 'unknown',
+    };
+  }
+  const snapshot = candidate.snapshot;
+  const system = protocolSystem(candidate);
+  const snapshotAt = snapshot.observedAt;
+  if (snapshot.status !== 'ok') {
+    const reason = SNAPSHOT_REASON[snapshot.reasonCode ?? ''] ?? (snapshot.status === 'unsupported'
+      ? '已自动发现；上游没有可用的只读余额接口'
+      : '已自动发现；本轮余额探测失败，将自动重试');
+    return {
+      probe: { balance: null, costMonthToDate: null, costCoverage: 'none', reason },
+      ...(snapshotAt ? { snapshotAt } : {}),
+      stale: snapshot.stale === true,
+      system,
+    };
+  }
+  const balance = snapshot.mode !== 'quota_limited' && typeof snapshot.balance === 'number'
+    ? snapshot.balance
+    : null;
+  const cost = typeof snapshot.costMonthToDate === 'number' ? snapshot.costMonthToDate : null;
+  return {
+    probe: {
+      balance,
+      costMonthToDate: cost,
+      costCoverage: snapshot.costCoverage ?? (cost === null ? 'none' : 'exact'),
+      ...(balance === null
+        ? { reason: snapshot.mode === 'quota_limited'
+          ? '已自动发现；上游仅返回渠道配额，不把它冒充钱包余额'
+          : '已自动发现；账单接口未返回真实钱包余额' }
+        : {}),
+    },
+    ...(snapshotAt ? { snapshotAt } : {}),
+    stale: snapshot.stale === true,
+    system,
+  };
+}
+
+/**
+ * 同名账号跨站镜像只计一次；同一供应商的不同账号名视为不同 key，成本相加、钱包余额仍只取最新一份。
+ * 这是没有明文 key/跨站指纹时最保守的去重边界：避免四站镜像把成本乘四，也不漏掉明确不同的采购 key。
+ */
+export function snapshotProbe(candidates: SiteUpstreamWalletCandidate[]): {
+  probe: ProbeResult;
+  snapshotAt?: string;
+  stale: boolean;
+  system: VendorViewSystem;
+} {
+  const byAccount = new Map<string, SiteUpstreamWalletCandidate[]>();
+  for (const candidate of candidates) {
+    const key = candidate.accountName.trim().toLowerCase() || `id:${candidate.accountId}`;
+    const group = byAccount.get(key) ?? [];
+    group.push(candidate);
+    byAccount.set(key, group);
+  }
+  const representatives = [...byAccount.values()].map((group) => snapshotProbeOne(group));
+  const balanceSource = representatives
+    .filter((item) => item.probe.balance !== null)
+    .sort((a, b) => Date.parse(b.snapshotAt ?? '') - Date.parse(a.snapshotAt ?? ''))[0];
+  const reasonSource = balanceSource ?? representatives
+    .sort((a, b) => Date.parse(b.snapshotAt ?? '') - Date.parse(a.snapshotAt ?? ''))[0];
+  if (!reasonSource) {
+    return {
+      probe: { balance: null, costMonthToDate: null, costCoverage: 'none', reason: '已自动发现，等待引擎生成钱包快照' },
+      stale: false,
+      system: 'unknown',
+    };
+  }
+
+  const costs = representatives.filter((item) => item.probe.costMonthToDate !== null);
+  const costMonthToDate = costs.length === 0
+    ? null
+    : costs.reduce((sum, item) => sum + (item.probe.costMonthToDate ?? 0), 0);
+  const costCoverage = costMonthToDate === null
+    ? 'none'
+    : costs.length === representatives.length && representatives.every((item) => item.probe.costCoverage === 'exact')
+      ? 'exact'
+      : 'partial';
+  const newestSnapshotAt = representatives
+    .map((item) => item.snapshotAt)
+    .filter((value): value is string => typeof value === 'string')
+    .sort((a, b) => Date.parse(b) - Date.parse(a))[0];
+  return {
+    probe: {
+      balance: balanceSource?.probe.balance ?? null,
+      costMonthToDate,
+      costCoverage,
+      ...(!balanceSource && reasonSource.probe.reason
+        ? { reason: reasonSource.probe.reason }
+        : {}),
+    },
+    ...(newestSnapshotAt ? { snapshotAt: newestSnapshotAt } : {}),
+    stale: representatives.some((item) => item.stale),
+    system: balanceSource?.system ?? reasonSource.system,
+  };
+}
+
+/**
+ * 自动来源是主数据，upstream:* 仅按相同 origin 覆盖展示名/口径并兼容旧探测。
+ * enabled:false 的同源旧配置显式隐藏自动卡片，保留既有“停用”语义。
+ */
+export function resolveVendorSources(
+  configs: VendorConfig[],
+  candidates: SiteUpstreamWalletCandidate[],
+): ResolvedVendorSource[] {
+  const automatic = new Map<string, SiteUpstreamWalletCandidate[]>();
+  for (const candidate of candidates) {
+    if (!candidate.enabled) continue;
+    const origin = automaticOrigin(candidate.baseUrl);
+    if (!origin) continue;
+    const group = automatic.get(origin) ?? [];
+    group.push(candidate);
+    automatic.set(origin, group);
+  }
+
+  const manualByOrigin = new Map<string, VendorConfig[]>();
+  for (const config of configs) {
+    const origin = normalizeVendorOrigin(config.baseUrl);
+    if (!origin) continue;
+    const group = manualByOrigin.get(origin) ?? [];
+    group.push(config);
+    manualByOrigin.set(origin, group);
+  }
+
+  const matched = new Set<VendorConfig>();
+  const resolved: ResolvedVendorSource[] = [];
+  for (const [origin, group] of automatic) {
+    const overrides = manualByOrigin.get(origin) ?? [];
+    for (const config of overrides) matched.add(config);
+    if (overrides.some((config) => config.enabled === false)) continue;
+    const override = overrides.find((config) => config.enabled !== false);
+    const best = bestCandidate(group);
+    const detectedSystem = best ? protocolSystem(best) : 'unknown';
+    const system = detectedSystem === 'unknown' && override ? override.system : detectedSystem;
+    const config: VendorConfig = override ?? {
+      vendor: autoVendorId(origin),
+      label: automaticVendorLabel(origin, group),
+      baseUrl: origin,
+      apiKey: '',
+      system: system === 'newapi' ? 'newapi' : 'sub2api',
+      enabled: true,
+    };
+    resolved.push({
+      config,
+      candidates: group,
+      discovery: override ? 'automatic+override' : 'automatic',
+      system,
+    });
+  }
+
+  for (const config of configs) {
+    if (matched.has(config) || config.enabled === false) continue;
+    resolved.push({ config, candidates: [], discovery: 'manual', system: config.system });
+  }
+  return resolved;
 }
 
 /** 采集结果缓存（与 sites 侧一致的 5min TTL，避免每次刷新都打上游账单接口） */
@@ -345,7 +715,11 @@ export const DEFAULT_LOW_DAYS = 3;
  * force=true 跳过缓存（前端"刷新"按钮用）。
  */
 export async function listVendorBalances(
-  deps: { db: Db; secretKey?: string },
+  deps: {
+    db: Db;
+    secretKey?: string;
+    discover?: (opts: { force: boolean }) => Promise<SiteUpstreamWalletCandidate[]>;
+  },
   opts: { lowDaysThreshold?: number; force?: boolean } = {},
 ): Promise<VendorOverview> {
   const lowDays = opts.lowDaysThreshold ?? DEFAULT_LOW_DAYS;
@@ -353,9 +727,42 @@ export async function listVendorBalances(
   if (!opts.force && cached && Date.now() - cached.at < VENDOR_TTL_MS) return cached.body;
 
   const now = new Date();
-  const configs = (await readVendorConfigs(deps)).filter((c) => c.enabled !== false);
+  const configs = await readVendorConfigs(deps);
+  let candidates: SiteUpstreamWalletCandidate[] = [];
+  if (deps.discover) {
+    try {
+      candidates = await deps.discover({ force: opts.force === true });
+    } catch {
+      // 自动发现整体失败时保留旧 upstream:* 兼容路径，不让供应商页整页报错。
+    }
+  }
+  const sources = resolveVendorSources(configs, candidates);
   const rows = await Promise.all(
-    configs.map(async (cfg) => buildVendorView(cfg, await probeVendor(cfg, now), lowDays, now)),
+    sources.map(async (source) => {
+      if (source.candidates.length === 0) {
+        return buildVendorView(source.config, await probeVendor(source.config, now), lowDays, now, {
+          discovery: 'manual',
+          sourceCount: 0,
+          system: source.system,
+        });
+      }
+
+      const automatic = snapshotProbe(source.candidates);
+      let probe = automatic.probe;
+      // 旧配置里若有独立面板凭据，而引擎快照暂时拿不到真实余额，继续用它补齐；
+      // 一旦引擎已有真实快照便不再把上游 key 搬进面板探测链路。
+      if (probe.balance === null && source.discovery === 'automatic+override' && source.config.apiKey !== '') {
+        const fallback = await probeVendor(source.config, now);
+        if (fallback.balance !== null || fallback.costMonthToDate !== null) probe = fallback;
+      }
+      return buildVendorView(source.config, probe, lowDays, now, {
+        discovery: source.discovery,
+        sourceCount: source.candidates.length,
+        ...(automatic.snapshotAt ? { snapshotAt: automatic.snapshotAt } : {}),
+        stale: automatic.stale,
+        system: automatic.system === 'unknown' ? source.system : automatic.system,
+      });
+    }),
   );
   // 排序：先红标，再按"还能撑几天"升序（最急的在最上面），无数据的沉底
   rows.sort((a, b) => {

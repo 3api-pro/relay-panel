@@ -12,6 +12,7 @@ import type {
   InstanceInfo,
   SiteBranding,
   SiteUserRecord,
+  UpstreamWalletCandidate,
   UsageSummary,
 } from '@relay-panel/adapter-core';
 import { NewapiHttp, type NewapiAuth, type PageInfo } from './http.js';
@@ -60,6 +61,22 @@ interface NaQuotaData {
   count: number;
   token_used: number;
   quota: number;
+}
+
+/** NewAPI 渠道 GET 不回显 key；这里只规范化公开 base_url，移除可能携密的 query/hash/userinfo。 */
+function normalizeUpstreamBaseUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.trim() === '') return null;
+  try {
+    const url = new URL(raw.trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (url.username !== '' || url.password !== '') return null;
+    url.search = '';
+    url.hash = '';
+    const path = url.pathname.replace(/\/+$/, '');
+    return `${url.origin}${path === '' || path === '/' ? '' : path}`;
+  } catch {
+    return null;
+  }
 }
 
 function channelToRecord(ch: NaChannel): ChannelRecord {
@@ -332,6 +349,33 @@ export class NewapiAdminClient implements EngineAdminClient {
         cost: quota / QUOTA_PER_USD,
         byModel,
       };
+    },
+    /**
+     * NewAPI 的管理 GET 会把渠道 key 脱敏为空，因此只能返回地址元数据；不尝试钱包探测，
+     * 也不把站点 admin 凭据误当成渠道钱包凭据。force 在该 adapter 上保持无副作用。
+     */
+    upstreamWalletCandidates: async (_opts?: { force?: boolean }): Promise<UpstreamWalletCandidate[]> => {
+      const channels = await this.http.listAll<NaChannel>('/api/channel/');
+      const out: UpstreamWalletCandidate[] = [];
+      for (const channel of channels) {
+        if (channel.status !== 1) continue;
+        const baseUrl = normalizeUpstreamBaseUrl(channel.base_url);
+        if (!baseUrl) continue;
+        out.push({
+          accountId: String(channel.id),
+          accountName: channel.name,
+          enabled: true,
+          baseUrl,
+          system: 'unknown',
+          discovery: 'metadata-only',
+          snapshot: {
+            status: 'unsupported',
+            protocol: 'unknown',
+            reasonCode: 'credential_not_exported',
+          },
+        });
+      }
+      return out;
     },
   };
 

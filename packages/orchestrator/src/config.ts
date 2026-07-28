@@ -87,6 +87,8 @@ export interface Config {
    * （不可逆，另受 root-only + 站点 readonly + 确认令牌=渠道名 + 仅 quota 型 多重守卫）。改需受控重启生效。
    */
   upstreamResetEnabled: boolean;
+  /** 受信任的上游钱包清单端点；多个 URL 由 RP_UPSTREAM_MANIFEST_URLS 以分号分隔。 */
+  upstreamManifestUrls: string[];
   /** 风控骤增后台扫描周期（毫秒）；0=不起自动扫描循环（默认，避免线上突现骤增告警噪音，仅按需 POST 触发）。 */
   riskScanIntervalMs: number;
   /**
@@ -143,6 +145,7 @@ const envSchema = z.object({
   RP_REPORT_SWEEP_INTERVAL_MS: z.coerce.number().int().min(0).default(0),
   RP_RISK_ENFORCE: z.enum(['0', '1']).default('0'),
   RP_UPSTREAM_RESET_ENABLED: z.enum(['0', '1']).default('0'),
+  RP_UPSTREAM_MANIFEST_URLS: z.string().optional(),
   RP_RISK_SCAN_INTERVAL_MS: z.coerce.number().int().min(0).default(0),
   RP_CRM_SNAPSHOT_INTERVAL_MS: z.coerce.number().int().min(0).default(0),
   RP_METERING_GATEWAY_URL: z.string().url().optional(),
@@ -177,6 +180,15 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     throw new Error(`环境变量配置无效: ${issues}`);
   }
   const e = parsed.data;
+
+  const upstreamManifestUrls = [
+    ...new Set(
+      (e.RP_UPSTREAM_MANIFEST_URLS ?? '')
+        .split(';')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0),
+    ),
+  ];
 
   const [minStr, maxStr] = e.RP_PORT_RANGE.split('-');
   const portRange: PortRange = { min: Number(minStr), max: Number(maxStr) };
@@ -226,6 +238,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     reportSweepIntervalMs: e.RP_REPORT_SWEEP_INTERVAL_MS,
     riskEnforce: e.RP_RISK_ENFORCE === '1',
     upstreamResetEnabled: e.RP_UPSTREAM_RESET_ENABLED === '1',
+    upstreamManifestUrls,
     riskScanIntervalMs: e.RP_RISK_SCAN_INTERVAL_MS,
     crmSnapshotIntervalMs: e.RP_CRM_SNAPSHOT_INTERVAL_MS,
     ...(e.RP_METERING_GATEWAY_URL !== undefined ? { meteringGatewayUrl: e.RP_METERING_GATEWAY_URL } : {}),

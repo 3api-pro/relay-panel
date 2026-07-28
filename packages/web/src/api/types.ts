@@ -691,7 +691,12 @@ export interface ResetQuotaResponse {
 export interface VendorBalanceView {
   vendor: string;
   label: string;
-  system: 'sub2api' | 'newapi';
+  system: 'sub2api' | 'newapi' | 'unknown';
+  /** 自动发现为默认；manual 仅表示旧 upstream:* 独立配置。 */
+  discovery: 'automatic' | 'manual' | 'automatic+override';
+  sourceCount: number;
+  snapshotAt?: string;
+  stale: boolean;
   /** 真实钱包余额（已按 balanceDivisor 修正）；null=取不到，前端显示"不可用"而非 0 */
   balance: number | null;
   available: boolean;
@@ -699,6 +704,7 @@ export interface VendorBalanceView {
   unavailableReason?: string;
   /** 本月累计消耗（自然月，上游账单口径） */
   costMonthToDate: number | null;
+  costCoverage: 'exact' | 'partial' | 'none';
   avgDailyCost: number | null;
   /** 还能撑几天；null=无法推算（不编造） */
   daysLeft: number | null;

@@ -19,6 +19,7 @@ import type {
   CustomerRanking,
   AccountUsageStat,
   ChannelBalance,
+  UpstreamWalletCandidate,
   RechargeSummary,
   PlatformQuota,
   PlatformQuotaInput,
@@ -113,10 +114,15 @@ export interface EngineAdminClient {
     rechargeSummary?(days: number): Promise<RechargeSummary>;
     /**
      * 上游渠道"余额/可用度"（F5，可选：引擎支持才实现，adapter-newapi 未实现即 undefined）。
-     * 🔴 引擎从不提供上游钱包真实余额；本方法按覆盖度返回 quota/window/none 分类（见 ChannelBalance），
-     * 绝不编造余额。只读，绝不写回/砍余额。
+     * 🔴 本方法只返回引擎本地 quota/window/none 分类（见 ChannelBalance），不等同于独立的
+     * UpstreamWalletSnapshot 上游钱包快照。绝不编造余额；只读，绝不写回/砍余额。
      */
     channelBalances?(): Promise<ChannelBalance[]>;
+    /**
+     * 从引擎正常 admin DTO 读取无凭据的上游钱包候选（可选能力）。
+     * force=true 时 adapter 可先触发引擎自己的批量只读探测，再回读脱敏快照；旧引擎不支持时应优雅降级。
+     */
+    upstreamWalletCandidates?(opts?: { force?: boolean }): Promise<UpstreamWalletCandidate[]>;
   };
 }
 

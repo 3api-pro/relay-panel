@@ -62,6 +62,7 @@ describe('config: loadConfig', () => {
     expect(c.meteringGatewayUrl).toBeUndefined();
     expect(c.caddyAdminUrl).toBeUndefined();
     expect(c.metricsToken).toBeUndefined();
+    expect(c.upstreamManifestUrls).toEqual([]);
   });
 
   it('解析自定义值与端口池', () => {
@@ -72,6 +73,8 @@ describe('config: loadConfig', () => {
       RP_DOCKER_VIA_WSL: '1',
       RP_SECRET_KEY: 'k1',
       RP_METERING_GATEWAY_URL: 'https://gateway.example.com',
+      RP_UPSTREAM_MANIFEST_URLS:
+        ' http://127.0.0.1:3230/internal/upstream-wallets ; https://wallets.example.com/manifest ; http://127.0.0.1:3230/internal/upstream-wallets ',
     });
     expect(c.port).toBe(8123);
     expect(c.signupMode).toBe('invite');
@@ -79,6 +82,10 @@ describe('config: loadConfig', () => {
     expect(c.dockerViaWsl).toBe(true);
     expect(c.secretKey).toBe('k1');
     expect(c.meteringGatewayUrl).toBe('https://gateway.example.com');
+    expect(c.upstreamManifestUrls).toEqual([
+      'http://127.0.0.1:3230/internal/upstream-wallets',
+      'https://wallets.example.com/manifest',
+    ]);
   });
 
   it('空串 env 视为未设置', () => {

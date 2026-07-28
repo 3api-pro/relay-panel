@@ -241,7 +241,8 @@ export interface AccountUsageStat {
 
 /**
  * 上游渠道"余额/可用度"读模型（F5）。
- * 🔴 引擎【从不】提供上游钱包真实余额；本类型是能拿到的最接近口径，按覆盖度分三类：
+ * 🔴 本接口只描述引擎本地渠道额度，不提供上游钱包真实余额；服务端主动探测的钱包快照走
+ * 独立 UpstreamWalletSnapshot，二者绝不能混算。本类型按覆盖度分三类：
  *  - kind='quota'：apikey/bedrock 类型，管理员手配的额度上限 quotaLimit(USD) 与已用 quotaUsed(USD)，
  *    remaining = quotaLimit − quotaUsed 是【真实可用额度】。
  *  - kind='window'：Anthropic OAuth/号池，仅有 5h 窗口成本闸 windowCostLimit(USD，非余额，无池总额)→零余额口径。
@@ -262,6 +263,66 @@ export interface ChannelBalance {
   quotaUsed?: number;
   /** kind='window' 时的 5h 窗口成本上限(USD，非余额，不可当撑几天算) */
   windowCostLimit?: number;
+}
+
+// ---------- 上游供应商钱包自动发现（服务端只读、无凭据）----------
+
+/** 已知的上游钱包账单系统；无法从脱敏元数据可靠判断时必须保留 unknown。 */
+export type UpstreamWalletSystem = 'sub2api' | 'newapi' | 'unknown';
+
+/** 引擎侧钱包探测协议。未知新增协议在 adapter 边界收敛为 unknown，避免透传私有值。 */
+export type UpstreamWalletProtocol = 'sub2api_v1_usage' | 'newapi_billing' | 'unknown';
+
+/** 引擎侧脱敏钱包快照状态。 */
+export type UpstreamWalletSnapshotStatus = 'ok' | 'unsupported' | 'failed';
+
+/** 引擎侧钱包覆盖模式；quota_limited 的 remaining 不是钱包余额。 */
+export type UpstreamWalletMode = 'unrestricted' | 'quota_limited';
+
+/** 本月成本覆盖度；partial 表示仅部分账号/key 可取，不能冒充完整成本。 */
+export type UpstreamWalletCostCoverage = 'exact' | 'partial' | 'none';
+
+/**
+ * 引擎已经完成探测后返回的脱敏钱包快照。
+ *
+ * 安全边界：这里只允许数值、时间和稳定错误码；禁止放 apiKey/token/header、上游响应正文或 raw DTO。
+ * balance 仅在上游明确返回真实钱包余额时出现；quota_limited 只能使用 remaining，二者不可混用。
+ */
+export interface UpstreamWalletSnapshot {
+  schemaVersion?: number;
+  status: UpstreamWalletSnapshotStatus;
+  protocol: UpstreamWalletProtocol;
+  mode?: UpstreamWalletMode;
+  balance?: number;
+  remaining?: number;
+  costMonthToDate?: number;
+  costCoverage?: UpstreamWalletCostCoverage;
+  /** 最近一次刷新失败但仍保留上一份成功值；消费方必须明确标注为旧快照。 */
+  stale?: boolean;
+  currency?: 'USD';
+  unit?: 'USD';
+  observedAt?: string;
+  freshUntil?: string;
+  nextProbeAt?: string;
+  failureCount?: number;
+  httpStatus?: number;
+  /** 引擎定义的稳定、安全枚举；不得放错误正文。 */
+  reasonCode?: string;
+}
+
+/**
+ * 单个引擎账号发现出的上游钱包候选。
+ *
+ * 该类型刻意没有任何凭据字段。baseUrl 是规范化后的公开元数据；来源站点由 orchestrator 另行附加。
+ */
+export interface UpstreamWalletCandidate {
+  accountId: string;
+  accountName: string;
+  enabled: boolean;
+  baseUrl: string;
+  system: UpstreamWalletSystem;
+  discovery: 'server-snapshot' | 'metadata-only';
+  snapshot?: UpstreamWalletSnapshot;
 }
 
 // ---------- 平台限额（风控护栏 F3；user × platform 粒度，日/周/月窗口）----------

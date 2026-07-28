@@ -18,6 +18,8 @@ import type {
   CustomerUsageStat,
   AccountUsageStat,
   ChannelBalance,
+  UpstreamWalletCandidate,
+  UpstreamWalletSnapshot,
   RechargeSummary,
 } from '@relay-panel/adapter-core';
 import type { Config } from '../config.js';
@@ -347,6 +349,37 @@ export interface FinanceAccountRow {
   avgDailyCost: number;
 }
 
+/** 已纳管站点发现出的上游钱包候选；站点与账号共同构成来源，不在本层做供应商去重。 */
+export interface SiteUpstreamWalletCandidate extends UpstreamWalletCandidate {
+  siteSlug: string;
+  siteLabel: string;
+  /** manifest 表示受信任清单来源，并不是一个可纳管的站点引擎。 */
+  siteEngine: EngineKind | 'manifest';
+}
+
+/** 显式拷贝允许字段，纵深防御 adapter 运行时意外夹带 raw/credentials/apiKey。 */
+function copyUpstreamWalletSnapshot(snapshot: UpstreamWalletSnapshot): UpstreamWalletSnapshot {
+  return {
+    status: snapshot.status,
+    protocol: snapshot.protocol,
+    ...(snapshot.schemaVersion !== undefined ? { schemaVersion: snapshot.schemaVersion } : {}),
+    ...(snapshot.mode !== undefined ? { mode: snapshot.mode } : {}),
+    ...(snapshot.balance !== undefined ? { balance: snapshot.balance } : {}),
+    ...(snapshot.remaining !== undefined ? { remaining: snapshot.remaining } : {}),
+    ...(snapshot.costMonthToDate !== undefined ? { costMonthToDate: snapshot.costMonthToDate } : {}),
+    ...(snapshot.costCoverage !== undefined ? { costCoverage: snapshot.costCoverage } : {}),
+    ...(snapshot.stale === true ? { stale: true } : {}),
+    ...(snapshot.currency !== undefined ? { currency: snapshot.currency } : {}),
+    ...(snapshot.unit !== undefined ? { unit: snapshot.unit } : {}),
+    ...(snapshot.observedAt !== undefined ? { observedAt: snapshot.observedAt } : {}),
+    ...(snapshot.freshUntil !== undefined ? { freshUntil: snapshot.freshUntil } : {}),
+    ...(snapshot.nextProbeAt !== undefined ? { nextProbeAt: snapshot.nextProbeAt } : {}),
+    ...(snapshot.failureCount !== undefined ? { failureCount: snapshot.failureCount } : {}),
+    ...(snapshot.httpStatus !== undefined ? { httpStatus: snapshot.httpStatus } : {}),
+    ...(snapshot.reasonCode !== undefined ? { reasonCode: snapshot.reasonCode } : {}),
+  };
+}
+
 /**
  * 上游渠道"余额/可用度"单行（F5）。siteOk=false 为站点降级 marker 行（连不上，id/name 为空）。
  * kind/quotaLimit/quotaUsed/windowCostLimit 源自引擎 ChannelBalance；avgDailyCost 来自账号口径 accountStats。
@@ -524,6 +557,43 @@ export class SitesService {
     const client = await this.client(site);
     const recs = await this.adapterRead(() => client.channels.list());
     return recs.map((c) => sanitizeChannel(c));
+  }
+
+  /**
+   * 聚合所有可见的已纳管站点（external + compose）钱包候选。单站不支持或不可达时跳过，不阻塞其它站；
+   * 每行保留 siteSlug + accountId 来源，供应商归并留给 upstream 业务层。
+   */
+  async listUpstreamWalletCandidates(
+    ctx: SessionCtx,
+    opts: { force?: boolean } = {},
+  ): Promise<SiteUpstreamWalletCandidate[]> {
+    const managedSites = await this.visibleSites(ctx);
+    const perSite = await mapPool(managedSites, 5, async (site): Promise<SiteUpstreamWalletCandidate[]> => {
+      try {
+        const client = await this.client(site);
+        if (!client.stats.upstreamWalletCandidates) return [];
+        const candidates = await client.stats.upstreamWalletCandidates(
+          opts.force === true ? { force: true } : undefined,
+        );
+        return candidates.map((candidate): SiteUpstreamWalletCandidate => ({
+          siteSlug: site.slug,
+          siteLabel: site.label,
+          siteEngine: site.engine as EngineKind,
+          accountId: candidate.accountId,
+          accountName: candidate.accountName,
+          enabled: candidate.enabled,
+          baseUrl: candidate.baseUrl,
+          system: candidate.system,
+          discovery: candidate.discovery,
+          ...(candidate.snapshot !== undefined
+            ? { snapshot: copyUpstreamWalletSnapshot(candidate.snapshot) }
+            : {}),
+        }));
+      } catch {
+        return [];
+      }
+    });
+    return perSite.flat();
   }
 
   async listGroups(ctx: SessionCtx, slug: string): Promise<GroupRecord[]> {

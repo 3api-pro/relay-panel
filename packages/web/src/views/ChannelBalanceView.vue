@@ -74,6 +74,14 @@ async function loadVendors(force = false) {
 function fmtNum(v: number | null | undefined): string {
   return typeof v === 'number' ? v.toFixed(2) : '—';
 }
+function vendorDiscoveryKey(discovery: 'automatic' | 'manual' | 'automatic+override'): string {
+  if (discovery === 'automatic+override') return 'upstream.vendorDiscoveryOverride';
+  if (discovery === 'automatic') return 'upstream.vendorDiscoveryAuto';
+  return 'upstream.vendorDiscoveryManual';
+}
+function vendorDiscoveryTone(discovery: 'automatic' | 'manual' | 'automatic+override') {
+  return discovery === 'automatic' ? 'accent' as const : discovery === 'automatic+override' ? 'amber' as const : 'muted' as const;
+}
 // 天数格式化直接复用下方已有的 fmtDays（同样 null → '—'，不编造）
 /** 告急家数（用于顶部提示） */
 const lowVendorCount = computed(() => vendors.value?.rows.filter((r) => r.low).length ?? 0);
@@ -340,7 +348,19 @@ onMounted(() => {
           :class="v.low ? 'border-red-500/40 bg-red-500/5' : 'border-subtle bg-elevated'"
         >
           <div class="flex items-center justify-between gap-2">
-            <span class="truncate text-[13px] font-medium">{{ v.label }}</span>
+            <div class="flex min-w-0 items-center gap-1.5">
+              <span class="truncate text-[13px] font-medium">{{ v.label }}</span>
+              <Badge
+                :tone="vendorDiscoveryTone(v.discovery)"
+                size="sm"
+                :title="v.sourceCount > 0 ? t('upstream.vendorSourceCount', { n: v.sourceCount }) : undefined"
+              >
+                {{ t(vendorDiscoveryKey(v.discovery)) }}
+              </Badge>
+              <Badge v-if="v.stale" tone="amber" size="sm" :title="t('upstream.vendorStaleTitle')">
+                {{ t('upstream.vendorStale') }}
+              </Badge>
+            </div>
             <Badge :tone="v.low ? 'red' : v.available ? 'green' : 'muted'">
               {{ v.available ? (v.low ? t('upstream.vendorLow') : t('upstream.vendorOk')) : t('upstream.vendorNA') }}
             </Badge>
@@ -363,7 +383,10 @@ onMounted(() => {
           <div class="mt-2 grid grid-cols-3 gap-2 text-[11px]">
             <div>
               <div class="text-muted">{{ t('upstream.vendorMonthCost') }}</div>
-              <div class="tabular-nums">{{ fmtNum(v.costMonthToDate) }}</div>
+              <div class="tabular-nums">
+                {{ fmtNum(v.costMonthToDate) }}
+                <span v-if="v.costCoverage === 'partial'" class="text-amber-500" :title="t('upstream.vendorCostPartial')">*</span>
+              </div>
             </div>
             <div>
               <div class="text-muted">{{ t('upstream.vendorAvgDaily') }}</div>

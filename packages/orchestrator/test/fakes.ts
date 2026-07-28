@@ -23,6 +23,7 @@ import type {
   PlatformQuotaInput,
   ChannelBalance,
   AccountUsageStat,
+  UpstreamWalletCandidate,
 } from '@relay-panel/adapter-core';
 
 /**
@@ -59,6 +60,8 @@ export interface FakeSiteState {
   channelBalances?: ChannelBalance[];
   /** 账号口径日均消耗（F5）：stats.accountStats 返回的 avgDailyCost（accountId → USD）；缺省 0 */
   accountAvgDailyCost?: Map<string, number>;
+  /** 无凭据的上游钱包候选（自动发现链路）；未设置=空。 */
+  upstreamWalletCandidates?: UpstreamWalletCandidate[];
 }
 
 function defaultState(slug: string): FakeSiteState {
@@ -147,6 +150,11 @@ export class FakeAdapter implements EngineAdapter {
   setAccountAvgDailyCost(slug: string, accountId: string, usd: number): void {
     const s = this.stateFor(slug);
     (s.accountAvgDailyCost ??= new Map()).set(accountId, usd);
+  }
+
+  /** 设某站自动发现的上游钱包候选；测试数据也不得放真实凭据。 */
+  setUpstreamWalletCandidates(slug: string, candidates: UpstreamWalletCandidate[]): void {
+    this.stateFor(slug).upstreamWalletCandidates = candidates;
   }
 
   private check(op: string): void {
@@ -351,6 +359,13 @@ export class FakeAdapter implements EngineAdapter {
           track('stats.accountStats');
           const avg = state.accountAvgDailyCost?.get(accountId) ?? 0;
           return { requests: 0, tokens: 0, revenue: 0, cost: 0, avgDailyCost: avg, days };
+        },
+        upstreamWalletCandidates: async (opts?: { force?: boolean }): Promise<UpstreamWalletCandidate[]> => {
+          track(opts?.force === true ? 'stats.upstreamWalletCandidates.force' : 'stats.upstreamWalletCandidates');
+          return (state.upstreamWalletCandidates ?? []).map((candidate) => ({
+            ...candidate,
+            ...(candidate.snapshot !== undefined ? { snapshot: { ...candidate.snapshot } } : {}),
+          }));
         },
       },
     };

@@ -6,6 +6,7 @@ import { toPgTimestamp } from '../auth/sessions.js';
 import { writeAudit } from '../audit.js';
 import { SitesService, type SitesServiceDeps } from '../sites/service.js';
 import { RECHARGE_LINKS_KEY, buildBalanceOverview, isHttpUrl, readRechargeLinks } from './service.js';
+import { readTrustedUpstreamManifests } from './manifest.js';
 import { listVendorBalances } from './vendors.js';
 
 /**
@@ -79,7 +80,23 @@ export function registerUpstreamRoutes(app: FastifyInstance, deps: SitesServiceD
     const ctx = requireCtx(req);
     requireRoot(ctx);
     return listVendorBalances(
-      { db: deps.db, ...(deps.config.secretKey !== undefined ? { secretKey: deps.config.secretKey } : {}) },
+      {
+        db: deps.db,
+        ...(deps.config.secretKey !== undefined ? { secretKey: deps.config.secretKey } : {}),
+        discover: async ({ force }) => {
+          const [sitesResult, manifestsResult] = await Promise.allSettled([
+            service.listUpstreamWalletCandidates(ctx, force ? { force: true } : {}),
+            readTrustedUpstreamManifests(
+              deps.config.upstreamManifestUrls,
+              force ? { force: true } : {},
+            ),
+          ]);
+          return [
+            ...(sitesResult.status === 'fulfilled' ? sitesResult.value : []),
+            ...(manifestsResult.status === 'fulfilled' ? manifestsResult.value : []),
+          ];
+        },
+      },
       { force: req.query.force === '1' },
     );
   });
