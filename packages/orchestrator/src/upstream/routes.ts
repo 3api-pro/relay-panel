@@ -86,10 +86,9 @@ export function registerUpstreamRoutes(app: FastifyInstance, deps: SitesServiceD
         discover: async ({ force }) => {
           const [sitesResult, manifestsResult] = await Promise.allSettled([
             service.listUpstreamWalletCandidates(ctx, force ? { force: true } : {}),
-            readTrustedUpstreamManifests(
-              deps.config.upstreamManifestUrls,
-              force ? { force: true } : {},
-            ),
+            // V3 已用 5min 脱敏快照缓存保护上游。Relay 的“强制刷新”只强刷受管引擎；
+            // 不再同时让两个 V3 实例绕过缓存，避免同一批生图 key 被双倍探测并超过清单读取时限。
+            readTrustedUpstreamManifests(deps.config.upstreamManifestUrls),
           ]);
           return [
             ...(sitesResult.status === 'fulfilled' ? sitesResult.value : []),
