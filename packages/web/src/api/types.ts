@@ -145,7 +145,7 @@ export interface FinanceTotals {
   cost: number;
   profit: number;
   /** 充值(现金到账)区间合计；全站取不到为 null。与营收(消费)不同口径 */
-  recharge: number | null;
+  recharge: Record<string, number> | null;
 }
 
 /** 走势/每日明细单日点：充值/营收(消耗)/成本/毛利/请求/token 均为该北京日历日真实值。recharge 全站无数据为 null */
@@ -156,7 +156,7 @@ export interface FinanceTrendPoint {
   tokens: number;
   cost: number;
   profit: number;
-  recharge: number | null;
+  recharge: Record<string, number> | null;
 }
 
 export interface FinanceSummaryResponse {

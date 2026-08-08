@@ -21,6 +21,7 @@ import type {
   UpstreamWalletCandidate,
   UpstreamWalletSnapshot,
   RechargeSummary,
+  CurrencyAmounts,
 } from '@relay-panel/adapter-core';
 import type { Config } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -401,12 +402,12 @@ export interface SiteChannelBalanceRow {
   avgDailyCost?: number;
 }
 
-/** 充值(现金到账)跨站汇总。金额为站点结算货币(RMB=本行业 1:1 于 USD)，与营收(消费)口径不同。 */
+/** 充值(现金到账)跨站汇总。金额按实际支付币种分别累计，与营收(消费)口径不同。 */
 export interface FinanceRecharge {
-  /** 区间充值合计 */
-  periodAmount: number;
-  /** 北京日历日 → 该日充值(跨站合计)，供每日明细/走势逐日展示 */
-  byDate: Record<string, number>;
+  /** 区间充值合计，按实际支付币种分开 */
+  periodAmount: CurrencyAmounts;
+  /** 北京日历日 → 该日充值(跨站、按币种合计)，供每日明细/走势逐日展示 */
+  byDate: Record<string, CurrencyAmounts>;
   /** 是否有站点成功返回（全失败则前端不展示充值列） */
   ok: boolean;
 }
@@ -1065,9 +1066,9 @@ export class SitesService {
     const visible = await this.visibleSites(ctx);
     const bjToday = beijingTodayStr();
     const days = enumerateBjDates(fromDate, bjToday).length; // 覆盖 from..今天，供 daily 过滤 [from,to]
-    let periodAmount = 0;
+    const periodAmount: CurrencyAmounts = {};
     let anyOk = false;
-    const byDate: Record<string, number> = {};
+    const byDate: Record<string, CurrencyAmounts> = {};
     await Promise.all(
       visible.map(async (site) => {
         const key = `recharge:${site.slug}:${days}`;
@@ -1089,8 +1090,12 @@ export class SitesService {
         anyOk = true;
         for (const p of sum.daily) {
           if (p.date >= fromDate && p.date <= toDate) {
-            byDate[p.date] = (byDate[p.date] ?? 0) + p.amount;
-            periodAmount += p.amount;
+            const day = (byDate[p.date] ??= {});
+            for (const [currency, amount] of Object.entries(p.amount)) {
+              if (!Number.isFinite(amount)) continue;
+              day[currency] = (day[currency] ?? 0) + amount;
+              periodAmount[currency] = (periodAmount[currency] ?? 0) + amount;
+            }
           }
         }
       }),

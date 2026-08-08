@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { appSettings } from '../db/schema.js';
 import type { FinanceSiteUsage } from '../sites/service.js';
+import type { CurrencyAmounts } from '@relay-panel/adapter-core';
 
 /**
  * 经营汇总口径的单一实现（F2 第一刀：零行为变化的口径抽取）。
@@ -57,7 +58,7 @@ export interface FinanceSummaryTotals {
    */
   costedRevenue: number;
   /** 充值(现金到账)区间合计；不同口径，调用方传入（无则 null） */
-  recharge: number | null;
+  recharge: CurrencyAmounts | null;
 }
 
 /** app_settings['finance_cost_ratios'] → { [slug]: number }（容错：非法结构回落空表） */
@@ -120,11 +121,11 @@ export function resolveSummaryRows(
 /**
  * 合计：营收/请求/token 累加全部站点；成本/毛利只累加「有成本口径」的站点
  * （cost!==null）。与 routes.ts 原 totals 逻辑逐字节等价。
- * recharge 是现金到账口径（RMB，1:1 于 USD），由调用方传入（报告不混入，传 null）。
+ * recharge 是现金到账口径并按实际支付币种拆分，由调用方传入（报告不混入，传 null）。
  */
 export function summaryTotals(
   rows: FinanceSummaryRow[],
-  rechargePeriod: number | null,
+  rechargePeriod: CurrencyAmounts | null,
 ): FinanceSummaryTotals {
   const costed = rows.filter((r) => r.cost !== null);
   return {

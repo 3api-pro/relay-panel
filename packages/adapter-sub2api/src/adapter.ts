@@ -26,6 +26,7 @@ import type {
   UpstreamWalletSnapshot,
   UpstreamWalletSnapshotStatus,
   RechargeSummary,
+  CurrencyAmounts,
   PlatformQuota,
   PlatformQuotaInput,
 } from '@relay-panel/adapter-core';
@@ -89,6 +90,18 @@ function normalizeUpstreamBaseUrl(raw: unknown): string | null {
 
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/** 兼容旧版 number 与新版按 ISO 4217 币种拆分的对象。 */
+function normalizeCurrencyAmounts(value: unknown): CurrencyAmounts {
+  if (typeof value === 'number' && Number.isFinite(value)) return { CNY: value };
+  const raw = recordOf(value);
+  if (!raw) return {};
+  const out: CurrencyAmounts = {};
+  for (const [currency, amount] of Object.entries(raw)) {
+    if (typeof amount === 'number' && Number.isFinite(amount)) out[currency.toUpperCase()] = amount;
+  }
+  return out;
 }
 
 function nonNegativeInt(value: unknown): number | undefined {
@@ -664,16 +677,16 @@ export class Sub2apiAdminClient implements EngineAdminClient {
     rechargeSummary: async (days: number): Promise<RechargeSummary> => {
       const d = Math.min(Math.max(1, Math.floor(days)), 366);
       const r = await this.http.get<{
-        today_amount?: number;
+        today_amount?: number | Record<string, number>;
         today_count?: number;
-        daily_series?: { date: string; amount: number; count: number }[];
+        daily_series?: { date: string; amount: number | Record<string, number>; count: number }[];
       }>(`/api/v1/admin/payment/dashboard?days=${d}`);
       return {
-        todayAmount: r.today_amount ?? 0,
+        todayAmount: normalizeCurrencyAmounts(r.today_amount),
         todayCount: r.today_count ?? 0,
         daily: (r.daily_series ?? []).map((x) => ({
           date: x.date,
-          amount: x.amount ?? 0,
+          amount: normalizeCurrencyAmounts(x.amount),
           count: x.count ?? 0,
         })),
       };

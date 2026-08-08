@@ -204,7 +204,7 @@ export function registerFinanceRoutes(
     // 每日走势/明细：逐日 充值·消耗(营收)·成本·毛利·请求·token 全含（充值折进每日，不再单列今日充值）
     const trend = dates.map((date) => {
       const a = dateAgg.get(date) as { revenue: number; cost: number; requests: number; tokens: number };
-      const rc = recharge.ok ? recharge.byDate[date] ?? 0 : null;
+      const rc = recharge.ok ? recharge.byDate[date] ?? {} : null;
       return {
         date,
         revenue: a.revenue,

@@ -60,7 +60,7 @@
   "statRecharge": "Top-ups (cash)",
   "statRechargeHint": "Cash customers deposited · prepaid",
   "dailyTitle": "Daily detail",
-  "dailyNote": "Per day: top-ups · consumption (revenue) · cost · profit · requests · tokens (top-ups = cash received, a different caliber from consumption; USD/RMB 1:1)",
+  "dailyNote": "Per day: top-ups · consumption (revenue) · cost · profit · requests · tokens (top-ups = cash received, separate from consumption and shown by payment currency)",
   "colDate": "Date",
   "colRecharge": "Top-ups",
   "colConsume": "Consumption",

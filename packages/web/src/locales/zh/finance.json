@@ -60,7 +60,7 @@
   "statRecharge": "充值(现金)",
   "statRechargeHint": "客户存入现金·预收款",
   "dailyTitle": "每日明细",
-  "dailyNote": "逐日：充值 · 消耗(营收) · 成本 · 毛利 · 请求 · Token（充值=现金到账，与消耗不同口径；美元/人民币 1:1）",
+  "dailyNote": "逐日：充值 · 消耗(营收) · 成本 · 毛利 · 请求 · Token（充值=现金到账，与消耗不同口径；按实际支付币种分别显示）",
   "colDate": "日期",
   "colRecharge": "充值",
   "colConsume": "消耗",

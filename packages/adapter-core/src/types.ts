@@ -213,15 +213,18 @@ export interface CustomerRanking {
   totalTokens: number;
 }
 
-/** 充值(现金到账)单日点。amount 为站点结算货币(llmapi 系为 RMB)，非 USD。 */
+/** 充值(现金到账)按 ISO 4217 币种分别汇总；不同币种不可直接相加。 */
+export type CurrencyAmounts = Record<string, number>;
+
+/** 充值(现金到账)单日点。amount 按实际支付币种拆分，非营收/消费。 */
 export interface RechargePoint {
   date: string;
-  amount: number;
+  amount: CurrencyAmounts;
   count: number;
 }
 /** 充值汇总（源 sub2api payment/dashboard，days 窗口终点为今天）。amount 口径=现金到账，非营收/消费。 */
 export interface RechargeSummary {
-  todayAmount: number;
+  todayAmount: CurrencyAmounts;
   todayCount: number;
   daily: RechargePoint[];
 }

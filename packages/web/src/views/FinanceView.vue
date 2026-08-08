@@ -221,9 +221,22 @@ function marginPct(revenue: number, profit: number | null): string {
   if (profit === null || !(revenue > 0)) return '—';
   return `${((profit / revenue) * 100).toFixed(1)}%`;
 }
-/** 充值金额（RMB 口径，¥ 前缀）；本行业美元/人民币 1:1，可直接与营收对比 */
-function fmtCny(n: number): string {
-  return `¥${(n ?? 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+/** 充值现金按实际支付币种分别展示，绝不把 CNY/USD 等不同币种直接相加。 */
+function fmtCash(amounts: Record<string, number> | null): string {
+  if (amounts === null) return '—';
+  const entries = Object.entries(amounts)
+    .filter(([, amount]) => Number.isFinite(amount))
+    .sort(([a], [b]) => (a === 'CNY' ? -1 : b === 'CNY' ? 1 : a.localeCompare(b)));
+  if (entries.length === 0) return '¥0';
+  return entries
+    .map(([currency, amount]) =>
+      new Intl.NumberFormat(currency === 'CNY' ? 'zh-CN' : 'en-US', {
+        style: 'currency',
+        currency,
+        maximumFractionDigits: 2,
+      }).format(amount),
+    )
+    .join(' · ');
 }
 function marginClass(n: number | null): string {
   if (n === null) return 'text-muted';
@@ -375,7 +388,7 @@ const fieldCls =
       />
       <StatCard
         :label="t('finance.statRecharge')"
-        :value="loading ? '' : loadError || totals.recharge === null ? '—' : fmtCny(totals.recharge)"
+        :value="loading ? '' : loadError || totals.recharge === null ? '—' : fmtCash(totals.recharge)"
         :loading="loading"
         :icon="Coins"
         :hint="t('finance.statRechargeHint')"
@@ -428,7 +441,7 @@ const fieldCls =
       >
         <template #cell-recharge="{ row }">
           <span class="tnum" :class="asTrend(row).recharge === null ? 'text-muted' : ''">{{
-            asTrend(row).recharge === null ? '—' : fmtCny(asTrend(row).recharge as number)
+            asTrend(row).recharge === null ? '—' : fmtCash(asTrend(row).recharge)
           }}</span>
         </template>
         <template #cell-revenue="{ row }"><span class="tnum">{{ fmtMoney(asTrend(row).revenue) }}</span></template>
