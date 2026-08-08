@@ -74,7 +74,10 @@ async function loadVendors(force = false) {
  * 🔴 null → '—'：余额/成本取不到时绝不显示 0（0 会被误读成"没钱了"或"没花钱"）。
  */
 function fmtNum(v: number | null | undefined): string {
-  return typeof v === 'number' ? v.toFixed(2) : '—';
+  if (typeof v !== 'number') return '—';
+  const abs = Math.abs(v);
+  const digits = abs > 0 && abs < 1 ? (abs < 0.001 ? 6 : 4) : 2;
+  return v.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 function vendorDiscoveryKey(discovery: 'automatic' | 'manual' | 'automatic+override'): string {
   if (discovery === 'automatic+override') return 'upstream.vendorDiscoveryOverride';
