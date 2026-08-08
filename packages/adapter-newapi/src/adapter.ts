@@ -94,6 +94,20 @@ function channelToRecord(ch: NaChannel): ChannelRecord {
   };
 }
 
+function inferUpstreamPurposes(ch: NaChannel): NonNullable<UpstreamWalletCandidate['purposes']> {
+  const text = [ch.name, ch.models, ch.model_mapping, TYPE_TO_PROTOCOL[ch.type]]
+    .filter((part): part is string => typeof part === 'string')
+    .join(' ')
+    .toLowerCase();
+  const purposes = new Set<NonNullable<UpstreamWalletCandidate['purposes']>[number]>();
+  if (/gpt[-_ ]?image|image2|imagen|dall[-_ ]?e|\bimage\b|生图/.test(text)) purposes.add('image');
+  if (/bedrock|aws/.test(text)) purposes.add('aws');
+  if (/claude|anthropic|fable|sonnet|opus|haiku/.test(text)) purposes.add('claude');
+  if (/gemini/.test(text)) purposes.add('gemini');
+  if (!purposes.has('image') && /openai|responses|codex|\bgpt/.test(text)) purposes.add('gpt');
+  return [...purposes];
+}
+
 export class NewapiAdapter implements EngineAdapter {
   readonly engine = 'newapi' as const;
   readonly dbDirect = false;
@@ -361,6 +375,7 @@ export class NewapiAdminClient implements EngineAdminClient {
         if (channel.status !== 1) continue;
         const baseUrl = normalizeUpstreamBaseUrl(channel.base_url);
         if (!baseUrl) continue;
+        const purposes = inferUpstreamPurposes(channel);
         out.push({
           accountId: String(channel.id),
           accountName: channel.name,
@@ -368,6 +383,7 @@ export class NewapiAdminClient implements EngineAdminClient {
           baseUrl,
           system: 'unknown',
           discovery: 'metadata-only',
+          ...(purposes.length > 0 ? { purposes } : {}),
           snapshot: {
             status: 'unsupported',
             protocol: 'unknown',

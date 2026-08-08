@@ -325,6 +325,8 @@ export interface UpstreamWalletCandidate {
   baseUrl: string;
   system: UpstreamWalletSystem;
   discovery: 'server-snapshot' | 'metadata-only';
+  /** 从账号平台/模型映射推导的脱敏用途；不得包含 key、模型请求正文或任意上游响应。 */
+  purposes?: Array<'image' | 'gpt' | 'claude' | 'gemini' | 'aws'>;
   snapshot?: UpstreamWalletSnapshot;
 }
 

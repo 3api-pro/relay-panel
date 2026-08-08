@@ -100,6 +100,8 @@ export interface VendorBalanceView {
   discovery: VendorDiscovery;
   /** 归并进本钱包的站点×账号来源数；手工独立配置为 0。 */
   sourceCount: number;
+  /** 从实际账号平台、模型映射或 V3 路由清单推导的用途分组。 */
+  purposes: Array<'image' | 'gpt' | 'claude' | 'gemini' | 'aws'>;
   /** 引擎最近一次成功生成脱敏快照的时间。 */
   snapshotAt?: string;
   /** 最近一轮刷新失败，当前数值来自上一次成功快照。 */
@@ -536,6 +538,7 @@ export function buildVendorView(
     snapshotAt?: string;
     stale?: boolean;
     system?: VendorViewSystem;
+    purposes?: VendorBalanceView['purposes'];
   } = {},
 ): VendorBalanceView {
   const divisor = cfg.balanceDivisor ?? 1;
@@ -553,6 +556,7 @@ export function buildVendorView(
     system: meta.system ?? cfg.system,
     discovery: meta.discovery ?? 'manual',
     sourceCount: meta.sourceCount ?? 0,
+    purposes: meta.purposes ?? [],
     ...(meta.snapshotAt ? { snapshotAt: meta.snapshotAt } : {}),
     stale: meta.stale === true,
     balance,
@@ -625,6 +629,12 @@ function automaticVendorNote(candidates: SiteUpstreamWalletCandidate[]): string 
   if (names.length === 0) return undefined;
   const visible = names.slice(0, 3).join(' · ');
   return names.length > 3 ? `${visible} 等 ${names.length} 个来源账号` : visible;
+}
+
+function automaticVendorPurposes(candidates: SiteUpstreamWalletCandidate[]): VendorBalanceView['purposes'] {
+  const order: VendorBalanceView['purposes'] = ['image', 'gpt', 'claude', 'gemini', 'aws'];
+  const found = new Set(candidates.flatMap((candidate) => candidate.purposes ?? []));
+  return order.filter((purpose) => found.has(purpose));
 }
 
 function protocolSystem(candidate: SiteUpstreamWalletCandidate): VendorViewSystem {
@@ -921,6 +931,7 @@ export async function listVendorBalances(
         ...(automatic.snapshotAt ? { snapshotAt: automatic.snapshotAt } : {}),
         stale: automatic.stale,
         system: automatic.system === 'unknown' ? source.system : automatic.system,
+        purposes: automaticVendorPurposes(source.candidates),
       });
     }),
   );

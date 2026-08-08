@@ -14,6 +14,7 @@ function manifestWallet(overrides: Record<string, unknown> = {}): Record<string,
     cost_coverage: 'complete',
     probed_at: '2026-07-28T08:09:10.000Z',
     last_error: null,
+    purposes: ['image'],
     ...overrides,
   };
 }
@@ -58,6 +59,7 @@ describe('受信任上游钱包清单', () => {
         baseUrl: 'https://vendor.example.com/api',
         system: 'sub2api',
         discovery: 'server-snapshot',
+        purposes: ['image'],
         snapshot: {
           schemaVersion: 1,
           status: 'ok',

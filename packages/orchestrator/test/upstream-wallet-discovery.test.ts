@@ -143,6 +143,7 @@ describe('Sub2API 上游钱包候选', () => {
       baseUrl: 'https://vendor.example.com/api',
       system: 'sub2api',
       discovery: 'server-snapshot',
+      purposes: ['claude'],
       snapshot: {
         schemaVersion: 1,
         status: 'ok',
@@ -277,6 +278,7 @@ describe('NewAPI 上游钱包候选', () => {
         baseUrl: 'https://up.example.com/v1',
         system: 'unknown',
         discovery: 'metadata-only',
+        purposes: ['gpt'],
         snapshot: {
           status: 'unsupported',
           protocol: 'unknown',

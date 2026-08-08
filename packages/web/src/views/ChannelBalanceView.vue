@@ -84,6 +84,9 @@ function vendorDiscoveryKey(discovery: 'automatic' | 'manual' | 'automatic+overr
   if (discovery === 'automatic') return 'upstream.vendorDiscoveryAuto';
   return 'upstream.vendorDiscoveryManual';
 }
+function vendorPurposeKey(purpose: VendorBalanceView['purposes'][number]): string {
+  return `upstream.vendorPurpose${purpose[0]!.toUpperCase()}${purpose.slice(1)}`;
+}
 function vendorDiscoveryTone(discovery: 'automatic' | 'manual' | 'automatic+override') {
   return discovery === 'automatic' ? 'accent' as const : discovery === 'automatic+override' ? 'amber' as const : 'muted' as const;
 }
@@ -469,6 +472,19 @@ onMounted(() => {
             </div>
             <Badge :tone="v.low ? 'red' : v.available ? 'green' : 'muted'">
               {{ v.available ? (v.low ? t('upstream.vendorLow') : t('upstream.vendorOk')) : t('upstream.vendorNA') }}
+            </Badge>
+          </div>
+
+          <div v-if="(v.purposes ?? []).length > 0" class="mt-1.5 flex flex-wrap items-center gap-1">
+            <span class="mr-0.5 text-[10px] text-muted">{{ t('upstream.vendorPurposeLabel') }}</span>
+            <Badge
+              v-for="purpose in v.purposes ?? []"
+              :key="purpose"
+              tone="muted"
+              size="sm"
+              :title="t('upstream.vendorPurposeHint')"
+            >
+              {{ t(vendorPurposeKey(purpose)) }}
             </Badge>
           </div>
 

@@ -586,6 +586,7 @@ export class SitesService {
           baseUrl: candidate.baseUrl,
           system: candidate.system,
           discovery: candidate.discovery,
+          ...(candidate.purposes !== undefined ? { purposes: [...candidate.purposes] } : {}),
           ...(candidate.snapshot !== undefined
             ? { snapshot: copyUpstreamWalletSnapshot(candidate.snapshot) }
             : {}),

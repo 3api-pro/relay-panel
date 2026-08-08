@@ -29,6 +29,7 @@ function candidate(
     baseUrl,
     system: 'sub2api',
     discovery: 'server-snapshot',
+    purposes: ['claude'],
     snapshot: {
       status: 'ok',
       protocol: 'sub2api_v1_usage',
@@ -101,6 +102,7 @@ describe('供应商钱包自动发现与旧配置覆盖', () => {
     image.accountId = 'image-supplier';
     image.accountName = 'image-supplier';
     image.system = 'newapi';
+    image.purposes = ['image'];
     image.snapshot = {
       status: 'unsupported',
       protocol: 'newapi_billing',
@@ -111,6 +113,7 @@ describe('供应商钱包自动发现与旧配置覆盖', () => {
 
     const sources = resolveVendorSources([], [image]);
     expect(sources[0]?.config.label).toBe('Image Supplier');
+    expect(sources[0]?.candidates[0]?.purposes).toEqual(['image']);
     expect(snapshotProbe(sources[0]!.candidates).probe.reason).toContain('占位额度');
   });
 

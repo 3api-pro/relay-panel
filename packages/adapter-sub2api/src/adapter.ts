@@ -187,6 +187,20 @@ function walletSystem(protocol: UpstreamWalletProtocol): UpstreamWalletCandidate
   return 'unknown';
 }
 
+function inferUpstreamPurposes(parts: unknown[]): NonNullable<UpstreamWalletCandidate['purposes']> {
+  const text = parts
+    .map((part) => typeof part === 'string' ? part : part == null ? '' : JSON.stringify(part))
+    .join(' ')
+    .toLowerCase();
+  const purposes = new Set<NonNullable<UpstreamWalletCandidate['purposes']>[number]>();
+  if (/gpt[-_ ]?image|image2|imagen|dall[-_ ]?e|\bimage\b|生图/.test(text)) purposes.add('image');
+  if (/bedrock|aws/.test(text)) purposes.add('aws');
+  if (/claude|anthropic|fable|sonnet|opus|haiku/.test(text)) purposes.add('claude');
+  if (/gemini/.test(text)) purposes.add('gemini');
+  if (!purposes.has('image') && /openai|responses|codex|\bgpt/.test(text)) purposes.add('gpt');
+  return [...purposes];
+}
+
 function accountToUpstreamWalletCandidate(a: S2ARawAccount): UpstreamWalletCandidate | null {
   if (a.status !== 'active') return null;
   const baseUrl = normalizeUpstreamBaseUrl(a.credentials?.base_url);
@@ -194,6 +208,12 @@ function accountToUpstreamWalletCandidate(a: S2ARawAccount): UpstreamWalletCandi
   // 新 DTO 顶层优先；旧服务端持久化值仍可从 extra.upstream_wallet_probe 回读。
   const topLevel = parseUpstreamWalletSnapshot(a.upstream_wallet);
   const fallback = topLevel ?? parseUpstreamWalletSnapshot(a.extra?.upstream_wallet_probe);
+  const purposes = inferUpstreamPurposes([
+    a.name,
+    a.platform,
+    a.credentials?.model_mapping,
+    a.extra?.model_mapping,
+  ]);
   return {
     accountId: String(a.id),
     accountName: a.name,
@@ -201,6 +221,7 @@ function accountToUpstreamWalletCandidate(a: S2ARawAccount): UpstreamWalletCandi
     baseUrl,
     system: walletSystem(fallback?.protocol ?? 'unknown'),
     discovery: fallback ? 'server-snapshot' : 'metadata-only',
+    ...(purposes.length > 0 ? { purposes } : {}),
     ...(fallback ? { snapshot: fallback } : {}),
   };
 }

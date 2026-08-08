@@ -698,6 +698,8 @@ export interface VendorBalanceView {
   /** 自动发现为默认；manual 仅表示旧 upstream:* 独立配置。 */
   discovery: 'automatic' | 'manual' | 'automatic+override';
   sourceCount: number;
+  /** 自动从账号平台、模型映射或 V3 路由清单推导，不包含任何密钥。 */
+  purposes: Array<'image' | 'gpt' | 'claude' | 'gemini' | 'aws'>;
   snapshotAt?: string;
   stale: boolean;
   /** 真实钱包余额（已按 balanceDivisor 修正）；null=取不到，前端显示"不可用"而非 0 */

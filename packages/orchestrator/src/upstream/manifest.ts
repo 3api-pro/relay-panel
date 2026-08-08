@@ -39,6 +39,7 @@ const manifestWalletSchema = z
           Number.isFinite(Date.parse(value)),
       ),
     last_error: z.union([z.null(), z.string().regex(/^[a-z][a-z0-9_]{0,63}$/)]),
+    purposes: z.array(z.enum(['image', 'gpt', 'claude', 'gemini', 'aws'])).max(10).optional(),
   })
   .superRefine((wallet, ctx) => {
     if (wallet.status === 'ok' && wallet.balance === null) {
@@ -218,6 +219,7 @@ function mapManifestWallets(
             ? 'newapi'
             : 'unknown',
       discovery: 'server-snapshot',
+      ...(wallet.purposes !== undefined ? { purposes: [...new Set(wallet.purposes)] } : {}),
       snapshot: {
         schemaVersion: 1,
         status: wallet.status,
