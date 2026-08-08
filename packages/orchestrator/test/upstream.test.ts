@@ -212,10 +212,62 @@ describe('/api/upstream/* HTTP', () => {
       expect(bal.statusCode).toBe(403);
       const links = await ts.app.inject({ method: 'GET', url: '/api/upstream/recharge-links', cookies: { rp_session: cookie } });
       expect(links.statusCode).toBe(403);
+      const cfg = await ts.app.inject({ method: 'GET', url: '/api/upstream/vendors/auto-example/config', cookies: { rp_session: cookie } });
+      expect(cfg.statusCode).toBe(403);
     } finally {
       await ts.close();
     }
   });
+
+  it('root 可完善自动上游档案；令牌只写不读，用户 ID/备注/跳转入口可回读', async () => {
+    const ts = await makeTestServer();
+    try {
+      const { cookie } = await ts.seedLogin({ email: 'vendor-root@x.com', password: 'pw-123456', role: 'root' });
+      const missing = await ts.app.inject({
+        method: 'GET',
+        url: '/api/upstream/vendors/auto-example-com/config',
+        cookies: { rp_session: cookie },
+      });
+      expect(missing.statusCode).toBe(404);
+
+      const put = await ts.app.inject({
+        method: 'PUT',
+        url: '/api/upstream/vendors/auto-example-com/config',
+        cookies: { rp_session: cookie },
+        payload: {
+          label: 'Apimatou',
+          baseUrl: 'https://example.com',
+          system: 'newapi',
+          apiKey: 'panel-token-route-test',
+          userId: '9527',
+          panelUrl: 'https://example.com/console',
+          rechargeUrl: 'https://example.com/topup',
+          note: '生图主渠道',
+        },
+      });
+      expect(put.statusCode).toBe(200);
+      expect(put.json()).toMatchObject({
+        vendor: 'auto-example-com',
+        label: 'Apimatou',
+        userId: '9527',
+        hasApiKey: true,
+        panelUrl: 'https://example.com/console',
+        rechargeUrl: 'https://example.com/topup',
+      });
+      expect(put.body).not.toContain('panel-token-route-test');
+
+      const get = await ts.app.inject({
+        method: 'GET',
+        url: '/api/upstream/vendors/auto-example-com/config',
+        cookies: { rp_session: cookie },
+      });
+      expect(get.statusCode).toBe(200);
+      expect(get.json()).toMatchObject({ hasApiKey: true, userId: '9527', note: '生图主渠道' });
+      expect(get.body).not.toContain('panel-token-route-test');
+    } finally {
+      await ts.close();
+    }
+  }, 30_000);
 
   it('充值外链 PUT 往返 + GET 读回；拒非 http(s) url（400）', async () => {
     const ts = await makeTestServer();

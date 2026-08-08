@@ -691,6 +691,9 @@ export interface ResetQuotaResponse {
 export interface VendorBalanceView {
   vendor: string;
   label: string;
+  baseUrl: string;
+  panelUrl?: string;
+  rechargeUrl?: string;
   system: 'sub2api' | 'newapi' | 'unknown';
   /** 自动发现为默认；manual 仅表示旧 upstream:* 独立配置。 */
   discovery: 'automatic' | 'manual' | 'automatic+override';
@@ -712,6 +715,22 @@ export interface VendorBalanceView {
   note?: string;
   /** 显示修正系数；!=1 时前端标注，避免与上游站点显示对不上 */
   balanceDivisor: number;
+}
+
+/** GET/PUT /api/upstream/vendors/:vendor/config；凭据仅返回是否存在，永不回显明文。 */
+export interface VendorConfigView {
+  vendor: string;
+  label: string;
+  baseUrl: string;
+  system: 'sub2api' | 'newapi';
+  userId?: string;
+  balanceDivisor: number;
+  panelUrl?: string;
+  rechargeUrl?: string;
+  note?: string;
+  enabled: boolean;
+  hasApiKey: boolean;
+  hasBillingKey: boolean;
 }
 
 /** GET /api/upstream/vendors 响应 */

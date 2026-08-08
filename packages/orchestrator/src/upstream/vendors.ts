@@ -4,7 +4,8 @@ import { assertPublicUrl, isBlockedIp } from '../net/guard.js';
 import type { SiteUpstreamWalletCandidate } from '../sites/service.js';
 import type { Db } from '../db/client.js';
 import { credentials } from '../db/schema.js';
-import { decryptSecret } from '../secrets.js';
+import { decryptSecret, encryptSecret } from '../secrets.js';
+import { toPgTimestamp } from '../auth/sessions.js';
 import {
   parseNewApiBillingUsageResponse,
   parseNewApiBillingWalletResponses,
@@ -76,6 +77,10 @@ export interface VendorConfig {
    * aizhongzhuan = 10（其面板把余额放大了 10 倍）。
    */
   balanceDivisor?: number;
+  /** 上游控制台/官网入口（root-only 页面展示）。 */
+  panelUrl?: string;
+  /** 该供应商的充值页入口（root-only 页面展示）。 */
+  rechargeUrl?: string;
   /** 备注（面板展示，如"CC Max 主力"） */
   note?: string;
   /** 关掉则不采集（保留配置） */
@@ -86,6 +91,10 @@ export interface VendorConfig {
 export interface VendorBalanceView {
   vendor: string;
   label: string;
+  /** root-only 页面用于创建/编辑同源覆盖；不含路径中的凭据（写入时也拒绝 userinfo）。 */
+  baseUrl: string;
+  panelUrl?: string;
+  rechargeUrl?: string;
   system: VendorViewSystem;
   /** 数据来源：自动发现是默认路径；旧 upstream:* 仅作为兼容覆盖。 */
   discovery: VendorDiscovery;
@@ -129,6 +138,39 @@ export interface VendorOverview {
   /** 采集时刻 ISO（前端显示"数据截至"） */
   fetchedAt: string;
 }
+
+/** 可回显的供应商覆盖配置；凭据永远只返回“是否已配置”。 */
+export interface VendorConfigView {
+  vendor: string;
+  label: string;
+  baseUrl: string;
+  system: VendorSystem;
+  userId?: string;
+  balanceDivisor: number;
+  note?: string;
+  enabled: boolean;
+  hasApiKey: boolean;
+  hasBillingKey: boolean;
+  panelUrl?: string;
+  rechargeUrl?: string;
+}
+
+export interface SaveVendorConfigInput {
+  label: string;
+  baseUrl: string;
+  system: VendorSystem;
+  /** 空/省略表示保留已有令牌；首次创建必须提供。 */
+  apiKey?: string | undefined;
+  userId?: string | undefined;
+  billingKey?: string | undefined;
+  balanceDivisor?: number | undefined;
+  panelUrl?: string | undefined;
+  rechargeUrl?: string | undefined;
+  note?: string | undefined;
+  enabled?: boolean | undefined;
+}
+
+export class VendorConfigInputError extends Error {}
 
 /** 本月已过天数（含今天，按 Asia/Shanghai），用于把"本月累计"折算成日均 */
 export function beijingDayOfMonth(now: Date = new Date()): number {
@@ -190,11 +232,107 @@ export async function readVendorConfigs(deps: { db: Db; secretKey?: string }): P
       ...(typeof parsed.balanceDivisor === 'number' && parsed.balanceDivisor > 0
         ? { balanceDivisor: parsed.balanceDivisor }
         : {}),
+      ...(typeof parsed.panelUrl === 'string' && parsed.panelUrl ? { panelUrl: parsed.panelUrl } : {}),
+      ...(typeof parsed.rechargeUrl === 'string' && parsed.rechargeUrl ? { rechargeUrl: parsed.rechargeUrl } : {}),
       ...(typeof parsed.note === 'string' && parsed.note ? { note: parsed.note } : {}),
       enabled: parsed.enabled !== false,
     });
   }
   return out.sort((a, b) => a.vendor.localeCompare(b.vendor));
+}
+
+function configView(config: VendorConfig): VendorConfigView {
+  return {
+    vendor: config.vendor,
+    label: config.label,
+    baseUrl: config.baseUrl,
+    system: config.system,
+    ...(config.userId ? { userId: config.userId } : {}),
+    balanceDivisor: config.balanceDivisor ?? 1,
+    ...(config.note ? { note: config.note } : {}),
+    enabled: config.enabled !== false,
+    hasApiKey: config.apiKey !== '',
+    hasBillingKey: Boolean(config.billingKey),
+    ...(config.panelUrl ? { panelUrl: config.panelUrl } : {}),
+    ...(config.rechargeUrl ? { rechargeUrl: config.rechargeUrl } : {}),
+  };
+}
+
+export async function readVendorConfigView(
+  deps: { db: Db; secretKey?: string },
+  vendor: string,
+): Promise<VendorConfigView | null> {
+  const found = (await readVendorConfigs(deps)).find((config) => config.vendor === vendor);
+  return found ? configView(found) : null;
+}
+
+/** 加密保存自动发现条目的可选覆盖；任何响应、审计和异常都不携带令牌。 */
+export async function saveVendorConfig(
+  deps: { db: Db; secretKey?: string },
+  vendor: string,
+  input: SaveVendorConfigInput,
+): Promise<VendorConfigView> {
+  if (!deps.secretKey) throw new VendorConfigInputError('RP_SECRET_KEY 未配置，无法保存上游凭据');
+  const ref = `${VENDOR_CRED_PREFIX}${vendor}`;
+  const existing = (await readVendorConfigs(deps)).find((config) => config.vendor === vendor);
+  const apiKey = input.apiKey?.trim() || existing?.apiKey || '';
+  if (!apiKey) throw new VendorConfigInputError('首次保存必须填写面板令牌或 API Key');
+  const normalized = input.baseUrl.replace(/\/+$/, '');
+  let url: URL;
+  try {
+    url = new URL(normalized);
+  } catch {
+    throw new VendorConfigInputError('上游地址格式无效');
+  }
+  if (url.protocol !== 'https:' || url.username !== '' || url.password !== '') {
+    throw new VendorConfigInputError('上游地址必须是无内嵌凭据的 HTTPS 地址');
+  }
+  try {
+    await assertPublicUrl(normalized, { failClosed: true });
+  } catch {
+    throw new VendorConfigInputError('上游地址未通过公网安全校验');
+  }
+  for (const link of [input.panelUrl, input.rechargeUrl]) {
+    if (!link?.trim()) continue;
+    let target: URL;
+    try {
+      target = new URL(link.trim());
+    } catch {
+      throw new VendorConfigInputError('控制台或充值入口格式无效');
+    }
+    if (target.protocol !== 'https:' || target.username !== '' || target.password !== '') {
+      throw new VendorConfigInputError('控制台和充值入口必须是无内嵌凭据的 HTTPS 地址');
+    }
+  }
+  const config: VendorConfig = {
+    vendor,
+    label: input.label.trim() || existing?.label || vendor,
+    baseUrl: normalized,
+    apiKey,
+    system: input.system,
+    ...(input.userId?.trim() ? { userId: input.userId.trim() } : {}),
+    ...(input.billingKey?.trim()
+      ? { billingKey: input.billingKey.trim() }
+      : existing?.billingKey ? { billingKey: existing.billingKey } : {}),
+    ...(existing?.costKeys?.length ? { costKeys: existing.costKeys } : {}),
+    ...(input.balanceDivisor && input.balanceDivisor !== 1 ? { balanceDivisor: input.balanceDivisor } : {}),
+    ...(input.panelUrl?.trim() ? { panelUrl: input.panelUrl.trim() } : {}),
+    ...(input.rechargeUrl?.trim() ? { rechargeUrl: input.rechargeUrl.trim() } : {}),
+    ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+    enabled: input.enabled !== false,
+  };
+  if (config.system === 'newapi' && !config.userId) {
+    throw new VendorConfigInputError('NewAPI 真实余额查询必须填写用户 ID');
+  }
+  const ciphertext = encryptSecret(JSON.stringify(config), deps.secretKey);
+  await deps.db.orm
+    .insert(credentials)
+    .values({ ref, kind: VENDOR_CRED_KIND, ciphertext })
+    .onConflictDoUpdate({
+      target: credentials.ref,
+      set: { kind: VENDOR_CRED_KIND, ciphertext, rotatedAt: toPgTimestamp(new Date()) },
+    });
+  return configView(config);
 }
 
 interface ProbeResult {
@@ -409,6 +547,9 @@ export function buildVendorView(
   return {
     vendor: cfg.vendor,
     label: cfg.label,
+    baseUrl: cfg.baseUrl,
+    ...(cfg.panelUrl ? { panelUrl: cfg.panelUrl } : {}),
+    ...(cfg.rechargeUrl ? { rechargeUrl: cfg.rechargeUrl } : {}),
     system: meta.system ?? cfg.system,
     discovery: meta.discovery ?? 'manual',
     sourceCount: meta.sourceCount ?? 0,
@@ -477,6 +618,13 @@ function automaticVendorLabel(
 ): string {
   const manifest = bestCandidate(candidates.filter((candidate) => candidate.siteEngine === 'manifest'));
   return manifest?.siteLabel.trim() || autoVendorLabel(origin);
+}
+
+function automaticVendorNote(candidates: SiteUpstreamWalletCandidate[]): string | undefined {
+  const names = [...new Set(candidates.map((candidate) => candidate.accountName.trim()).filter(Boolean))];
+  if (names.length === 0) return undefined;
+  const visible = names.slice(0, 3).join(' · ');
+  return names.length > 3 ? `${visible} 等 ${names.length} 个来源账号` : visible;
 }
 
 function protocolSystem(candidate: SiteUpstreamWalletCandidate): VendorViewSystem {
@@ -679,14 +827,18 @@ export function resolveVendorSources(
     const best = bestCandidate(group);
     const detectedSystem = best ? protocolSystem(best) : 'unknown';
     const system = detectedSystem === 'unknown' && override ? override.system : detectedSystem;
-    const config: VendorConfig = override ?? {
-      vendor: autoVendorId(origin),
-      label: automaticVendorLabel(origin, group),
-      baseUrl: origin,
-      apiKey: '',
-      system: system === 'newapi' ? 'newapi' : 'sub2api',
-      enabled: true,
-    };
+    const autoNote = automaticVendorNote(group);
+    const config: VendorConfig = override
+      ? { ...override, ...(override.note ? {} : autoNote ? { note: autoNote } : {}) }
+      : {
+          vendor: autoVendorId(origin),
+          label: automaticVendorLabel(origin, group),
+          baseUrl: origin,
+          apiKey: '',
+          system: system === 'newapi' ? 'newapi' : 'sub2api',
+          ...(autoNote ? { note: autoNote } : {}),
+          enabled: true,
+        };
     resolved.push({
       config,
       candidates: group,
@@ -753,7 +905,15 @@ export async function listVendorBalances(
       // 一旦引擎已有真实快照便不再把上游 key 搬进面板探测链路。
       if (probe.balance === null && source.discovery === 'automatic+override' && source.config.apiKey !== '') {
         const fallback = await probeVendor(source.config, now);
-        if (fallback.balance !== null || fallback.costMonthToDate !== null) probe = fallback;
+        if (fallback.balance !== null || fallback.costMonthToDate !== null) {
+          const costCoverage = fallback.costMonthToDate !== null ? fallback.costCoverage : probe.costCoverage;
+          probe = {
+            balance: fallback.balance ?? probe.balance,
+            costMonthToDate: fallback.costMonthToDate ?? probe.costMonthToDate,
+            ...(costCoverage ? { costCoverage } : {}),
+            ...(fallback.balance === null && fallback.reason ? { reason: fallback.reason } : {}),
+          };
+        }
       }
       return buildVendorView(source.config, probe, lowDays, now, {
         discovery: source.discovery,

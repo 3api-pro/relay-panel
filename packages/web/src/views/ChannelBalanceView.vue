@@ -20,6 +20,8 @@ import type {
   ResetQuotaResponse,
   UpstreamBalancesResponse,
   UpstreamVendorsResponse,
+  VendorBalanceView,
+  VendorConfigView,
 } from '../api/types';
 import {
   Badge,
@@ -81,6 +83,107 @@ function vendorDiscoveryKey(discovery: 'automatic' | 'manual' | 'automatic+overr
 }
 function vendorDiscoveryTone(discovery: 'automatic' | 'manual' | 'automatic+override') {
   return discovery === 'automatic' ? 'accent' as const : discovery === 'automatic+override' ? 'amber' as const : 'muted' as const;
+}
+
+// ---- 上游管理档案（自动发现 + 手工完善；令牌只写不读）----
+interface VendorEditForm {
+  vendor: string;
+  label: string;
+  baseUrl: string;
+  system: 'sub2api' | 'newapi';
+  apiKey: string;
+  userId: string;
+  billingKey: string;
+  balanceDivisor: string | number;
+  panelUrl: string;
+  rechargeUrl: string;
+  note: string;
+  hasApiKey: boolean;
+  hasBillingKey: boolean;
+}
+const vendorEditOpen = ref(false);
+const vendorEditLoading = ref(false);
+const vendorSaving = ref(false);
+const vendorForm = ref<VendorEditForm | null>(null);
+const vendorSystemOptions = computed<SelectOption[]>(() => [
+  { value: 'newapi', label: 'NewAPI' },
+  { value: 'sub2api', label: 'Sub2API' },
+]);
+
+function applyVendorConfig(config: VendorConfigView): void {
+  vendorForm.value = {
+    vendor: config.vendor,
+    label: config.label,
+    baseUrl: config.baseUrl,
+    system: config.system,
+    apiKey: '',
+    userId: config.userId ?? '',
+    billingKey: '',
+    balanceDivisor: config.balanceDivisor,
+    panelUrl: config.panelUrl ?? '',
+    rechargeUrl: config.rechargeUrl ?? '',
+    note: config.note ?? '',
+    hasApiKey: config.hasApiKey,
+    hasBillingKey: config.hasBillingKey,
+  };
+}
+
+async function openVendorEdit(row: VendorBalanceView): Promise<void> {
+  vendorForm.value = {
+    vendor: row.vendor,
+    label: row.label,
+    baseUrl: row.baseUrl,
+    system: row.system === 'newapi' ? 'newapi' : 'sub2api',
+    apiKey: '',
+    userId: '',
+    billingKey: '',
+    balanceDivisor: row.balanceDivisor,
+    panelUrl: row.panelUrl ?? '',
+    rechargeUrl: row.rechargeUrl ?? '',
+    note: row.note ?? '',
+    hasApiKey: false,
+    hasBillingKey: false,
+  };
+  vendorEditOpen.value = true;
+  if (row.discovery === 'automatic') return;
+  vendorEditLoading.value = true;
+  try {
+    applyVendorConfig(await get<VendorConfigView>(`/api/upstream/vendors/${encodeURIComponent(row.vendor)}/config`, { silent: true }));
+  } catch {
+    // 配置可能已被外部清理；保留自动发现数据作为新建表单。
+  } finally {
+    vendorEditLoading.value = false;
+  }
+}
+
+async function saveVendor(): Promise<void> {
+  const form = vendorForm.value;
+  if (!form) return;
+  vendorSaving.value = true;
+  try {
+    const apiKey = form.apiKey.trim();
+    const billingKey = form.billingKey.trim();
+    await put<VendorConfigView>(`/api/upstream/vendors/${encodeURIComponent(form.vendor)}/config`, {
+      label: form.label.trim(),
+      baseUrl: form.baseUrl.trim(),
+      system: form.system,
+      ...(apiKey ? { apiKey } : {}),
+      userId: form.userId.trim(),
+      ...(billingKey ? { billingKey } : {}),
+      balanceDivisor: Number(form.balanceDivisor) || 1,
+      ...(form.panelUrl.trim() ? { panelUrl: form.panelUrl.trim() } : {}),
+      ...(form.rechargeUrl.trim() ? { rechargeUrl: form.rechargeUrl.trim() } : {}),
+      note: form.note.trim(),
+      enabled: true,
+    });
+    toast.success(t('upstream.vendorConfigSaved'));
+    vendorEditOpen.value = false;
+    await loadVendors(true);
+  } catch {
+    // client 已显示后端校验错误；凭据绝不保留在页面外。
+  } finally {
+    vendorSaving.value = false;
+  }
 }
 // 天数格式化直接复用下方已有的 fmtDays（同样 null → '—'，不编造）
 /** 告急家数（用于顶部提示） */
@@ -400,6 +503,32 @@ onMounted(() => {
             </div>
           </div>
           <p v-if="v.note" class="mt-2 truncate text-[11px] text-muted" :title="v.note">{{ v.note }}</p>
+          <div class="mt-3 flex flex-wrap items-center gap-1.5 border-t border-subtle pt-2">
+            <a
+              :href="v.panelUrl || v.baseUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] text-muted transition-colors hover:bg-surface hover:text-text"
+            >
+              <ExternalLink :size="12" /> {{ t('upstream.vendorOpenPanel') }}
+            </a>
+            <a
+              v-if="v.rechargeUrl"
+              :href="v.rechargeUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] text-green-500 transition-colors hover:bg-green-500/10"
+            >
+              <ExternalLink :size="12" /> {{ t('upstream.vendorRecharge') }}
+            </a>
+            <button
+              type="button"
+              class="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] text-muted transition-colors hover:bg-surface hover:text-text"
+              @click="openVendorEdit(v)"
+            >
+              <Settings2 :size="12" /> {{ t('upstream.vendorManage') }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -415,6 +544,68 @@ onMounted(() => {
         }}
       </p>
     </section>
+
+    <Modal
+      v-model:open="vendorEditOpen"
+      :title="t('upstream.vendorEditTitle')"
+      width="720px"
+      :closable="!vendorSaving"
+    >
+      <div v-if="vendorForm" class="space-y-4">
+        <p class="text-xs leading-relaxed text-muted">{{ t('upstream.vendorEditDesc') }}</p>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <Field :label="t('upstream.vendorFieldLabel')"><Input v-model="vendorForm.label" /></Field>
+          <Field :label="t('upstream.vendorFieldSystem')">
+            <Select v-model="vendorForm.system" :options="vendorSystemOptions" />
+          </Field>
+          <Field class="sm:col-span-2" :label="t('upstream.vendorFieldBaseUrl')">
+            <Input v-model="vendorForm.baseUrl" type="url" mono />
+          </Field>
+          <Field :label="t('upstream.vendorFieldToken')">
+            <Input
+              v-model="vendorForm.apiKey"
+              type="password"
+              mono
+              :placeholder="vendorForm.hasApiKey ? t('upstream.vendorSecretKeep') : t('upstream.vendorSecretRequired')"
+            />
+          </Field>
+          <Field :label="t('upstream.vendorFieldUserId')">
+            <Input v-model="vendorForm.userId" mono :placeholder="vendorForm.system === 'newapi' ? t('upstream.vendorUserIdRequired') : t('upstream.vendorOptional')" />
+          </Field>
+          <Field :label="t('upstream.vendorFieldBillingKey')">
+            <Input
+              v-model="vendorForm.billingKey"
+              type="password"
+              mono
+              :placeholder="vendorForm.hasBillingKey ? t('upstream.vendorSecretKeep') : t('upstream.vendorOptional')"
+            />
+          </Field>
+          <Field :label="t('upstream.vendorFieldDivisor')">
+            <Input v-model="vendorForm.balanceDivisor" type="number" />
+          </Field>
+          <Field :label="t('upstream.vendorFieldPanelUrl')">
+            <Input v-model="vendorForm.panelUrl" type="url" :placeholder="t('upstream.vendorOptional')" />
+          </Field>
+          <Field :label="t('upstream.vendorFieldRechargeUrl')">
+            <Input v-model="vendorForm.rechargeUrl" type="url" :placeholder="t('upstream.vendorOptional')" />
+          </Field>
+          <Field class="sm:col-span-2" :label="t('upstream.vendorFieldNote')">
+            <Input v-model="vendorForm.note" :placeholder="t('upstream.vendorNoteAutoHint')" />
+          </Field>
+        </div>
+        <div class="rounded-md border border-subtle bg-surface px-3 py-2 text-[11px] leading-relaxed text-muted">
+          {{ t('upstream.vendorSecretHint') }}
+        </div>
+      </div>
+      <template #footer>
+        <Button variant="ghost" :disabled="vendorSaving" @click="vendorEditOpen = false">
+          {{ t('upstream.rechargeCancel') }}
+        </Button>
+        <Button :loading="vendorSaving || vendorEditLoading" @click="saveVendor">
+          {{ t('upstream.vendorSaveRefresh') }}
+        </Button>
+      </template>
+    </Modal>
 
     <!-- 覆盖度横幅 -->
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

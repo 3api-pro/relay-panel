@@ -7,7 +7,7 @@ import { writeAudit } from '../audit.js';
 import { SitesService, type SitesServiceDeps } from '../sites/service.js';
 import { RECHARGE_LINKS_KEY, buildBalanceOverview, isHttpUrl, readRechargeLinks } from './service.js';
 import { readTrustedUpstreamManifests } from './manifest.js';
-import { listVendorBalances } from './vendors.js';
+import { listVendorBalances, readVendorConfigView, saveVendorConfig, VendorConfigInputError } from './vendors.js';
 
 /**
  * 上游渠道"余额/可用度" + 快捷充值路由（F5，口径风险最高，全部 requireRoot——含上游账户结构/成本，nav 亦 rootOnly）：
@@ -45,6 +45,21 @@ const rechargeLinksBody = z.object({
 const resetQuotaBody = z.object({
   confirm: z.string().min(1).max(200),
   days: z.number().int().min(1).max(90).optional(),
+});
+
+const vendorIdSchema = z.string().min(1).max(160).regex(/^[a-zA-Z0-9._-]+$/);
+const vendorConfigBody = z.object({
+  label: z.string().min(1).max(120),
+  baseUrl: z.string().url().max(2000),
+  system: z.enum(['sub2api', 'newapi']),
+  apiKey: z.string().max(10_000).optional(),
+  userId: z.string().max(200).optional(),
+  billingKey: z.string().max(10_000).optional(),
+  balanceDivisor: z.number().positive().max(10_000).optional(),
+  panelUrl: z.string().url().max(2000).optional(),
+  rechargeUrl: z.string().url().max(2000).optional(),
+  note: z.string().max(500).optional(),
+  enabled: z.boolean().optional(),
 });
 
 export function registerUpstreamRoutes(app: FastifyInstance, deps: SitesServiceDeps): void {
@@ -98,6 +113,54 @@ export function registerUpstreamRoutes(app: FastifyInstance, deps: SitesServiceD
       },
       { force: req.query.force === '1' },
     );
+  });
+
+  // ---- 单个上游档案/余额认证覆盖（仅 root；令牌只写不读）----
+  app.get<{ Params: { vendor: string } }>('/api/upstream/vendors/:vendor/config', async (req) => {
+    const ctx = requireCtx(req);
+    requireRoot(ctx);
+    const vendor = vendorIdSchema.safeParse(req.params.vendor);
+    if (!vendor.success) throw new ApiError(400, '上游标识无效');
+    const config = await readVendorConfigView(
+      { db: deps.db, ...(deps.config.secretKey ? { secretKey: deps.config.secretKey } : {}) },
+      vendor.data,
+    );
+    if (!config) throw new ApiError(404, '该自动发现上游尚未配置手工档案');
+    return config;
+  });
+
+  app.put<{ Params: { vendor: string } }>('/api/upstream/vendors/:vendor/config', async (req) => {
+    const ctx = requireCtx(req);
+    requireRoot(ctx);
+    const vendor = vendorIdSchema.safeParse(req.params.vendor);
+    if (!vendor.success) throw new ApiError(400, '上游标识无效');
+    const parsed = vendorConfigBody.safeParse(req.body);
+    if (!parsed.success) throw new ApiError(400, parsed.error.issues[0]?.message ?? '参数无效');
+    let config;
+    try {
+      config = await saveVendorConfig(
+        { db: deps.db, ...(deps.config.secretKey ? { secretKey: deps.config.secretKey } : {}) },
+        vendor.data,
+        parsed.data,
+      );
+    } catch (error) {
+      if (error instanceof VendorConfigInputError) throw new ApiError(400, error.message);
+      throw error;
+    }
+    await writeAudit(deps.db, {
+      siteId: null,
+      actor: ctx.email,
+      action: 'upstream.vendor_config.set',
+      payload: {
+        vendor: vendor.data,
+        system: parsed.data.system,
+        credentialChanged: Boolean(parsed.data.apiKey?.trim() || parsed.data.billingKey?.trim()),
+        hasPanelUrl: Boolean(parsed.data.panelUrl),
+        hasRechargeUrl: Boolean(parsed.data.rechargeUrl),
+      },
+      ok: true,
+    });
+    return config;
   });
 
   // ---- 充值外链读（仅 root）----

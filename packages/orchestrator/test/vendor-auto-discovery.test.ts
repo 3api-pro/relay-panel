@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import type { SiteUpstreamWalletCandidate } from '../src/sites/service.js';
+import { credentials } from '../src/db/schema.js';
 import {
   buildVendorView,
   normalizeVendorOrigin,
   resolveVendorSources,
+  readVendorConfigView,
+  saveVendorConfig,
   snapshotProbe,
   type VendorConfig,
 } from '../src/upstream/vendors.js';
+import { makeTestDb } from './helpers.js';
 
 function candidate(
   siteSlug: string,
@@ -178,4 +183,45 @@ describe('供应商钱包自动发现与旧配置覆盖', () => {
     expect(normalizeVendorOrigin('https://Example.com:443/v1?q=1#x')).toBe('https://example.com');
     expect(normalizeVendorOrigin('https://user:pass@example.com')).toBeNull();
   });
+
+  it('自动上游可加密保存管理令牌、用户 ID、备注与跳转入口，读取接口绝不回显明文', async () => {
+    const db = await makeTestDb();
+    try {
+      const secretKey = 'vendor-config-test-key';
+      const saved = await saveVendorConfig(
+        { db, secretKey },
+        'auto-api-example-com',
+        {
+          label: 'Apimatou',
+          baseUrl: 'https://example.com',
+          system: 'newapi',
+          apiKey: 'panel-token-test-only',
+          userId: '9527',
+          panelUrl: 'https://example.com/console',
+          rechargeUrl: 'https://example.com/topup',
+          note: '生图主渠道',
+        },
+      );
+      expect(saved).toMatchObject({
+        vendor: 'auto-api-example-com',
+        userId: '9527',
+        hasApiKey: true,
+        panelUrl: 'https://example.com/console',
+        rechargeUrl: 'https://example.com/topup',
+      });
+      expect(JSON.stringify(saved)).not.toContain('panel-token-test-only');
+
+      const row = await db.orm
+        .select({ ciphertext: credentials.ciphertext })
+        .from(credentials)
+        .where(eq(credentials.ref, 'upstream:auto-api-example-com'))
+        .limit(1);
+      expect(row[0]?.ciphertext).not.toContain('panel-token-test-only');
+      const read = await readVendorConfigView({ db, secretKey }, 'auto-api-example-com');
+      expect(read?.hasApiKey).toBe(true);
+      expect(JSON.stringify(read)).not.toContain('panel-token-test-only');
+    } finally {
+      await db.close();
+    }
+  }, 15_000);
 });
