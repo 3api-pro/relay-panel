@@ -71,6 +71,15 @@ function recordOf(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function accountRoutingFamily(account: S2ARawAccount): string {
+  const name = account.name.toLowerCase();
+  if (name.includes('ccmax') || name.includes('cc-max')) return 'claude-cc';
+  if (name.includes('bedrock') || name.includes('awsp')) return 'claude-aws';
+  if (name.includes('codex') || name.includes('gpt')) return 'openai';
+  if (name.includes('m3') || account.type === 'oauth' || account.type === 'setup_token') return 'subscription';
+  return `${account.platform || 'unknown'}-${account.type || 'unknown'}`;
+}
+
 /**
  * 只保留 http(s) origin + path：去尾斜杠、query/hash/userinfo，避免把 URL 内嵌凭据带出 adapter。
  * 非法或非 http(s) 地址不是可探测候选，返回 null。
@@ -767,7 +776,7 @@ export class Sub2apiAdminClient implements EngineAdminClient {
           ...(typeof a.priority === 'number' ? { priority: a.priority } : {}),
           priorityDirection: 'lower' as const,
           ...(typeof a.rate_multiplier === 'number' ? { rateMultiplier: a.rate_multiplier } : {}),
-          ...(Array.isArray(a.group_ids) ? { routingScopes: a.group_ids.map((id) => `group:${id}`) } : {}),
+          ...(Array.isArray(a.group_ids) ? { routingScopes: a.group_ids.map((id) => `group:${id}/${accountRoutingFamily(a)}`) } : {}),
           ...(recordOf(a.credentials)?.model_mapping && typeof recordOf(a.credentials)?.model_mapping === 'object'
             ? { models: Object.keys(recordOf(a.credentials)!.model_mapping as Record<string, unknown>) }
             : {}),
