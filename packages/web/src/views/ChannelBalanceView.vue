@@ -262,11 +262,31 @@ function coverageLabel(c: ChannelRow['coverage']): string {
   if (c === 'estimate') return t('upstream.covEstimate');
   return t('upstream.covNone');
 }
+function routingRoleLabel(row: ChannelRow): string {
+  if (row.routingRole === 'primary') return t('upstream.rolePrimary');
+  if (row.routingRole === 'balanced-primary') return t('upstream.roleBalanced');
+  if (row.routingRole === 'backup') return t('upstream.roleBackup', { n: row.backupRank ?? 1 });
+  if (row.routingRole === 'paused') return t('upstream.rolePaused');
+  return t('upstream.roleUnknown');
+}
+function routingRoleTone(role: ChannelRow['routingRole']): 'green' | 'accent' | 'amber' | 'muted' {
+  if (role === 'primary') return 'green';
+  if (role === 'balanced-primary') return 'accent';
+  if (role === 'backup') return 'amber';
+  return 'muted';
+}
+function fmtRate(n: number | undefined): string {
+  return n === undefined ? '—' : `${n.toFixed(2)}×`;
+}
 
 const columns = computed<TableColumn[]>(() => [
   { key: 'name', label: t('upstream.colChannel') },
   { key: 'site', label: t('upstream.colSite') },
   { key: 'accountType', label: t('upstream.colType'), mono: true },
+  { key: 'routingRole', label: t('upstream.colRoutingRole') },
+  { key: 'rateMultiplier', label: t('upstream.colRate'), align: 'right' },
+  { key: 'priority', label: t('upstream.colPriority'), align: 'right' },
+  { key: 'routingScopes', label: t('upstream.colScope') },
   { key: 'coverage', label: t('upstream.colCoverage') },
   { key: 'quotaLimit', label: t('upstream.colQuota'), align: 'right' },
   { key: 'quotaUsed', label: t('upstream.colUsed'), align: 'right' },
@@ -278,7 +298,11 @@ const columns = computed<TableColumn[]>(() => [
 ]);
 
 const tableRows = computed<Record<string, unknown>[]>(() =>
-  realRows.value.map((r) => ({ ...r, rowKey: `${r.siteSlug}:${r.id}` })),
+  [...realRows.value]
+    .sort((a, b) => a.siteSlug.localeCompare(b.siteSlug)
+      || (a.routingScopes?.join(',') ?? '').localeCompare(b.routingScopes?.join(',') ?? '')
+      || (a.rateMultiplier ?? Number.POSITIVE_INFINITY) - (b.rateMultiplier ?? Number.POSITIVE_INFINITY))
+    .map((r) => ({ ...r, rowKey: `${r.siteSlug}:${r.id}` })),
 );
 
 /** Table 单元格插槽 row 为 Record<string,unknown>，经 unknown 收敛回 ChannelRow */
@@ -713,6 +737,26 @@ onMounted(() => {
           <Badge :tone="coverageTone(asRow(row).coverage)" size="sm">
             {{ coverageLabel(asRow(row).coverage) }}
           </Badge>
+        </template>
+        <template #cell-routingRole="{ row }">
+          <Badge :tone="routingRoleTone(asRow(row).routingRole)" size="sm">
+            {{ routingRoleLabel(asRow(row)) }}
+          </Badge>
+          <Badge v-if="asRow(row).priceOrderOk === false" tone="red" size="sm" class="ml-1">
+            {{ t('upstream.priceOrderBad') }}
+          </Badge>
+        </template>
+        <template #cell-rateMultiplier="{ row }">
+          <span class="tnum font-medium">{{ fmtRate(asRow(row).rateMultiplier) }}</span>
+        </template>
+        <template #cell-priority="{ row }">
+          <span class="tnum">{{ asRow(row).priority ?? '—' }}</span>
+          <span v-if="asRow(row).priority !== undefined" class="ml-1 text-[10px] text-muted">
+            {{ asRow(row).priorityDirection === 'higher' ? '↑' : '↓' }}
+          </span>
+        </template>
+        <template #cell-routingScopes="{ row }">
+          <span class="text-xs text-muted">{{ asRow(row).routingScopes?.join(', ') || '—' }}</span>
         </template>
         <template #cell-quotaLimit="{ row }">
           <span class="tnum">{{ fmtUsd(asRow(row).quotaLimit) }}</span>

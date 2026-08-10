@@ -47,6 +47,8 @@ interface S2ARawAccount {
   type: string;
   status: string;
   priority?: number;
+  rate_multiplier?: number;
+  schedulable?: boolean;
   group_ids?: number[];
   credentials?: Record<string, unknown>;
   extra?: Record<string, unknown>;
@@ -761,6 +763,14 @@ export class Sub2apiAdminClient implements EngineAdminClient {
           name: a.name,
           accountType: a.type,
           enabled: a.status === 'active',
+          schedulable: a.schedulable ?? a.status === 'active',
+          ...(typeof a.priority === 'number' ? { priority: a.priority } : {}),
+          priorityDirection: 'lower' as const,
+          ...(typeof a.rate_multiplier === 'number' ? { rateMultiplier: a.rate_multiplier } : {}),
+          ...(Array.isArray(a.group_ids) ? { routingScopes: a.group_ids.map((id) => `group:${id}`) } : {}),
+          ...(recordOf(a.credentials)?.model_mapping && typeof recordOf(a.credentials)?.model_mapping === 'object'
+            ? { models: Object.keys(recordOf(a.credentials)!.model_mapping as Record<string, unknown>) }
+            : {}),
         };
         if (typeof a.quota_limit === 'number') {
           return {

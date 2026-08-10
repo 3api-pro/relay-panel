@@ -625,6 +625,15 @@ export interface ChannelBalanceView {
   name: string;
   accountType: string;
   enabled: boolean;
+  schedulable?: boolean;
+  priority?: number;
+  priorityDirection?: 'lower' | 'higher';
+  rateMultiplier?: number;
+  routingScopes?: string[];
+  models?: string[];
+  routingRole?: 'primary' | 'balanced-primary' | 'backup' | 'paused' | 'unknown';
+  backupRank?: number;
+  priceOrderOk?: boolean;
   kind: 'quota' | 'window' | 'none';
   /** 覆盖度：exact=有真实额度；estimate=仅窗口估算；none=零覆盖/站点降级 */
   coverage: 'exact' | 'estimate' | 'none';

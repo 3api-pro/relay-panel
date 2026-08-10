@@ -42,6 +42,12 @@ function row(partial: Partial<SiteChannelBalanceRow> & { kind: SiteChannelBalanc
     ...(partial.quotaUsed !== undefined ? { quotaUsed: partial.quotaUsed } : {}),
     ...(partial.windowCostLimit !== undefined ? { windowCostLimit: partial.windowCostLimit } : {}),
     ...(partial.avgDailyCost !== undefined ? { avgDailyCost: partial.avgDailyCost } : {}),
+    ...(partial.schedulable !== undefined ? { schedulable: partial.schedulable } : {}),
+    ...(partial.priority !== undefined ? { priority: partial.priority } : {}),
+    ...(partial.priorityDirection !== undefined ? { priorityDirection: partial.priorityDirection } : {}),
+    ...(partial.rateMultiplier !== undefined ? { rateMultiplier: partial.rateMultiplier } : {}),
+    ...(partial.routingScopes !== undefined ? { routingScopes: partial.routingScopes } : {}),
+    ...(partial.models !== undefined ? { models: partial.models } : {}),
     ...(partial.siteSlug !== undefined ? { siteSlug: partial.siteSlug } : {}),
     ...(partial.siteLabel !== undefined ? { siteLabel: partial.siteLabel } : {}),
     ...(partial.siteOk !== undefined ? { siteOk: partial.siteOk } : {}),
@@ -105,6 +111,25 @@ describe('evaluateChannelLowBalance', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildBalanceOverview', () => {
+  it('按成本标注主备、同价均衡，并识别优先级与价格倒挂', () => {
+    const common = { kind: 'none' as const, routingScopes: ['group:2'], models: ['claude-opus-5'], priorityDirection: 'lower' as const };
+    const rows = [
+      row({ ...common, id: 'cheap-a', rateMultiplier: 0.75, priority: 0 }),
+      row({ ...common, id: 'cheap-b', rateMultiplier: 0.75, priority: 0 }),
+      row({ ...common, id: 'backup', rateMultiplier: 0.95, priority: 30 }),
+      row({ ...common, id: 'paused', rateMultiplier: 0.85, priority: 10, schedulable: false }),
+    ];
+    const byId = new Map(buildBalanceOverview(rows, 0).rows.map((v) => [v.id, v]));
+    expect(byId.get('cheap-a')).toMatchObject({ routingRole: 'balanced-primary', priceOrderOk: true });
+    expect(byId.get('cheap-b')).toMatchObject({ routingRole: 'balanced-primary', priceOrderOk: true });
+    expect(byId.get('backup')).toMatchObject({ routingRole: 'backup', backupRank: 1, priceOrderOk: true });
+    expect(byId.get('paused')).toMatchObject({ routingRole: 'paused' });
+
+    rows[2]!.priority = -1;
+    const bad = buildBalanceOverview(rows, 0).rows.find((v) => v.id === 'backup');
+    expect(bad?.priceOrderOk).toBe(false);
+  });
+
   it('quota 有值路：coverage exact + remaining + daysLeft + 低余额红标', () => {
     const rows = [row({ id: '1', kind: 'quota', quotaLimit: 100, quotaUsed: 95, avgDailyCost: 5 })];
     const ov = buildBalanceOverview(rows, 10);

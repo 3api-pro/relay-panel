@@ -394,6 +394,12 @@ export interface SiteChannelBalanceRow {
   name: string;
   accountType: string;
   enabled: boolean;
+  schedulable?: boolean;
+  priority?: number;
+  priorityDirection?: 'lower' | 'higher';
+  rateMultiplier?: number;
+  routingScopes?: string[];
+  models?: string[];
   kind: 'quota' | 'window' | 'none';
   quotaLimit?: number;
   quotaUsed?: number;
@@ -961,6 +967,12 @@ export class SitesService {
           name: b.name,
           accountType: b.accountType,
           enabled: b.enabled,
+          ...(b.schedulable !== undefined ? { schedulable: b.schedulable } : {}),
+          ...(b.priority !== undefined ? { priority: b.priority } : {}),
+          ...(b.priorityDirection !== undefined ? { priorityDirection: b.priorityDirection } : {}),
+          ...(b.rateMultiplier !== undefined ? { rateMultiplier: b.rateMultiplier } : {}),
+          ...(b.routingScopes !== undefined ? { routingScopes: b.routingScopes } : {}),
+          ...(b.models !== undefined ? { models: b.models } : {}),
           kind: b.kind,
           ...(b.quotaLimit !== undefined ? { quotaLimit: b.quotaLimit } : {}),
           ...(b.quotaUsed !== undefined ? { quotaUsed: b.quotaUsed } : {}),

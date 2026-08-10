@@ -73,6 +73,15 @@ export interface ChannelBalanceView {
   name: string;
   accountType: string;
   enabled: boolean;
+  schedulable?: boolean;
+  priority?: number;
+  priorityDirection?: 'lower' | 'higher';
+  rateMultiplier?: number;
+  routingScopes?: string[];
+  models?: string[];
+  routingRole?: 'primary' | 'balanced-primary' | 'backup' | 'paused' | 'unknown';
+  backupRank?: number;
+  priceOrderOk?: boolean;
   kind: 'quota' | 'window' | 'none';
   /** 覆盖度：exact=有真实额度；estimate=仅窗口估算；none=零覆盖/站点降级 */
   coverage: 'exact' | 'estimate' | 'none';
@@ -107,6 +116,15 @@ export function buildBalanceOverview(rows: SiteChannelBalanceRow[], thresholdUsd
   const degradedSlugs = new Set<string>();
   const views: ChannelBalanceView[] = [];
 
+  const routingFields = (r: SiteChannelBalanceRow) => ({
+    ...(r.schedulable !== undefined ? { schedulable: r.schedulable } : {}),
+    ...(r.priority !== undefined ? { priority: r.priority } : {}),
+    ...(r.priorityDirection !== undefined ? { priorityDirection: r.priorityDirection } : {}),
+    ...(r.rateMultiplier !== undefined ? { rateMultiplier: r.rateMultiplier } : {}),
+    ...(r.routingScopes !== undefined ? { routingScopes: r.routingScopes } : {}),
+    ...(r.models !== undefined ? { models: r.models } : {}),
+  });
+
   for (const r of rows) {
     if (!r.siteOk) {
       // 站点连不上 marker：不产出真渠道行，只登记降级站
@@ -116,6 +134,7 @@ export function buildBalanceOverview(rows: SiteChannelBalanceRow[], thresholdUsd
         name: r.name,
         accountType: r.accountType,
         enabled: r.enabled,
+        ...routingFields(r),
         kind: 'none',
         coverage: 'none',
         daysLeft: null,
@@ -137,6 +156,7 @@ export function buildBalanceOverview(rows: SiteChannelBalanceRow[], thresholdUsd
         name: r.name,
         accountType: r.accountType,
         enabled: r.enabled,
+        ...routingFields(r),
         kind: 'quota',
         coverage: 'exact',
         ...(r.quotaLimit !== undefined ? { quotaLimit: r.quotaLimit } : {}),
@@ -157,6 +177,7 @@ export function buildBalanceOverview(rows: SiteChannelBalanceRow[], thresholdUsd
         name: r.name,
         accountType: r.accountType,
         enabled: r.enabled,
+        ...routingFields(r),
         kind: 'window',
         coverage: 'estimate',
         ...(r.windowCostLimit !== undefined ? { windowCostLimit: r.windowCostLimit } : {}),
@@ -174,6 +195,7 @@ export function buildBalanceOverview(rows: SiteChannelBalanceRow[], thresholdUsd
         name: r.name,
         accountType: r.accountType,
         enabled: r.enabled,
+        ...routingFields(r),
         kind: 'none',
         coverage: 'none',
         ...(r.avgDailyCost !== undefined ? { avgDailyCost: r.avgDailyCost } : {}),
@@ -187,7 +209,44 @@ export function buildBalanceOverview(rows: SiteChannelBalanceRow[], thresholdUsd
   }
 
   coverage.degradedSites = degradedSlugs.size;
+  applyPriceFirstRoutingRoles(views);
   return { coverage, rows: views };
+}
+
+function applyPriceFirstRoutingRoles(rows: ChannelBalanceView[]): void {
+  const active = rows.filter((r) => r.siteOk && r.enabled && r.schedulable !== false);
+  const overlaps = (a: ChannelBalanceView, b: ChannelBalanceView): boolean => {
+    if (a.siteSlug !== b.siteSlug) return false;
+    const scopesA = a.routingScopes ?? [];
+    const scopesB = b.routingScopes ?? [];
+    if (scopesA.length > 0 && scopesB.length > 0 && !scopesA.some((v) => scopesB.includes(v))) return false;
+    const modelsA = a.models ?? [];
+    const modelsB = b.models ?? [];
+    return modelsA.length === 0 || modelsB.length === 0 || modelsA.some((v) => modelsB.includes(v));
+  };
+  const isBetterPriority = (a: ChannelBalanceView, b: ChannelBalanceView): boolean =>
+    a.priorityDirection === 'higher' ? (a.priority ?? 0) > (b.priority ?? 0) : (a.priority ?? 0) < (b.priority ?? 0);
+
+  for (const row of rows) {
+    if (!row.siteOk) continue;
+    if (!row.enabled || row.schedulable === false) {
+      row.routingRole = 'paused';
+      continue;
+    }
+    const peers = active.filter((p) => overlaps(row, p) && p.rateMultiplier !== undefined);
+    if (row.rateMultiplier === undefined || peers.length === 0) {
+      row.routingRole = 'unknown';
+      continue;
+    }
+    const rates = [...new Set(peers.map((p) => p.rateMultiplier!))].sort((a, b) => a - b);
+    const rank = rates.indexOf(row.rateMultiplier);
+    const cheapest = peers.filter((p) => p.rateMultiplier === rates[0]);
+    row.routingRole = rank === 0 ? (cheapest.length > 1 ? 'balanced-primary' : 'primary') : 'backup';
+    if (rank > 0) row.backupRank = rank;
+    const cheaper = peers.filter((p) => p.rateMultiplier! < row.rateMultiplier!);
+    const pricier = peers.filter((p) => p.rateMultiplier! > row.rateMultiplier!);
+    row.priceOrderOk = !cheaper.some((p) => !isBetterPriority(p, row)) && !pricier.some((p) => !isBetterPriority(row, p));
+  }
 }
 
 // ---------------------------------------------------------------------------

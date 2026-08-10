@@ -258,6 +258,18 @@ export interface ChannelBalance {
   /** 引擎账户 type 原样字符串（apikey/bedrock/oauth/setup_token…） */
   accountType: string;
   enabled: boolean;
+  /** 实际调度开关；缺省时与 enabled 相同。 */
+  schedulable?: boolean;
+  /** 引擎原始优先级。 */
+  priority?: number;
+  /** sub2api 数字越小越优先；newapi 数字越大越优先。 */
+  priorityDirection?: 'lower' | 'higher';
+  /** 采购成本倍率，仅用于路由审计和展示。 */
+  rateMultiplier?: number;
+  /** 路由作用域，例如 sub2api group id 或 newapi group 名。 */
+  routingScopes?: string[];
+  /** 脱敏后的模型清单。 */
+  models?: string[];
   /** 余额口径：quota=真实额度上限；window=仅窗口成本闸(非余额)；none=零覆盖 */
   kind: 'quota' | 'window' | 'none';
   /** kind='quota' 时的额度上限(USD，管理员手配) */

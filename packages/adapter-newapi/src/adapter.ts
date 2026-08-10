@@ -13,6 +13,7 @@ import type {
   SiteBranding,
   SiteUserRecord,
   UpstreamWalletCandidate,
+  ChannelBalance,
   UsageSummary,
 } from '@relay-panel/adapter-core';
 import { NewapiHttp, type NewapiAuth, type PageInfo } from './http.js';
@@ -45,6 +46,14 @@ interface NaChannel {
   priority?: number;
   weight?: number;
   model_mapping?: string;
+  remark?: string;
+}
+
+function parseCostMultiplier(remark: string | undefined): number | undefined {
+  const match = remark?.match(/(?:^|[;,\s])cost_multiplier\s*=\s*(\d+(?:\.\d+)?)/i);
+  if (!match) return undefined;
+  const value = Number(match[1]);
+  return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 interface NaUser {
@@ -392,6 +401,25 @@ export class NewapiAdminClient implements EngineAdminClient {
         });
       }
       return out;
+    },
+    channelBalances: async (): Promise<ChannelBalance[]> => {
+      const channels = await this.http.listAll<NaChannel>('/api/channel/');
+      return channels.map((channel) => {
+        const rateMultiplier = parseCostMultiplier(channel.remark);
+        return {
+          id: String(channel.id),
+          name: channel.name,
+          accountType: `newapi:${channel.type}`,
+          enabled: channel.status === 1,
+          schedulable: channel.status === 1,
+          kind: 'none' as const,
+          ...(typeof channel.priority === 'number' ? { priority: channel.priority } : {}),
+          priorityDirection: 'higher' as const,
+          ...(rateMultiplier !== undefined ? { rateMultiplier } : {}),
+          routingScopes: (channel.group ?? 'default').split(',').map((v) => v.trim()).filter(Boolean),
+          models: (channel.models ?? '').split(',').map((v) => v.trim()).filter(Boolean),
+        };
+      });
     },
   };
 
