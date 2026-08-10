@@ -219,7 +219,10 @@ function applyPriceFirstRoutingRoles(rows: ChannelBalanceView[]): void {
     if (a.siteSlug !== b.siteSlug) return false;
     const scopesA = a.routingScopes ?? [];
     const scopesB = b.routingScopes ?? [];
-    if (scopesA.length > 0 && scopesB.length > 0 && !scopesA.some((v) => scopesB.includes(v))) return false;
+    // 无挂载组的渠道不是所有路由的“全局同行”，否则会把孤立的
+    // Codex/GPT 渠道误算进 Claude CC/AWS 的价格链。
+    if (scopesA.length === 0 || scopesB.length === 0) return scopesA.length === 0 && scopesB.length === 0;
+    if (!scopesA.some((v) => scopesB.includes(v))) return false;
     const modelsA = a.models ?? [];
     const modelsB = b.models ?? [];
     return modelsA.length === 0 || modelsB.length === 0 || modelsA.some((v) => modelsB.includes(v));
