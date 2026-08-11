@@ -1,6 +1,6 @@
 {
   "name": "@relay-panel/adapter-newapi",
-  "version": "2.1.0-beta.1",
+  "version": "2.1.0",
   "type": "module",
   "license": "MIT",
   "main": "dist/index.js",
