@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, reactive, ref, watch, type ComputedRef } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { fmtCash } from '../components/finance/format-cash';
 import {
   Activity,
   CircleDollarSign,
@@ -222,22 +223,6 @@ function marginPct(revenue: number, profit: number | null): string {
   return `${((profit / revenue) * 100).toFixed(1)}%`;
 }
 /** 充值现金按实际支付币种分别展示，绝不把 CNY/USD 等不同币种直接相加。 */
-function fmtCash(amounts: Record<string, number> | null): string {
-  if (amounts === null) return '—';
-  const entries = Object.entries(amounts)
-    .filter(([, amount]) => Number.isFinite(amount))
-    .sort(([a], [b]) => (a === 'CNY' ? -1 : b === 'CNY' ? 1 : a.localeCompare(b)));
-  if (entries.length === 0) return '¥0';
-  return entries
-    .map(([currency, amount]) =>
-      new Intl.NumberFormat(currency === 'CNY' ? 'zh-CN' : 'en-US', {
-        style: 'currency',
-        currency,
-        maximumFractionDigits: 2,
-      }).format(amount),
-    )
-    .join(' · ');
-}
 function marginClass(n: number | null): string {
   if (n === null) return 'text-muted';
   if (n > 0) return 'text-green';

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { fmtCash } from './format-cash';
 import type { FinanceTrendPoint } from '../../api/types';
 
 /**
@@ -110,22 +111,6 @@ function fmtMoney(v: number): string {
   const a = Math.abs(v);
   const digits = a > 0 && a < 1 ? 4 : 2;
   return `${v < 0 ? '-' : ''}$${a.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
-}
-function fmtCash(amounts: Record<string, number> | null): string {
-  if (amounts === null) return '—';
-  const entries = Object.entries(amounts)
-    .filter(([, amount]) => Number.isFinite(amount))
-    .sort(([a], [b]) => (a === 'CNY' ? -1 : b === 'CNY' ? 1 : a.localeCompare(b)));
-  if (entries.length === 0) return '¥0';
-  return entries
-    .map(([currency, amount]) =>
-      new Intl.NumberFormat(currency === 'CNY' ? 'zh-CN' : 'en-US', {
-        style: 'currency',
-        currency,
-        maximumFractionDigits: 2,
-      }).format(amount),
-    )
-    .join(' · ');
 }
 function fmtInt(v: number): string {
   return (v ?? 0).toLocaleString('en-US');
