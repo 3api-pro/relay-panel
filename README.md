@@ -38,6 +38,10 @@ relay-panel collapses that into one control plane:
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+## v2.7.0: Passive budgets and threshold alerts
+
+Track daily, weekly and monthly budgets from existing consumption logs, scoped to a site, channel or model. Reports distinguish missing amounts, scan coverage and observed threshold crossings. Versioned events, optional owner notifications, one-time review notes and daily CSV exports preserve the evidence. These policies never probe models, stop channels, change balances or enforce engine limits.
+
 ## v2.6.0: Customer knowledge and model capability records
 
 Publish setup guides, FAQs, runbooks and model capability records from a site-scoped knowledge workspace. Drafts and immutable history remain private; owners preview and publish a separate snapshot, restore old versions as new drafts, or revoke public access. Model support requires dated human evidence, with untested capabilities shown as unknown; the panel sends no inference probes.
