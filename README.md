@@ -38,6 +38,10 @@ relay-panel collapses that into one control plane:
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+## v2.13.2: Service workspace interaction safety
+
+The service center serializes interactions while loading or saving. A slow case response cannot replace another selection, site changes clear the previous notice before loading, and editing notice content requires a new preview before publication. These are browser workflow fixes; no database migration or engine call is added.
+
 ## v2.13.1: Independent workspaces in browser tabs
 
 Each browser tab retains its selected workspace. Switching teams in another tab no longer changes the tenant used by an already-open form or export. JSON and download requests share the same page context and session error handling. Selections are bound to the signed-in account and cleared on login/logout; blocked browser storage prevents switching instead of silently falling back.
