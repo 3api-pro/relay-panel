@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { setUnauthorizedHandler } from './api/client';
 import { session } from './api/session';
+import { canVisit, canonicalPath } from './navigation';
 import Shell from './layouts/Shell.vue';
 import LoginView from './views/LoginView.vue';
 import OverviewView from './views/OverviewView.vue';
@@ -47,6 +48,9 @@ const routes: RouteRecordRaw[] = [
       { path: 'jobs', component: () => import('./views/JobsView.vue'), meta: { title: '任务' } },
       { path: 'operators', component: () => import('./views/OperatorsView.vue'), meta: { title: '操作员' } },
       { path: 'billing', component: () => import('./views/BillingView.vue'), meta: { title: '计费' } },
+      { path: 'admin/billing', component: () => import('./views/BillingView.vue'), meta: { title: '订阅与收款' } },
+      { path: 'admin/marketplace', component: () => import('./views/MarketplaceView.vue'), meta: { title: '渠道市场管理' } },
+      { path: 'admin/settings', component: () => import('./views/SettingsView.vue'), props: { section: 'platform' }, meta: { title: '平台设置' } },
       { path: 'batch', component: () => import('./views/BatchView.vue'), meta: { title: '批量操作' } },
       { path: 'help', component: () => import('./views/HelpView.vue'), meta: { title: '帮助与支持' } },
       { path: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: '设置' } },
@@ -85,6 +89,9 @@ router.beforeEach(async (to) => {
     if (to.path === '/') return { path: '/welcome' };
     return { path: '/login', query: { redirect: to.fullPath } };
   }
+  if (!canVisit(me.role, to.path)) return { path: '/', replace: true };
+  const path = canonicalPath(me.role, to.path);
+  if (path !== to.path) return { path, query: to.query, hash: to.hash, replace: true };
   return true;
 });
 

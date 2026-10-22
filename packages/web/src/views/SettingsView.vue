@@ -13,6 +13,8 @@ import { Badge, Button, Card, EmptyState, Field, Input, Skeleton, toast } from '
  */
 
 const { t } = useI18n();
+const props = withDefaults(defineProps<{ section?: 'account' | 'platform' }>(), { section: 'account' });
+const platform = computed(() => props.section === 'platform' && session.isRoot.value);
 
 const isRoot = session.isRoot;
 
@@ -26,7 +28,7 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
-  if (isRoot.value) await loadReportConfig();
+  if (platform.value) await loadReportConfig();
 });
 
 const me = computed<Me | null>(() => session.state.user);
@@ -179,6 +181,10 @@ async function sendTestReport(): Promise<void> {
 
 <template>
   <div class="rp-page space-y-5">
+    <div v-if="platform" class="space-y-1">
+      <h2 class="text-lg font-semibold">{{ t('nav.platformSettings') }}</h2>
+      <p class="text-sm text-muted">{{ t('nav.platformSettingsDescription') }}</p>
+    </div>
     <div v-if="loading" class="rp-panel p-4">
       <Skeleton :lines="3" />
     </div>
@@ -189,7 +195,7 @@ async function sendTestReport(): Promise<void> {
 
     <div v-else class="grid grid-cols-1 gap-5 lg:grid-cols-2">
       <!-- 修改密码 -->
-      <Card>
+      <Card v-if="!platform">
         <template #title>
           <span class="flex items-center gap-2">
             <KeyRound :size="15" class="text-muted" /> {{ t('settings.changePassword') }}
@@ -215,9 +221,9 @@ async function sendTestReport(): Promise<void> {
         </form>
       </Card>
 
-      <div class="space-y-5">
+      <div :class="platform ? 'contents' : 'space-y-5'">
         <!-- 账户信息 -->
-        <Card>
+        <Card v-if="!platform">
           <template #title>
             <span class="flex items-center gap-2">
               <UserRound :size="15" class="text-muted" /> {{ t('settings.accountInfo') }}
@@ -243,7 +249,7 @@ async function sendTestReport(): Promise<void> {
         </Card>
 
         <!-- root：实例配置摘要 -->
-        <Card v-if="isRoot">
+        <Card v-if="platform">
           <template #title>
             <span class="flex items-center gap-2">
               <ServerCog :size="15" class="text-muted" /> {{ t('settings.instanceConfig') }}
@@ -271,7 +277,7 @@ async function sendTestReport(): Promise<void> {
         </Card>
 
         <!-- root：经营报告配置（F2） -->
-        <Card v-if="isRoot">
+        <Card v-if="platform">
           <template #title>
             <span class="flex items-center gap-2">
               <LineChart :size="15" class="text-muted" /> {{ t('settings.report.title') }}

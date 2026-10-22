@@ -600,8 +600,12 @@ async function doCancel(): Promise<void> {
 
 <template>
   <div class="rp-page space-y-5">
-    <!-- 我的套餐 -->
-    <section class="rp-panel overflow-hidden">
+    <div v-if="isRoot" class="space-y-1">
+      <h2 class="text-lg font-semibold">{{ t('nav.platformBilling') }}</h2>
+      <p class="text-sm text-muted">{{ t('nav.platformBillingDescription') }}</p>
+    </div>
+    <!-- 站长个人订阅；管理员从平台收费管理进入 -->
+    <section v-if="!isRoot" class="rp-panel overflow-hidden">
       <header class="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 class="text-[13px] font-semibold">{{ t('billing.myPlan') }}</h2>
       </header>

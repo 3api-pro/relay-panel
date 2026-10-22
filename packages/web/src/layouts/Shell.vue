@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed, provide, type Component } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch, type Component } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import {
   Bell,
+  Menu,
+  X,
+  ShieldCheck,
   BookOpen,
   CreditCard,
   Layers,
@@ -21,6 +24,7 @@ import {
   Wallet,
 } from 'lucide-vue-next';
 import { session } from '../api/session';
+import { navigationFor, type NavigationItem } from '../navigation';
 import Badge from '../components/ui/Badge.vue';
 import ThemeToggle from '../components/ThemeToggle.vue';
 import LanguageSwitcher from '../components/LanguageSwitcher.vue';
@@ -36,34 +40,62 @@ const { t } = useI18n();
 
 provide('canWrite', session.canWrite);
 
-interface NavItem {
-  to: string;
-  key: string; // i18n key: nav.<key>
-  icon: Component;
-  rootOnly?: boolean;
+const icons: Record<string, Component> = {
+  overview: LayoutDashboard, finance: TrendingUp, upstream: Wallet, sites: Server,
+  batch: Layers, marketplace: Store, ledger: BookOpen, alerts: Bell, risk: ShieldAlert,
+  customers: UserRound, jobs: ListChecks, operators: Users, billing: CreditCard,
+  settings: Settings, account: UserRound, help: LifeBuoy,
+};
+const navGroups = computed(() => navigationFor(session.state.user?.role ?? 'operator'));
+const navItems = computed(() => navGroups.value.flatMap(g => g.items));
+const mainGroups = computed(() => navGroups.value.filter(g => g.key !== 'groupAccount'));
+const accountItems = computed(() => navGroups.value.find(g => g.key === 'groupAccount')?.items ?? []);
+const activeGroup = computed(() => navGroups.value.find(g => g.items.some(isActive)));
+const mobileOpen = ref(false);
+const isMobile = ref(false);
+const rail = ref<HTMLElement | null>(null);
+const menuButton = ref<HTMLButtonElement | null>(null);
+let media: MediaQueryList | undefined;
+let previousOverflow = '';
+function syncViewport(): void {
+  isMobile.value = media?.matches ?? false;
+  if (!isMobile.value) mobileOpen.value = false;
 }
+async function closeMenu(restoreFocus = true): Promise<void> {
+  mobileOpen.value = false;
+  if (restoreFocus) await nextTick(() => menuButton.value?.focus());
+}
+function onRailKeydown(event: KeyboardEvent): void {
+  if (!isMobile.value || !mobileOpen.value) return;
+  if (event.key === 'Escape') { event.preventDefault(); void closeMenu(); }
+  if (event.key !== 'Tab') return;
+  const links = rail.value?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])');
+  if (!links?.length) return;
+  const first = links[0]!;
+  const last = links[links.length - 1]!;
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+}
+watch(mobileOpen, async open => {
+  if (open) {
+    previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    await nextTick();
+    rail.value?.querySelector<HTMLElement>('button, a[href]')?.focus();
+  } else document.body.style.overflow = previousOverflow;
+});
+watch(() => route.fullPath, () => { void closeMenu(false); });
+onMounted(() => {
+  media = window.matchMedia('(max-width: 1023px)');
+  syncViewport();
+  media.addEventListener('change', syncViewport);
+});
+onBeforeUnmount(() => {
+  media?.removeEventListener('change', syncViewport);
+  if (mobileOpen.value) document.body.style.overflow = previousOverflow;
+});
 
-const NAV: NavItem[] = [
-  { to: '/', key: 'overview', icon: LayoutDashboard },
-  { to: '/finance', key: 'finance', icon: TrendingUp },
-  { to: '/upstream', key: 'upstream', icon: Wallet, rootOnly: true },
-  { to: '/sites', key: 'sites', icon: Server },
-  { to: '/batch', key: 'batch', icon: Layers },
-  { to: '/marketplace', key: 'marketplace', icon: Store },
-  { to: '/ledger', key: 'ledger', icon: BookOpen },
-  { to: '/alerts', key: 'alerts', icon: Bell },
-  { to: '/risk', key: 'risk', icon: ShieldAlert, rootOnly: true },
-  { to: '/customers', key: 'customers', icon: UserRound, rootOnly: true },
-  { to: '/jobs', key: 'jobs', icon: ListChecks },
-  { to: '/operators', key: 'operators', icon: Users, rootOnly: true },
-  { to: '/billing', key: 'billing', icon: CreditCard },
-  { to: '/settings', key: 'settings', icon: Settings },
-  { to: '/help', key: 'help', icon: LifeBuoy },
-];
-
-const navItems = computed(() => NAV.filter((n) => !n.rootOnly || session.isRoot.value));
-
-function isActive(item: NavItem): boolean {
+function isActive(item: NavigationItem): boolean {
   if (item.to === '/') return route.path === '/';
   return route.path === item.to || route.path.startsWith(`${item.to}/`);
 }
@@ -98,38 +130,50 @@ async function onLogout(): Promise<void> {
 
 <template>
   <div class="flex min-h-screen">
-    <!-- 侧边导航轨（玻璃） -->
-    <aside class="rp-rail fixed inset-y-0 left-0 z-40 flex w-[224px] flex-col">
-      <!-- 品牌字标 -->
-      <RouterLink to="/" class="flex h-14 items-center gap-2 border-b border-[var(--glass-border)] px-5">
-        <span class="text-[15px] font-semibold tracking-tight">
-          relay<span class="text-accent">/</span>panel
-        </span>
-      </RouterLink>
-
-      <nav class="flex-1 space-y-0.5 overflow-y-auto px-2.5 py-3">
-        <RouterLink
-          v-for="item in navItems"
-          :key="item.to"
-          :to="item.to"
-          class="group relative flex items-center gap-2.5 rounded-[11px] px-2.5 py-[7px] text-[13px] transition-all duration-200"
-          :class="
-            isActive(item)
-              ? 'rp-nav-active font-medium text-text'
-              : 'text-muted hover:bg-panel-2/50 hover:text-text'
-          "
-        >
-          <!-- 活跃指示条 -->
-          <span
-            v-if="isActive(item)"
-            class="absolute -left-2.5 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-accent shadow-[0_0_8px_var(--color-accent)]"
-          />
-          <component
-            :is="item.icon"
-            :size="15"
-            :class="isActive(item) ? 'text-accent' : 'text-muted/80 group-hover:text-muted'"
-          />
-          {{ t(`nav.${item.key}`) }}
+    <a href="#main-content" class="rp-skip-link">{{ t('nav.skipToContent') }}</a>
+    <div v-if="mobileOpen" class="fixed inset-0 z-40 bg-black/45 backdrop-blur-sm lg:hidden" aria-hidden="true" @click="closeMenu()" />
+    <aside
+      id="primary-navigation" ref="rail"
+      class="rp-rail fixed inset-y-0 left-0 z-50 flex w-[248px] flex-col"
+      :class="{ 'rp-rail-open': mobileOpen }"
+      :role="isMobile && mobileOpen ? 'dialog' : undefined"
+      :aria-modal="isMobile && mobileOpen ? true : undefined"
+      :aria-label="t('nav.navigation')"
+      @keydown="onRailKeydown"
+    >
+      <div class="flex h-16 shrink-0 items-center justify-between px-5">
+        <RouterLink to="/" class="text-[16px] font-semibold tracking-tight">relay<span class="text-accent">/</span>panel</RouterLink>
+        <button class="rounded-lg p-2 text-muted lg:hidden" :aria-label="t('nav.closeMenu')" @click="closeMenu()"><X :size="18" /></button>
+      </div>
+      <div class="mx-3 mb-2 flex items-center gap-2.5 rounded-xl border border-[var(--glass-border)] bg-panel-2/50 px-3 py-2.5">
+        <ShieldCheck v-if="isRoot" :size="17" class="shrink-0 text-accent" />
+        <Server v-else :size="17" class="shrink-0 text-accent" />
+        <div class="min-w-0">
+          <p class="text-xs font-semibold">{{ t(isRoot ? 'nav.adminWorkspace' : user?.role === 'viewer' ? 'nav.viewerWorkspace' : 'nav.userWorkspace') }}</p>
+          <p class="mt-0.5 text-[10px] text-muted">{{ t(isRoot ? 'nav.adminScope' : user?.role === 'viewer' ? 'nav.viewerScope' : 'nav.userScope') }}</p>
+        </div>
+      </div>
+      <nav class="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3" :aria-label="t('nav.navigation')">
+        <section v-for="group in mainGroups" :key="group.key" :aria-labelledby="`nav-${group.key}`">
+          <h2 :id="`nav-${group.key}`" class="mb-1.5 px-2.5 text-[10px] font-semibold tracking-wide text-muted/70">{{ t(`nav.${group.key}`) }}</h2>
+          <RouterLink
+            v-for="item in group.items" :key="item.to" :to="item.to"
+            class="rp-nav-link group relative mb-0.5 flex min-h-9 items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-[13px] transition-colors"
+            :class="isActive(item) ? 'rp-nav-active font-medium text-text' : 'text-muted hover:bg-panel-2/60 hover:text-text'"
+            :aria-current="isActive(item) ? 'page' : undefined"
+            @click="closeMenu(false)"
+          >
+            <component :is="icons[item.icon]" :size="15" class="shrink-0" :class="isActive(item) ? 'text-accent' : 'text-muted/80'" />
+            {{ t(`nav.${item.key}`) }}
+          </RouterLink>
+        </section>
+      </nav>
+      <nav class="space-y-0.5 border-t border-[var(--glass-border)] px-3 py-2" :aria-label="t('nav.groupAccount')">
+        <RouterLink v-for="item in accountItems" :key="item.to" :to="item.to"
+          class="rp-nav-link flex min-h-9 items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-[13px]"
+          :class="isActive(item) ? 'rp-nav-active text-text' : 'text-muted hover:bg-panel-2/60 hover:text-text'"
+          :aria-current="isActive(item) ? 'page' : undefined" @click="closeMenu(false)">
+          <component :is="icons[item.icon]" :size="15" />{{ t(`nav.${item.key}`) }}
         </RouterLink>
       </nav>
 
@@ -159,21 +203,28 @@ async function onLogout(): Promise<void> {
     </aside>
 
     <!-- 主区 -->
-    <div class="flex min-w-0 flex-1 flex-col pl-[224px]">
+    <div class="flex min-w-0 flex-1 flex-col lg:pl-[248px]" :inert="isMobile && mobileOpen ? true : undefined">
       <!-- 顶栏（玻璃条，sticky，背景透过） -->
-      <header class="rp-topbar sticky top-0 z-30 flex h-14 items-center justify-between gap-3 px-6">
-        <h1 class="truncate text-sm font-semibold">{{ pageTitle }}</h1>
+      <header class="rp-topbar sticky top-0 z-30 flex min-h-16 items-center justify-between gap-2 px-4 sm:px-6">
+        <div class="flex min-w-0 items-center gap-2">
+          <button ref="menuButton" type="button" class="shrink-0 rounded-lg p-2 text-muted hover:bg-panel-2 lg:hidden"
+            :aria-label="t('nav.openMenu')" :aria-expanded="mobileOpen" aria-controls="primary-navigation" @click="mobileOpen = true"><Menu :size="20" /></button>
+          <div class="min-w-0">
+            <p class="text-[10px] text-muted">{{ activeGroup ? t(`nav.${activeGroup.key}`) : '' }}</p>
+            <h1 class="truncate text-sm font-semibold">{{ pageTitle }}</h1>
+          </div>
+        </div>
         <div class="flex items-center gap-2">
-          <span class="hidden max-w-[220px] truncate text-xs text-muted sm:inline">{{ user?.email }}</span>
+          <span class="hidden max-w-[220px] truncate text-xs text-muted xl:inline">{{ user?.email }}</span>
           <div class="mx-1 hidden h-4 w-px bg-[var(--glass-border)] sm:block" />
           <!-- 版本徽章：仅 root（部署者）可见，有新版发行时琥珀提示 -->
-          <VersionBadge v-if="isRoot" />
+          <VersionBadge v-if="isRoot" class="hidden sm:block" />
           <LanguageSwitcher />
           <ThemeToggle />
         </div>
       </header>
 
-      <main class="min-w-0 flex-1 px-6 py-5">
+      <main id="main-content" tabindex="-1" class="min-w-0 flex-1 px-4 py-5 outline-none sm:px-6">
         <RouterView v-slot="{ Component: ViewComponent }">
           <component :is="ViewComponent" :key="route.path" class="rp-page" />
         </RouterView>
@@ -206,4 +257,12 @@ async function onLogout(): Promise<void> {
   border: 1px solid var(--glass-border);
   box-shadow: inset 0 1px 0 0 var(--glass-highlight);
 }
+.rp-nav-link:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.rp-skip-link { position: fixed; top: -100px; left: 1rem; z-index: 100; padding: 0.75rem 1rem; background: var(--color-panel); color: var(--color-text); }
+.rp-skip-link:focus { top: 1rem; }
+@media (max-width: 1023px) {
+  .rp-rail { transform: translateX(-100%); visibility: hidden; transition: transform 180ms ease, visibility 180ms; width: min(288px, 85vw); background: var(--color-panel); }
+  .rp-rail-open { transform: translateX(0); visibility: visible; }
+}
+@media (prefers-reduced-motion: reduce) { .rp-rail { transition: none; } }
 </style>
