@@ -105,17 +105,15 @@ const app = await buildServer(
 
 if (migrated.length > 0) app.log.info(`migrations applied: ${migrated.join(', ')}`);
 
-// 崩溃恢复：起 worker 前先回收上次重启遗留的 running 僵尸任务，否则其占据 enqueue
-// 去重（queued/running）导致对应 slug 一律 409、站点无法升级/启停/销毁而彻底卡死。
-// 显式 await 保证在 app.listen 开始接请求前完成（start() 内部亦有兜底回收，幂等无害）。
+// Attach job-result alerts before boot reconciliation so interrupted jobs are also reported.
+// monitorIntervalMs=0 disables polling but keeps the job completion callback.
+const monitor = startMonitor({ config, db, adapters, notifier, jobs }, config.monitorIntervalMs);
+
+// Only expired executions become uncertain; another live worker keeps its lease and site fence.
 const recovered = await jobs.reconcileOrphans();
-if (recovered > 0) app.log.warn(`reconciled ${recovered} orphaned running job(s) on boot`);
+if (recovered > 0) app.log.warn(`${recovered} lifecycle job(s) require manual review`);
 
 jobs.start();
-
-// G3: 告警监控。monitorIntervalMs=0 时不起轮询定时器；startMonitor 内部把 jobs.onFinish
-// 挂上 job_failed 告警，故即便巡检关闭，任务失败告警仍生效
-const monitor = startMonitor({ config, db, adapters, notifier, jobs }, config.monitorIntervalMs);
 
 // G2: 账本网关拉取循环（网关已配置且周期 > 0 时启动；启动即先拉一轮）
 const stopLedgerPull =
@@ -176,7 +174,7 @@ async function shutdown(): Promise<void> {
   financeReports?.stop();
   billingSweep?.stop();
   monitor.stop();
-  jobs.stop();
+  await jobs.shutdown();
   await app.close().catch(() => undefined);
   await db.close().catch(() => undefined);
   process.exit(0);

@@ -1,45 +1,19 @@
+import { randomUUID } from 'node:crypto';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { jobs, type JobRow, type JobStep } from '../db/schema.js';
-
-/**
- * 任务引擎（规格 §5）。
- * engine 不 import 任何 lifecycle/adapter —— handler 由外部（SitesService，G1）经
- * registerHandler 注册，保持可单测（测试注册 fake handler）。
- */
+import { executionScope, JobOwnershipLost, liveLease, lockScheduler } from './execution.js';
 
 export type JobKind = 'provision' | 'upgrade' | 'start' | 'stop' | 'destroy';
-
-/** handler 里上报进度：追加一条 step（detail 入库前过文本脱敏） */
 export type OnStep = (step: string, status: string, detail?: string) => Promise<void>;
-
 export type JobHandler = (job: JobRow, onStep: OnStep) => Promise<void>;
-
-/** 任务到达终态（succeeded/failed）后的回调；alerts 引擎用它出 job_failed 告警 */
 export type JobFinishCallback = (job: JobRow) => void | Promise<void>;
-
-export interface JobEngineOptions {
-  onFinish?: JobFinishCallback;
-}
-
-export interface HttpError extends Error {
-  statusCode: number;
-}
-
-function httpError(statusCode: number, message: string): HttpError {
-  const err = new Error(message) as HttpError;
-  err.statusCode = statusCode;
-  return err;
-}
-
-/** 全局同时在跑的 job 上限 */
+export interface JobEngineOptions { onFinish?: JobFinishCallback }
+export interface HttpError extends Error { statusCode: number }
+function httpError(statusCode: number, message: string): HttpError { return Object.assign(new Error(message), {statusCode}); }
 const GLOBAL_CONCURRENCY = 2;
-
-/**
- * 文本级脱敏：audit.redact() 只按对象 key 打码，而 step detail / error message 是
- * 自由文本，可能内嵌 "password=xxx"、"token: yyy" 之类的键值对或裸 key。
- * 敏感词表与 audit.ts 的 SENSITIVE_KEY_RE 同一语义，宁可多杀不可漏。
- */
+const LEASE_SECONDS = 60;
+const UNCERTAIN_MESSAGE = '执行进程失联或已停止，实际结果未知；请先停止旧进程及其子进程并核对现场，再复核解除占用。';
 const SENSITIVE_KV_RE =
   /\b((?:api[-_]?key|access[-_]?key|secret|password|passwd|pwd|token|credentials?|authorization|key)\b["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;&]+)/gi;
 const BARE_KEY_RE = /\bsk-[A-Za-z0-9_-]{8,}\b/g;
@@ -53,209 +27,116 @@ function errorMessage(err: unknown): string {
 }
 
 export class JobEngine {
-  /** 终态回调，可随时挂载/替换（G3 alerts 在 index.ts 装配时挂） */
   onFinish: JobFinishCallback | null = null;
-
-  private readonly db: Db;
   private readonly handlers = new Map<JobKind, JobHandler>();
-  /** 在跑 job 的执行 promise（id → promise）；size 即当前并发数 */
   private readonly executions = new Map<number, Promise<void>>();
-  /** 已派发（含 DB 状态尚未刷成 running 的瞬间），tick 重入时防止重复派发 */
-  private readonly dispatchedIds = new Set<number>();
-  /** 在跑 slug —— 同 slug 串行的唯一依据 */
-  private readonly runningSlugs = new Set<string>();
+  private readonly controllers = new Map<number, AbortController>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private ticking = false;
+  private closing = false;
+  constructor(private readonly db: Db, opts: JobEngineOptions = {}) { this.onFinish=opts.onFinish??null; }
+  registerHandler(kind: JobKind, handler: JobHandler): void { this.handlers.set(kind,handler); }
+  get runningCount(): number { return this.executions.size; }
 
-  constructor(db: Db, opts: JobEngineOptions = {}) {
-    this.db = db;
-    if (opts.onFinish !== undefined) this.onFinish = opts.onFinish;
-  }
-
-  registerHandler(kind: JobKind, handler: JobHandler): void {
-    this.handlers.set(kind, handler);
-  }
-
-  /** 当前在跑的 job 数（测试/metrics 用） */
-  get runningCount(): number {
-    return this.executions.size;
-  }
-
-  /**
-   * 入队。同 slug 已有 queued/running 的 job 时抛 statusCode=409 的错误
-   * （Fastify 会把它映射为 409 响应，路由层无需再包装）。
-   */
-  async enqueue(
-    kind: JobKind,
-    slug: string,
-    payload: Record<string, unknown> | undefined,
-    createdBy: string,
-    opts: { siteId?: number } = {},
-  ): Promise<number> {
-    const dup = (
-      await this.db.orm
-        .select({ id: jobs.id, status: jobs.status })
-        .from(jobs)
-        .where(and(eq(jobs.slug, slug), inArray(jobs.status, ['queued', 'running'])))
-        .limit(1)
-    )[0];
-    if (dup) {
-      throw httpError(409, `站点 ${slug} 已有未完成任务（#${dup.id} ${dup.status}），请等待其结束`);
-    }
-    const inserted = await this.db.orm
-      .insert(jobs)
-      .values({
-        kind,
-        slug,
-        createdBy,
-        ...(payload !== undefined ? { payload } : {}),
-        ...(opts.siteId !== undefined ? { siteId: opts.siteId } : {}),
-      })
-      .returning({ id: jobs.id });
-    return inserted[0]!.id;
-  }
-
-  /**
-   * 回收遗留 running job（规格 §5 崩溃恢复）。
-   * 单进程模型：start 时本进程内没有任何在跑 job，DB 里残留的 status='running'
-   * 只可能来自上次进程重启前未落终态的僵尸——全部标 failed 即可，避免其永久占据
-   * enqueue 去重（inArray queued/running），导致对应 slug 一律 409、站点彻底卡死。
-   * 返回回收条数。
-   */
-  async reconcileOrphans(): Promise<number> {
-    const recovered = await this.db.orm
-      .update(jobs)
-      .set({ status: 'failed', error: 'orphaned by restart', finishedAt: sql`now()` })
-      .where(eq(jobs.status, 'running'))
-      .returning({ id: jobs.id });
-    if (recovered.length > 0) {
-      console.warn(`[jobs] 重启回收遗留 running 任务 ${recovered.length} 条`);
-    }
-    return recovered.length;
-  }
-
-  start(intervalMs = 1500): void {
-    if (this.timer) return;
-    // 起定时器前先回收上次重启遗留的 running 僵尸，否则其占据 slug 去重致 409 卡死站点。
-    // 单进程模型下本进程此刻无在跑 job，全量回收安全。
-    void this.reconcileOrphans().catch((err) => {
-      console.warn('[jobs] 遗留任务回收失败:', redactText(errorMessage(err)));
+  async enqueue(kind: JobKind, slug: string, payload: Record<string,unknown>|undefined, createdBy: string, opts: {siteId?:number} = {}): Promise<number> {
+    return this.db.orm.transaction(async orm => {
+      await lockScheduler(orm);
+      const [dup]=await orm.select({id:jobs.id,status:jobs.status}).from(jobs).where(and(eq(jobs.slug,slug),inArray(jobs.status,['queued','running','uncertain']))).limit(1);
+      if(dup)throw httpError(409,`站点 ${slug} 已有未完成或待复核任务（#${dup.id} ${dup.status}），请先处理该任务`);
+      const [created]=await orm.insert(jobs).values({kind,slug,createdBy,...(payload?{payload}:{}),...opts}).returning({id:jobs.id});
+      return created!.id;
     });
-    this.timer = setInterval(() => {
-      void this.tick().catch((err) => {
-        console.warn('[jobs] 轮询失败:', redactText(errorMessage(err)));
-      });
-    }, intervalMs);
-    // 空闲时不阻止进程退出
+  }
+
+  /** Expiry never proves failure or stops Docker. Keep both the site fence and capacity slot until reviewed. */
+  async reconcileOrphans(): Promise<number> {
+    const rows=await this.db.orm.transaction(async orm=>{
+      await lockScheduler(orm);
+      return orm.update(jobs).set({status:'uncertain',error:UNCERTAIN_MESSAGE,reviewVersion:sql`${jobs.reviewVersion}+1`})
+        .where(and(eq(jobs.status,'running'),sql`(${jobs.leaseUntil} IS NULL OR ${jobs.leaseUntil}<=clock_timestamp())`)).returning();
+    });
+    for(const row of rows)await this.notify(row);
+    return rows.length;
+  }
+  start(intervalMs=1500): void {
+    if(this.timer)return;this.closing=false;
+    this.timer=setInterval(()=>void this.tick().catch(err=>console.warn('[jobs] 调度失败:',redactText(errorMessage(err)))),intervalMs);
     this.timer.unref();
   }
-
-  stop(): void {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
+  stop(): void { if(this.timer)clearInterval(this.timer);this.timer=null; }
+  async shutdown(): Promise<void> {
+    this.stop();this.closing=true;
+    for(const controller of this.controllers.values())controller.abort();
+    // Wait for an in-progress claim to leave its short transaction before collecting owned executions.
+    while(this.ticking)await new Promise(r=>setTimeout(r,10));
+    for(const id of this.executions.keys()) {
+      const [row]=await this.db.orm.update(jobs).set({status:'uncertain',error:UNCERTAIN_MESSAGE,reviewVersion:sql`${jobs.reviewVersion}+1`}).where(and(eq(jobs.id,id),eq(jobs.status,'running'))).returning();
+      if(row)await this.notify(row);
     }
+    let timeout:ReturnType<typeof setTimeout>|undefined;
+    try { await Promise.race([this.idle(),new Promise<void>(r=>{timeout=setTimeout(r,5000);})]); }
+    finally { if(timeout)clearTimeout(timeout); }
   }
-
-  /**
-   * 单轮调度：把可运行的 queued job 派发到并发上限为止，不等待 job 完成。
-   * 测试可直接调用 tick() 同步驱动（配合 idle()），无需 sleep。
-   * 返回本轮派发的 job 数。
-   */
   async tick(): Promise<number> {
-    if (this.ticking) return 0; // 防重入：interval 与手动 tick 并发时只跑一轮
-    this.ticking = true;
+    if(this.ticking||this.closing)return 0;this.ticking=true;
     try {
-      let dispatched = 0;
-      while (this.executions.size < GLOBAL_CONCURRENCY) {
-        const candidates = await this.db.orm
-          .select()
-          .from(jobs)
-          .where(eq(jobs.status, 'queued'))
-          .orderBy(asc(jobs.id))
-          .limit(50);
-        // find + 标记必须在同一同步段完成，避免 await 间隙重复派发
-        const next = candidates.find(
-          (j) => !this.dispatchedIds.has(j.id) && !this.runningSlugs.has(j.slug),
-        );
-        if (!next) break;
-        this.dispatch(next);
-        dispatched++;
+      await this.reconcileOrphans();let dispatched=0;
+      while(!this.closing&&this.executions.size<GLOBAL_CONCURRENCY) {
+        const row=await this.db.orm.transaction(async orm=>{
+          await lockScheduler(orm);
+          const [count]=await orm.select({n:sql<number>`count(*)::int`}).from(jobs).where(inArray(jobs.status,['running','uncertain']));
+          if(count!.n>=GLOBAL_CONCURRENCY)return null;
+          const [next]=await orm.select().from(jobs).where(and(eq(jobs.status,'queued'),sql`NOT EXISTS (SELECT 1 FROM jobs active WHERE active.slug=${jobs.slug} AND active.status IN ('running','uncertain'))`)).orderBy(asc(jobs.id)).limit(1).for('update');
+          if(!next)return null;
+          const [claimed]=await orm.update(jobs).set({status:'running',startedAt:sql`clock_timestamp()`,heartbeatAt:sql`clock_timestamp()`,leaseUntil:sql`clock_timestamp()+${LEASE_SECONDS}*interval '1 second'`,leaseToken:randomUUID()}).where(and(eq(jobs.id,next.id),eq(jobs.status,'queued'))).returning();
+          return claimed??null;
+        });
+        if(!row)break;
+        this.dispatch(row);dispatched++;
       }
       return dispatched;
-    } finally {
-      this.ticking = false;
-    }
+    } finally { this.ticking=false; }
   }
-
-  /** 等待当前所有在跑 job 落地（测试用；不派发新 job） */
-  async idle(): Promise<void> {
-    while (this.executions.size > 0) {
-      await Promise.allSettled([...this.executions.values()]);
-    }
+  async idle(): Promise<void> { while(this.executions.size)await Promise.allSettled([...this.executions.values()]); }
+  private dispatch(row:JobRow): void {
+    const controller=new AbortController();this.controllers.set(row.id,controller);if(this.closing)controller.abort();
+    const p=this.runJob(row,controller).catch(err=>console.warn('[jobs] 执行状态待复核:',redactText(errorMessage(err)))).finally(()=>{this.controllers.delete(row.id);this.executions.delete(row.id);});
+    this.executions.set(row.id,p);
   }
-
-  private dispatch(row: JobRow): void {
-    this.dispatchedIds.add(row.id);
-    this.runningSlugs.add(row.slug);
-    const p = this.runJob(row)
-      .catch((err) => {
-        // runJob 自身已兜底落库，这里只保证 promise 链不外溢
-        console.warn('[jobs] 执行异常未落库:', redactText(errorMessage(err)));
-      })
-      .finally(() => {
-        this.dispatchedIds.delete(row.id);
-        this.runningSlugs.delete(row.slug);
-        this.executions.delete(row.id);
-      });
-    this.executions.set(row.id, p);
+  private async notify(row:JobRow):Promise<void> {
+    try{await this.onFinish?.(row);}catch(err){console.warn('[jobs] 通知失败:',redactText(errorMessage(err)));}
   }
-
-  private async runJob(row: JobRow): Promise<void> {
-    // 认领：仅 queued 可进入 running；已被取消/他处改动则放弃执行
-    const claimed = await this.db.orm
-      .update(jobs)
-      .set({ status: 'running', startedAt: sql`now()` })
-      .where(and(eq(jobs.id, row.id), eq(jobs.status, 'queued')))
-      .returning({ id: jobs.id });
-    if (claimed.length === 0) return;
-
-    const steps: JobStep[] = Array.isArray(row.steps) ? [...row.steps] : [];
-    const onStep: OnStep = async (step, status, detail) => {
-      steps.push({
-        step,
-        status,
-        ...(detail !== undefined ? { detail: redactText(detail) } : {}),
-        at: new Date().toISOString(),
-      });
-      await this.db.orm.update(jobs).set({ steps }).where(eq(jobs.id, row.id));
-    };
-
+  private async runJob(row:JobRow,controller:AbortController):Promise<void> {
+    const token=row.leaseToken!;let renewing=false;
+    const renew=setInterval(()=>{
+      if(renewing||controller.signal.aborted)return;renewing=true;
+      void this.db.orm.update(jobs).set({heartbeatAt:sql`clock_timestamp()`,leaseUntil:sql`clock_timestamp()+${LEASE_SECONDS}*interval '1 second'`}).where(liveLease(row.id,token)).returning({id:jobs.id})
+        .then(rows=>{if(!rows.length)controller.abort();}).catch(()=>controller.abort()).finally(()=>{renewing=false;});
+    },10_000);renew.unref();
+    let status='succeeded',error:string|null=null;
     try {
-      const handler = this.handlers.get(row.kind as JobKind);
-      if (!handler) throw new Error(`未注册任务处理器: ${row.kind}`);
-      await handler(row, onStep);
-      await this.db.orm
-        .update(jobs)
-        .set({ status: 'succeeded', finishedAt: sql`now()` })
-        .where(eq(jobs.id, row.id));
-    } catch (err) {
-      await this.db.orm
-        .update(jobs)
-        .set({ status: 'failed', error: redactText(errorMessage(err)), finishedAt: sql`now()` })
-        .where(eq(jobs.id, row.id));
+      await executionScope.run({db:this.db,jobId:row.id,token,controller},async()=>{
+        const steps:JobStep[]=Array.isArray(row.steps)?[...row.steps]:[];
+        const onStep:OnStep=async(step,status,detail)=>{
+          if(controller.signal.aborted)throw new JobOwnershipLost();
+          steps.push({step,status,...(detail===undefined?{}:{detail:redactText(detail)}),at:new Date().toISOString()});
+          const updated=await this.db.orm.update(jobs).set({steps}).where(liveLease(row.id,token)).returning({id:jobs.id});
+          if(!updated.length){controller.abort();throw new JobOwnershipLost();}
+        };
+        if(controller.signal.aborted)throw new JobOwnershipLost();
+        const handler=this.handlers.get(row.kind as JobKind);if(!handler)throw new Error(`未注册任务处理器: ${row.kind}`);
+        await handler(row,onStep);
+      });
+    } catch(err) { status=err instanceof JobOwnershipLost||controller.signal.aborted?'uncertain':'failed';error=status==='uncertain'?UNCERTAIN_MESSAGE:redactText(errorMessage(err)); }
+    finally { clearInterval(renew); }
+    if(controller.signal.aborted){status='uncertain';error=UNCERTAIN_MESSAGE;}
+    let final:JobRow|undefined;
+    if(status!=='uncertain') {
+      [final]=await this.db.orm.update(jobs).set({status,error,finishedAt:sql`clock_timestamp()`}).where(liveLease(row.id,token)).returning();
     }
-
-    if (this.onFinish) {
-      try {
-        const finalRow = (
-          await this.db.orm.select().from(jobs).where(eq(jobs.id, row.id)).limit(1)
-        )[0];
-        if (finalRow) await this.onFinish(finalRow);
-      } catch (err) {
-        // 告警钩子失败不反噬任务终态与调度循环
-        console.warn('[jobs] onFinish 回调失败:', redactText(errorMessage(err)));
-      }
+    if(!final) {
+      [final]=await this.db.orm.update(jobs).set({status:'uncertain',error:UNCERTAIN_MESSAGE,reviewVersion:sql`${jobs.reviewVersion}+1`}).where(and(eq(jobs.id,row.id),eq(jobs.status,'running'),eq(jobs.leaseToken,token))).returning();
     }
+    if(final)await this.notify(final);
   }
 }

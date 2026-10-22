@@ -1,3 +1,4 @@
+import { assertExecutionActive, executionSignal, JobOwnershipLost } from '../jobs/execution.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
@@ -37,8 +38,7 @@ async function compose(ref: ComposeRef, args: string[]): Promise<string> {
   const [cmd, argv] = viaWsl
     ? (['wsl', ['-e', 'docker', ...composeArgs]] as const)
     : (['docker', composeArgs] as const);
-  const { stdout } = await exec(cmd, [...argv], { maxBuffer: 10 * 1024 * 1024 });
-  return stdout;
+  return runCompose(cmd, [...argv], 10 * 1024 * 1024);
 }
 
 export const dockerCompose = {
@@ -71,7 +71,18 @@ export const dockerCompose = {
     const [cmd, args] = viaWsl
       ? (['wsl', ['-e', 'docker', ...composeArgs]] as const)
       : (['docker', composeArgs] as const);
-    const { stdout } = await exec(cmd, [...args], { maxBuffer: 512 * 1024 * 1024 });
-    return stdout;
+    return runCompose(cmd, [...args], 512 * 1024 * 1024);
   },
 };
+
+async function runCompose(command: string, args: string[], maxBuffer: number): Promise<string> {
+  await assertExecutionActive();
+  try {
+    const {stdout}=await exec(command,args,{maxBuffer,timeout:600_000,signal:executionSignal()});
+    await assertExecutionActive();return stdout;
+  } catch(error) {
+    if(executionSignal()?.aborted || (error as {killed?:boolean}).killed) throw new JobOwnershipLost();
+    // Docker errors can include resolved environment values. Keep output out of jobs and API responses.
+    throw new Error('Docker Compose command failed; inspect private host logs');
+  }
+}

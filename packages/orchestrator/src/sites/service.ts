@@ -1,3 +1,4 @@
+import { assertExecutionActive, guardedJobTransaction } from '../jobs/execution.js';
 import { tenantId } from '../auth/rbac.js';
 import { connect } from 'node:net';
 import { randomUUID } from 'node:crypto';
@@ -238,13 +239,15 @@ export function makeStoreCredential(
     if (key === undefined) throw new Error('RP_SECRET_KEY 未配置，无法加密站点凭据');
     const ref = `enc:${slug}`;
     const ciphertext = encryptSecret(JSON.stringify(secrets), key);
-    await db.orm
-      .insert(credentials)
-      .values({ ref, kind: 'admin', ciphertext })
-      .onConflictDoUpdate({
-        target: credentials.ref,
-        set: { ciphertext, rotatedAt: toPgTimestamp(new Date()) },
-      });
+    await guardedJobTransaction(db, async orm => {
+      await orm
+        .insert(credentials)
+        .values({ ref, kind: 'admin', ciphertext })
+        .onConflictDoUpdate({
+          target: credentials.ref,
+          set: { ciphertext, rotatedAt: toPgTimestamp(new Date()) },
+        });
+    });
     return ref;
   };
 }
@@ -1259,7 +1262,7 @@ export class SitesService {
     const site = await this.requireSite(ctx, slug);
     if (site.managed !== 'compose' || !['pending', 'provisioning'].includes(site.status) && !site.status.startsWith('failed:')) throw new ApiError(409, '仅失败或中断的本机安装可重试');
     const [last] = await this.deps.db.orm.select().from(jobsTable).where(eq(jobsTable.siteId, site.id)).orderBy(desc(jobsTable.id)).limit(1);
-    if (!last || last.kind !== 'provision' || last.status !== 'failed' || typeof last.payload?.adminEmail !== 'string') throw new ApiError(409, '没有可重试的失败安装任务');
+    if (!last || last.kind !== 'provision' || !['failed','resolved','cancelled'].includes(last.status) || typeof last.payload?.adminEmail !== 'string') throw new ApiError(409, '没有可重试的失败、已复核或已取消安装任务');
     return this.enqueueAudited(ctx, site, 'provision', last.payload, 'site.install.retry', { previousJobId: last.id });
   }
 
@@ -1555,15 +1558,19 @@ export class SitesService {
   private async handleProvision(job: JobRow, onStep: OnStep): Promise<void> {
     const db = this.deps.db;
     const site = await this.siteBySlug(job.slug);
+    await assertExecutionActive();
+    if (site.readonly || site.managed !== 'compose' || site.status === 'destroyed') throw new ApiError(409, '站点当前不可执行本机操作');
     const lifecycle = this.lifecycleOf(site);
     const payload = (job.payload ?? {}) as { adminEmail?: unknown; branding?: SiteBranding };
     const adminEmail = typeof payload.adminEmail === 'string' ? payload.adminEmail : '';
     if (!adminEmail) throw new Error('provision payload 缺少 adminEmail');
 
-    await db.orm
-      .update(sites)
-      .set({ status: 'provisioning', updatedAt: nowPg() })
-      .where(eq(sites.id, site.id));
+    await guardedJobTransaction(db, async orm => {
+      await orm
+        .update(sites)
+        .set({ status: 'provisioning', updatedAt: nowPg() })
+        .where(eq(sites.id, site.id));
+    });
 
     const spec: SiteSpec = {
       slug: site.slug,
@@ -1585,18 +1592,20 @@ export class SitesService {
     });
     try {
       const inst = await lifecycle.provision(spec);
-      await db.orm
-        .update(sites)
-        .set({
-          status: 'active',
-          baseUrl: inst.baseUrl,
-          dataDir: inst.dataDir,
-          composeProject: inst.composeProject,
-          credentialRef: inst.credentialRef,
-          version: inst.version,
-          updatedAt: nowPg(),
-        })
-        .where(eq(sites.id, site.id));
+      await guardedJobTransaction(db, async orm => {
+        await orm
+          .update(sites)
+          .set({
+            status: 'active',
+            baseUrl: inst.baseUrl,
+            dataDir: inst.dataDir,
+            composeProject: inst.composeProject,
+            credentialRef: inst.credentialRef,
+            version: inst.version,
+            updatedAt: nowPg(),
+          })
+          .where(eq(sites.id, site.id));
+      });
       probeCache.delete(site.slug);
       await writeAudit(db, {
         siteId: site.id,
@@ -1607,10 +1616,12 @@ export class SitesService {
       });
     } catch (err) {
       const failedStep = tracker.failed || tracker.started || 'provision';
-      await db.orm
-        .update(sites)
-        .set({ status: `failed:${failedStep}`, updatedAt: nowPg() })
-        .where(eq(sites.id, site.id));
+      await guardedJobTransaction(db, async orm => {
+        await orm
+          .update(sites)
+          .set({ status: `failed:${failedStep}`, updatedAt: nowPg() })
+          .where(eq(sites.id, site.id));
+      });
       probeCache.delete(site.slug);
       await writeAudit(db, {
         siteId: site.id,
@@ -1634,6 +1645,8 @@ export class SitesService {
   ): Promise<void> {
     const db = this.deps.db;
     const site = await this.siteBySlug(job.slug);
+    await assertExecutionActive();
+    if (site.readonly || site.managed !== 'compose' || site.status === 'destroyed') throw new ApiError(409, '站点当前不可执行本机操作');
     const lifecycle = this.lifecycleOf(site);
     const inst = instOf(site);
     const payload = (job.payload ?? {}) as Record<string, unknown>;
@@ -1644,36 +1657,46 @@ export class SitesService {
         const toVersion = typeof payload.toVersion === 'string' ? payload.toVersion : '';
         if (!toVersion || toVersion === 'latest') throw new Error('upgrade payload 缺少钉住的 toVersion');
         const next = await lifecycle.upgrade(inst, toVersion);
-        await db.orm
-          .update(sites)
-          .set({ version: next.version, status: 'active', updatedAt: nowPg() })
-          .where(eq(sites.id, site.id));
+        await guardedJobTransaction(db, async orm => {
+          await orm
+            .update(sites)
+            .set({ version: next.version, status: 'active', updatedAt: nowPg() })
+            .where(eq(sites.id, site.id));
+        });
       } else if (kind === 'start') {
         await lifecycle.start(inst);
-        await db.orm
-          .update(sites)
-          .set({ status: 'active', updatedAt: nowPg() })
-          .where(eq(sites.id, site.id));
+        await guardedJobTransaction(db, async orm => {
+          await orm
+            .update(sites)
+            .set({ status: 'active', updatedAt: nowPg() })
+            .where(eq(sites.id, site.id));
+        });
       } else if (kind === 'stop') {
         await lifecycle.stop(inst);
-        await db.orm
-          .update(sites)
-          .set({ status: 'stopped', updatedAt: nowPg() })
-          .where(eq(sites.id, site.id));
+        await guardedJobTransaction(db, async orm => {
+          await orm
+            .update(sites)
+            .set({ status: 'stopped', updatedAt: nowPg() })
+            .where(eq(sites.id, site.id));
+        });
       } else {
         const keepData = payload.keepData === true;
         await lifecycle.destroy(inst, { keepData });
         const removeCred = !keepData && site.credentialRef.startsWith('enc:');
-        await db.orm
-          .update(sites)
-          .set({
-            status: 'destroyed',
-            updatedAt: nowPg(),
-            ...(removeCred ? { credentialRef: '' } : {}),
-          })
-          .where(eq(sites.id, site.id));
+        await guardedJobTransaction(db, async orm => {
+          await orm
+            .update(sites)
+            .set({
+              status: 'destroyed',
+              updatedAt: nowPg(),
+              ...(removeCred ? { credentialRef: '' } : {}),
+            })
+            .where(eq(sites.id, site.id));
+        });
         if (removeCred) {
-          await db.orm.delete(credentials).where(eq(credentials.ref, site.credentialRef));
+          await guardedJobTransaction(db, async orm => {
+            await orm.delete(credentials).where(eq(credentials.ref, site.credentialRef));
+          });
         }
         latestSnapshotCache.delete(site.slug);
         // 清该站在各 finance 缓存的残留条目（key 前缀 slug: 或含 :slug: 段）
@@ -1822,6 +1845,7 @@ export class SitesService {
   private async requireComposeSite(ctx: SessionCtx, slug: string): Promise<SiteRow> {
     const site = await this.requireSite(ctx, slug);
     if (site.managed !== 'compose') throw new ApiError(400, '外部接管站点不支持生命周期操作');
+    if (site.readonly) throw new ApiError(403, '站点为只读，不能执行本机生命周期操作');
     if (site.status === 'destroyed') throw new ApiError(400, '站点已销毁');
     return site;
   }
@@ -1939,7 +1963,7 @@ export class SitesService {
     const rows = await this.deps.db.orm
       .select({ id: jobsTable.id, kind: jobsTable.kind, status: jobsTable.status, slug: jobsTable.slug })
       .from(jobsTable)
-      .where(and(inArray(jobsTable.slug, slugs), inArray(jobsTable.status, ['queued', 'running'])));
+      .where(and(inArray(jobsTable.slug, slugs), inArray(jobsTable.status, ['queued', 'running', 'uncertain'])));
     for (const r of rows) map.set(r.slug, { id: r.id, kind: r.kind, status: r.status });
     return map;
   }

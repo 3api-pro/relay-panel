@@ -1,0 +1,13 @@
+BEGIN;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS lease_token text;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS lease_until timestamp;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS heartbeat_at timestamp;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS review_version integer NOT NULL DEFAULT 1;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS review_note text;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS review_outcome text;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS reviewed_by integer REFERENCES operators(id);
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS reviewed_at timestamp;
+CREATE INDEX IF NOT EXISTS jobs_active_slug ON jobs(slug,id) WHERE status IN ('queued','running','uncertain');
+CREATE INDEX IF NOT EXISTS jobs_running_lease ON jobs(lease_until) WHERE status='running';
+INSERT INTO app_settings(key,value) VALUES('job_scheduler_mutex','{}'::jsonb) ON CONFLICT(key) DO NOTHING;
+COMMIT;

@@ -25,7 +25,7 @@ afterEach(async () => {
   await db.orm
     .update(jobs)
     .set({ status: 'cancelled' })
-    .where(inArray(jobs.status, ['queued', 'running']));
+    .where(inArray(jobs.status, ['queued', 'running', 'uncertain']));
 });
 
 async function getJob(id: number): Promise<JobRow> {
@@ -265,7 +265,7 @@ describe('JobEngine: 去重 / 串行 / 并发', () => {
     }
   });
 
-  it('reconcileOrphans 回收遗留 running 僵尸 → failed，同 slug 可重新入队', async () => {
+  it('reconcileOrphans retains uncertain executions and their site fence', async () => {
     const engine = new JobEngine(db);
     // 模拟进程重启前未落终态的僵尸：直插一条 status='running'
     const zombie = (
@@ -284,9 +284,11 @@ describe('JobEngine: 去重 / 串行 / 并发', () => {
     expect(recovered).toBe(1);
 
     const row = await getJob(zombie);
-    expect(row.status).toBe('failed');
-    expect(row.error).toBe('orphaned by restart');
-    expect(row.finishedAt).toBeTruthy();
+    expect(row.status).toBe('uncertain');
+    expect(row.error).toContain('实际结果未知');
+    expect(row.finishedAt).toBeNull();
+    await expect(engine.enqueue('start','orphan-a',undefined,'root@example.com')).rejects.toMatchObject({statusCode:409});
+    await db.orm.update(jobs).set({status:'resolved'}).where(eq(jobs.id,zombie));
 
     // 回收后：同 slug 不再 409，可重新入队
     const id2 = await engine.enqueue('start', 'orphan-a', undefined, 'root@example.com');

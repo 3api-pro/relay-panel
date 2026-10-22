@@ -1,3 +1,4 @@
+import { assertExecutionActive, executionSignal } from '../jobs/execution.js';
 import { assertLocalEnvironment, assertPinnedVersion } from './environment.js';
 import { mkdir, writeFile, readFile, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -27,11 +28,13 @@ async function waitHealthy(baseUrl: string, timeoutMs = 180_000): Promise<void> 
   const deadline = Date.now() + timeoutMs;
   let lastErr = '';
   while (Date.now() < deadline) {
+    await assertExecutionActive();
     try {
-      const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(`${baseUrl}/health`, { signal: executionSignal() ? AbortSignal.any([executionSignal()!, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000) });
       if (res.ok) return;
       lastErr = `HTTP ${res.status}`;
     } catch (e) {
+      await assertExecutionActive();
       lastErr = e instanceof Error ? e.message : String(e);
     }
     await new Promise((r) => setTimeout(r, 3000));
@@ -45,9 +48,11 @@ export class Sub2apiLifecycle implements EngineLifecycle {
   constructor(private readonly opts: Sub2apiLifecycleOptions) {}
 
   private async step<T>(slug: string, name: string, fn: () => Promise<T>): Promise<T> {
+    await assertExecutionActive();
     await this.opts.onStep?.(slug, name, 'start');
     try {
       const out = await fn();
+      await assertExecutionActive();
       await this.opts.onStep?.(slug, name, 'ok');
       return out;
     } catch (e) {
@@ -119,6 +124,7 @@ export class Sub2apiLifecycle implements EngineLifecycle {
   }
 
   async upgrade(inst: InstanceInfo, toVersion: string): Promise<InstanceInfo> {
+    await assertExecutionActive();
     assertPinnedVersion(toVersion);
     const ref = composeRef(this.opts.sitesRoot, inst.siteSlug);
     const envPath = ref.envFile;
@@ -132,12 +138,14 @@ export class Sub2apiLifecycle implements EngineLifecycle {
       await dockerCompose.up(ref);
       await waitHealthy(inst.baseUrl);
     } catch (e) {
+      await assertExecutionActive();
       // 回滚旧版本 tag 并恢复运行
       await writeFile(envPath, env, 'utf8');
       try {
         await dockerCompose.up(ref);
         await waitHealthy(inst.baseUrl);
       } catch {
+        await assertExecutionActive();
         throw new Error(`upgrade to ${toVersion} failed; rollback to ${prev} also failed health verification. Inspect the job and restore from backup.`);
       }
       throw new Error(`upgrade to ${toVersion} failed; previous image ${prev} is healthy again. Database migrations are not reversed: ${e instanceof Error ? e.message : e}`);

@@ -135,14 +135,22 @@ export const jobs = pgTable('jobs', {
   siteId: integer('site_id').references(() => sites.id),
   slug: text('slug').notNull(),
   payload: jsonb('payload').$type<Record<string, unknown>>(),
-  status: text('status').notNull().default('queued'), // queued|running|succeeded|failed|cancelled
+  status: text('status').notNull().default('queued'), // queued|running|succeeded|failed|cancelled|uncertain|resolved
+  leaseToken: text('lease_token'),
+  leaseUntil: timestamp('lease_until', { mode: 'string' }),
+  heartbeatAt: timestamp('heartbeat_at', { mode: 'string' }),
+  reviewVersion: integer('review_version').notNull().default(1),
+  reviewNote: text('review_note'),
+  reviewOutcome: text('review_outcome'),
+  reviewedBy: integer('reviewed_by').references(() => operators.id),
+  reviewedAt: timestamp('reviewed_at', { mode: 'string' }),
   steps: jsonb('steps').$type<JobStep[]>().notNull().default([]),
   error: text('error'),
   createdBy: text('created_by').notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
   startedAt: timestamp('started_at', { mode: 'string' }),
   finishedAt: timestamp('finished_at', { mode: 'string' }),
-});
+}, t => [index('jobs_active_slug').on(t.slug,t.id).where(sql`${t.status} IN ('queued','running','uncertain')`),index('jobs_running_lease').on(t.leaseUntil).where(sql`${t.status}='running'`)]);
 
 /** 语义唯一：同 (kind, site_id) 最多一条 open（引擎层保证，不加 DB 约束以兼容 site_id null） */
 export const alerts = pgTable('alerts', {

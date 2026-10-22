@@ -224,13 +224,13 @@ export function startMonitor(deps: MonitorDeps, intervalMs: number): Monitor {
 
   // ---- job_failed：由 JobEngine 终态回调触发；不自动 resolve ----
   async function handleJobFinish(job: JobRow): Promise<void> {
-    if (job.status !== 'failed') return;
+    if (!['failed','uncertain'].includes(job.status)) return;
     const site = job.siteId !== null ? await siteRefById(job.siteId) : undefined;
     await openAlert(db, notifier, {
       kind: 'job_failed',
       siteId: job.siteId,
       severity: 'warning',
-      title: `${job.kind} 任务失败`,
+      title: `${job.kind} ${job.status === 'uncertain' ? '任务结果待复核' : '任务失败'}`,
       detail: `站点 ${job.slug}${job.error ? `: ${job.error}` : ''}`,
       ...(site !== undefined ? { site } : {}),
     });

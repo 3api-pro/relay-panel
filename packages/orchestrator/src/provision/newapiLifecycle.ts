@@ -1,3 +1,4 @@
+import { assertExecutionActive, executionSignal } from '../jobs/execution.js';
 import { assertLocalEnvironment, assertPinnedVersion } from './environment.js';
 import { mkdir, writeFile, readFile, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -26,8 +27,9 @@ async function waitHealthy(baseUrl: string, timeoutMs = 180_000): Promise<void> 
   const deadline = Date.now() + timeoutMs;
   let lastErr = '';
   while (Date.now() < deadline) {
+    await assertExecutionActive();
     try {
-      const res = await fetch(`${baseUrl}/api/status`, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(`${baseUrl}/api/status`, { signal: executionSignal() ? AbortSignal.any([executionSignal()!, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000) });
       if (res.ok) {
         const j = (await res.json().catch(() => ({}))) as { success?: boolean };
         if (j.success === true) return;
@@ -36,6 +38,7 @@ async function waitHealthy(baseUrl: string, timeoutMs = 180_000): Promise<void> 
         lastErr = `HTTP ${res.status}`;
       }
     } catch (e) {
+      await assertExecutionActive();
       lastErr = e instanceof Error ? e.message : String(e);
     }
     await new Promise((r) => setTimeout(r, 3000));
@@ -45,10 +48,12 @@ async function waitHealthy(baseUrl: string, timeoutMs = 180_000): Promise<void> 
 
 /** new-api 首启无预置 admin，须 POST /api/setup 建 root（幂等：已初始化则跳过） */
 async function ensureRoot(baseUrl: string, username: string, password: string): Promise<void> {
+  await assertExecutionActive();
   const st = (await fetch(`${baseUrl}/api/setup`, { signal: AbortSignal.timeout(8000) }).then((r) =>
     r.json(),
   )) as { data?: { root_init?: boolean } };
   if (st.data?.root_init) return; // 已建过 root
+  await assertExecutionActive();
   const res = await fetch(`${baseUrl}/api/setup`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -59,7 +64,7 @@ async function ensureRoot(baseUrl: string, username: string, password: string): 
       SelfUseModeEnabled: false,
       DemoSiteEnabled: false,
     }),
-    signal: AbortSignal.timeout(15_000),
+    signal: executionSignal() ? AbortSignal.any([executionSignal()!, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
   });
   const j = (await res.json().catch(() => ({}))) as { success?: boolean; message?: string };
   if (j.success === false) throw new Error(`setup root failed: ${j.message ?? 'unknown'}`);
@@ -71,9 +76,11 @@ export class NewapiLifecycle implements EngineLifecycle {
   constructor(private readonly opts: NewapiLifecycleOptions) {}
 
   private async step<T>(slug: string, name: string, fn: () => Promise<T>): Promise<T> {
+    await assertExecutionActive();
     await this.opts.onStep?.(slug, name, 'start');
     try {
       const out = await fn();
+      await assertExecutionActive();
       await this.opts.onStep?.(slug, name, 'ok');
       return out;
     } catch (e) {
@@ -139,6 +146,7 @@ export class NewapiLifecycle implements EngineLifecycle {
   }
 
   async upgrade(inst: InstanceInfo, toVersion: string): Promise<InstanceInfo> {
+    await assertExecutionActive();
     assertPinnedVersion(toVersion);
     const ref = composeRef(this.opts.sitesRoot, inst.siteSlug);
     const env = await readFile(ref.envFile, 'utf8');
@@ -150,11 +158,13 @@ export class NewapiLifecycle implements EngineLifecycle {
       await dockerCompose.up(ref);
       await waitHealthy(inst.baseUrl);
     } catch (e) {
+      await assertExecutionActive();
       await writeFile(ref.envFile, env, 'utf8');
       try {
         await dockerCompose.up(ref);
         await waitHealthy(inst.baseUrl);
       } catch {
+        await assertExecutionActive();
         throw new Error(`upgrade to ${toVersion} failed; rollback to ${prev} also failed health verification. Inspect the job and restore from backup.`);
       }
       throw new Error(`upgrade to ${toVersion} failed; previous image ${prev} is healthy again. Database migrations are not reversed: ${e instanceof Error ? e.message : e}`);
