@@ -7,7 +7,7 @@
 Connect, manage, and monitor any number of self-hosted [sub2api](https://github.com/Wei-Shaw/sub2api) / [new-api](https://github.com/QuantumNous/new-api) instances — engines stay unmodified, everything is driven from a single panel.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-3d5afe.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A522-43d17f.svg)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522.12-43d17f.svg)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)
 [![Live demo](https://img.shields.io/badge/live%20demo-demo.3api.pro-6d8bff.svg)](https://demo.3api.pro)
 

@@ -7,7 +7,7 @@
 接入、管理、监控任意数量的自建 [sub2api](https://github.com/Wei-Shaw/sub2api) / [new-api](https://github.com/QuantumNous/new-api) 实例 —— 引擎零修改，全部从一个面板驱动。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-3d5afe.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A522-43d17f.svg)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522.12-43d17f.svg)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)
 [![在线演示](https://img.shields.io/badge/%E5%9C%A8%E7%BA%BF%E6%BC%94%E7%A4%BA-demo.3api.pro-6d8bff.svg)](https://demo.3api.pro)
 
