@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { get, post } from '../api/client';
+import { downloadFile, get, post } from '../api/client';
 import { session } from '../api/session';
 import { Button, Card, Field, Input, Select, EmptyState } from '../components/ui';
 interface Scope { accessId: number; label: string; fromDay: string; toDay: string; channelId: string | null; model: string | null; costs: boolean; details: boolean; export: boolean; review: boolean; enabled: boolean; version: number }
@@ -40,7 +40,7 @@ async function save() { await action(async () => { if (!selected.value) return; 
 async function loadRecords(append = false) { await action(async () => { const r = await get<{ items: RecordRow[]; hasMore: boolean }>(`${base.value}/${selected.value}/records`, { query: { beforeId: append ? records.value.at(-1)?.id : undefined } }); records.value = append ? [...records.value, ...r.items] : r.items; moreRecords.value = r.hasMore; showRecords.value = true; }); }
 async function submit() { await action(async () => { await post(`${base.value}/${selected.value}/reviews`, { version: current.value!.version, note: submitNote.value }); submitNote.value = ''; await loadReviews(); notice.value = l('已提交当时的金额与覆盖快照，等待站长复核。', 'Submitted the current amount and coverage snapshot for owner review.'); }); }
 async function decide(r: Review, status: string) { await action(async () => { await post(`${base.value}/${selected.value}/reviews/${r.id}`, { version: r.version, status, decision: decisions.value[r.id] ?? '' }); await loadReviews(); }); }
-async function exportCsv() { await action(async () => { const workspace = localStorage.getItem('rp-workspace'); const r = await fetch(`${base.value}/${selected.value}/report.csv`, { credentials: 'same-origin', headers: workspace ? { 'x-workspace-id': workspace } : {} }); if (!r.ok) throw new Error(`HTTP ${r.status}`); const url = URL.createObjectURL(await r.blob()), a = document.createElement('a'); a.href = url; a.download = 'shared-finance.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }); }
+async function exportCsv() { await action(() => downloadFile(`${base.value}/${selected.value}/report.csv`, 'shared-finance.csv')); }
 </script>
 <template>
  <div class="rp-page space-y-5">

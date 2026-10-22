@@ -20,5 +20,7 @@
   "invites": "Invitations",
   "used": "Accepted",
   "revoked": "Revoked",
-  "revoke": "Revoke invitation"
+  "revoke": "Revoke invitation",
+  "tabScope": "Workspace selection applies only to this tab. Other tabs can work in different teams.",
+  "switchFailed": "Unable to save the workspace selection. Allow browser storage for this site and try again."
 }

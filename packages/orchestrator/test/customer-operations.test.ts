@@ -118,10 +118,16 @@ describe('team memberships', () => {
     expect((await api('PATCH', '/api/sites/owned-site', reader, { label: 'Cannot rename' }, owner.operatorId)).statusCode).toBe(403);
     expect((await api('GET', '/api/billing/orders', reader, undefined, owner.operatorId)).statusCode).toBe(403);
     expect((await api('GET', '/api/sites/owned-site', other, undefined, owner.operatorId)).statusCode).toBe(403);
+    for (const actor of [root, viewer]) {
+      expect((await api('GET', '/api/sites/owned-site', actor, undefined, owner.operatorId)).statusCode).toBe(403);
+    }
     const member = (await api('GET', '/api/team', owner)).json().members[0];
     expect((await api('PATCH', `/api/team/members/${member.id}`, other, { role: 'editor' })).statusCode).toBe(404);
     await api('PATCH', `/api/team/members/${member.id}`, owner, { role: 'editor' });
     expect((await api('PATCH', '/api/sites/owned-site', reader, { label: 'Team managed' }, owner.operatorId)).statusCode).toBe(200);
+    for (const url of ['/api/admin/operations', '/api/admin/reconciliation', '/api/admin/finance-review', '/api/operators', '/api/billing/orders']) {
+      expect((await api('GET', url, reader, undefined, owner.operatorId)).statusCode, url).toBe(403);
+    }
     await api('PATCH', `/api/team/members/${member.id}`, owner, { role: 'remove' });
     expect((await shared()).statusCode).toBe(403);
     expect((await api('GET', '/api/sites/owned-site', reader)).statusCode).toBe(404);

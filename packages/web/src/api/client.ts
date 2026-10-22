@@ -1,4 +1,5 @@
 import { toast } from '../components/ui/toast';
+import { workspaceHeaders } from './workspace';
 
 /**
  * fetch 包装：JSON、same-origin 凭据、统一错误处理。
@@ -43,15 +44,13 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
   return s ? `${path}?${s}` : path;
 }
 
-async function request<T>(method: string, path: string, body?: unknown, opts: RequestOptions = {}): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, opts: RequestOptions = {}, asBlob = false): Promise<T> {
   let res: Response;
-  let workspace = '';
-  try { workspace = localStorage.getItem('rp-workspace') ?? ''; } catch { /* Storage disabled. */ }
   try {
     res = await fetch(buildUrl(path, opts.query), {
       method,
       credentials: 'same-origin',
-      headers: { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(workspace ? { 'x-workspace-id': workspace } : {}) },
+      headers: { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...workspaceHeaders() },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
   } catch {
@@ -61,6 +60,7 @@ async function request<T>(method: string, path: string, body?: unknown, opts: Re
   }
 
   if (res.status === 204) return undefined as T;
+  if (res.ok && asBlob) return await res.blob() as T;
 
   let data: unknown = null;
   const text = await res.text();
@@ -96,6 +96,19 @@ async function request<T>(method: string, path: string, body?: unknown, opts: Re
 
 export function get<T>(path: string, opts?: RequestOptions): Promise<T> {
   return request<T>('GET', path, undefined, opts);
+}
+
+/** Downloads use exactly the same workspace, session and error handling as JSON requests. */
+export function getBlob(path: string, opts?: RequestOptions): Promise<Blob> {
+  return request<Blob>('GET', path, undefined, opts, true);
+}
+
+export async function downloadFile(path: string, name: string): Promise<void> {
+  const blob = await getBlob(path);
+  const href = URL.createObjectURL(blob), link = document.createElement('a');
+  try {
+    link.href = href; link.download = name; link.click();
+  } finally { setTimeout(() => URL.revokeObjectURL(href), 1000); }
 }
 
 export function post<T>(path: string, body?: unknown, opts?: RequestOptions): Promise<T> {

@@ -1,6 +1,7 @@
 import { computed, reactive } from 'vue';
 import { get, post } from './client';
 import type { Me } from './types';
+import { clearWorkspace, restoreWorkspace } from './workspace';
 
 /**
  * 会话 store（简单组合式，非 pinia）：boot 时 GET /api/auth/me 缓存，
@@ -33,15 +34,16 @@ async function ensureLoaded(force = false): Promise<Me | null> {
       const me = await get<Me>('/api/auth/me', { silent: true, skipAuthRedirect: true });
       state.user = me;
       try {
-        const selected = localStorage.getItem('rp-workspace');
+        const selected = restoreWorkspace(me.email);
         if (selected && me.role === 'operator') {
           const result = await get<{ workspaces: { ownerId: number; name: string; role: string }[] }>('/api/team/workspaces', { silent: true });
-          const workspace = result.workspaces.find(w => String(w.ownerId) === selected);
+          const workspace = result.workspaces.find(w => w.ownerId === selected);
           if (workspace) { state.workspaceRole = workspace.role; state.workspaceName = workspace.name; }
-          else { localStorage.removeItem('rp-workspace'); state.workspaceRole = 'owner'; state.workspaceName = ''; }
-        } else { localStorage.removeItem('rp-workspace'); state.workspaceRole = 'owner'; state.workspaceName = ''; }
+          else { clearWorkspace(); state.workspaceRole = 'owner'; state.workspaceName = ''; }
+        } else { clearWorkspace(); state.workspaceRole = 'owner'; state.workspaceName = ''; }
       } catch { state.workspaceRole = 'reader'; }
     } catch {
+      clearWorkspace();
       state.user = null;
     } finally {
       state.loaded = true;
@@ -54,7 +56,7 @@ async function ensureLoaded(force = false): Promise<Me | null> {
 
 /** 登录成功后写入（login 响应与 /me 同构） */
 function setUser(me: Me): void {
-  try { localStorage.removeItem('rp-workspace'); } catch { /* Storage disabled. */ }
+  clearWorkspace();
   state.workspaceRole = 'owner';
   state.workspaceName = '';
   state.user = me;
@@ -62,7 +64,7 @@ function setUser(me: Me): void {
 }
 
 function clear(): void {
-  try { localStorage.removeItem('rp-workspace'); } catch { /* Storage disabled. */ }
+  clearWorkspace();
   state.user = null;
   state.workspaceRole = 'owner';
   state.workspaceName = '';

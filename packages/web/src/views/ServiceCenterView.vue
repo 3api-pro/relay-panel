@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
-import { get, post } from '../api/client';
+import { downloadFile, get, post } from '../api/client';
 import { session } from '../api/session';
 import { Button, Card, Field, Input, Select, EmptyState } from '../components/ui';
 const { locale }=useI18n(),route=useRoute();
@@ -67,7 +67,7 @@ async function moreWork(){await action(async()=>{const last=items.value.at(-1);i
 async function addPartner(){await action(async()=>{await post('/api/services/partners',{siteId:Number(siteId.value),kind:partnerKind.value,name:partnerName.value,contact:partnerContact.value,notes:partnerNotes.value});partnerName.value='';partnerContact.value='';partnerNotes.value='';await load();});}
 async function archivePartner(p:Partner){await action(async()=>{await post(`/api/services/partners/${p.id}`,{kind:p.kind,name:p.name,contact:p.contact,notes:p.notes,status:p.status==='active'?'archived':'active',version:p.version});await load();});}
 async function publish(published:boolean){await action(async()=>{await post('/api/services/publication',{siteId:Number(siteId.value),version:publication.value?.version??0,title:pubTitle.value,body:pubBody.value,state:pubState.value,published});await load();notice.value=published?l('公告已发布','Status notice published'):l('公告已撤回或保存为草稿','Notice unpublished or saved as draft');});}
-async function download(url:string,name:string){await action(async()=>{const workspace=localStorage.getItem('rp-workspace');const response=await fetch(url,{credentials:'same-origin',headers:workspace?{'x-workspace-id':workspace}:{}});if(!response.ok)throw new Error(`HTTP ${response.status}`);const blob=await response.blob(),href=URL.createObjectURL(blob),a=document.createElement('a');a.href=href;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(href),1000);});}
+async function download(url: string, name: string) { await action(() => downloadFile(url, name)); }
 function qualityExport(){const q=new URLSearchParams({siteId:String(siteId.value),day:day.value});if(requestId.value.trim())q.set('requestId',requestId.value.trim());if(channel.value.trim())q.set('channelId',channel.value.trim());if(model.value.trim())q.set('model',model.value.trim());void download(`/api/services/quality.csv?${q}`,'observed-evidence.csv');}
 // This generator never receives a real API key and never sends a model request.
 const configText=computed(()=>{let url:URL;try{url=new URL(endpoint.value);if(!['https:','http:'].includes(url.protocol)||url.username||url.password||url.search||url.hash)return '';}catch{return '';}

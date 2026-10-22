@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { get, post } from '../api/client';
+import { downloadFile, get, post } from '../api/client';
 import { session } from '../api/session';
 import { Button, Card, Field, Input, Select, EmptyState } from '../components/ui';
 interface Policy { id: number; siteId: number; name: string; period: string; basis: string; amountUsd: string; warningPercent: number; channelId: string | null; model: string | null; enabled: boolean; notify: boolean; version: number }
@@ -40,7 +40,7 @@ async function pause() { if (!selected.value) return; await action(async () => {
 async function evaluate() { if (!selected.value) return; await action(async () => { const r = await post<{ report: Report; eventCreated: boolean }>(`${base}/${selected.value!.id}/evaluate`, {}); report.value = r.report; await loadReport(); notice.value = r.eventCreated ? l('已记录新的阈值事件；若启用通知，将按站长通知偏好发送。', 'A new threshold event was recorded. Enabled notifications follow the owner’s preferences.') : l('检查完成，没有新增阈值事件。', 'Checked. No new threshold event.'); }); }
 async function acknowledge(event: Event) { if (!selected.value) return; await action(async () => { await post(`${base}/${selected.value!.id}/events/${event.id}/acknowledge`, { note: notes.value[event.id] ?? '' }); await loadReport(); notice.value = l('已记录复核说明。确认提醒不会改变预算或用量。', 'Review recorded. Acknowledging does not change the budget or usage.'); }); }
 async function moreEvents() { if (!selected.value || !events.value.length) return; await action(async () => { const r = await get<{ items: Event[]; hasMore: boolean }>(`${base}/${selected.value!.id}/events?beforeId=${events.value.at(-1)!.id}`); events.value.push(...r.items); hasMore.value = r.hasMore; }); }
-async function exportCsv() { if (!selected.value) return; await action(async () => { const workspace = localStorage.getItem('rp-workspace'); const r = await fetch(`${base}/${selected.value!.id}/report.csv`, { credentials: 'same-origin', headers: workspace ? { 'x-workspace-id': workspace } : {} }); if (!r.ok) throw new Error(`HTTP ${r.status}`); const url = URL.createObjectURL(await r.blob()), a = document.createElement('a'); a.href = url; a.download = 'observed-budget.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }); }
+async function exportCsv() { if (!selected.value) return; await action(() => downloadFile(`${base}/${selected.value!.id}/report.csv`, 'observed-budget.csv')); }
 </script>
 <template>
   <div class="rp-page space-y-5">

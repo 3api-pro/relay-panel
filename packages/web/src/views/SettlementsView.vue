@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { get, post, del } from '../api/client';
+import { downloadFile, get, post, del } from '../api/client';
 import { session } from '../api/session';
 import { Button, Card, Field, Input, Select, EmptyState } from '../components/ui';
 interface Statement { id: number; reference: string; title: string; partnerName: string; direction: string; currency: string; fromDay: string; toDay: string; dueDay: string | null; lines: { label: string; amount: string }[]; total: string; publicNote: string; status: string; version: number; issuedAt: string | null; cancelReason: string | null; createdAt: string }
@@ -65,7 +65,7 @@ async function sharePreview(){await action(async()=>{preview.value=await post(`/
 async function shareDocument(){if(!preview.value)return;await action(async()=>{await post(`/api/services/settlements/${selected.value}/shares`,{accessId:Number(recipient.value),confirmation:preview.value!.confirmation,acknowledge:shareAck.value});await detail();});}
 async function revoke(s:Share){await action(async()=>{await del(`/api/services/settlements/${selected.value}/shares/${s.id}`);await pageRows('shares');});}
 async function respond(){await action(async()=>{await post(`${base.value}/${selected.value}/respond`,{version:share.value!.version,status:responseStatus.value,note:responseNote.value});responseNote.value='';await detail();await list();});}
-async function exportCsv(){await action(async()=>{const workspace=manage.value?localStorage.getItem('rp-workspace'):null;const r=await fetch(`${base.value}/${selected.value}/export.csv`,{credentials:'same-origin',headers:workspace?{'x-workspace-id':workspace}:{}});if(!r.ok)throw new Error(`HTTP ${r.status}`);const url=URL.createObjectURL(await r.blob()),a=document.createElement('a');a.href=url;a.download='settlement.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});}
+async function exportCsv() { await action(() => downloadFile(`${base.value}/${selected.value}/export.csv`, 'settlement.csv')); }
 watch(recipient,()=>{preview.value=null;shareAck.value=false;});
 onMounted(()=>void action(async()=>{await init();if(manage.value&&typeof route.query.source==='string'){const r=await get<{siteId:number;reviewId:number;evidence:Evidence;amount:string}>(`/api/services/settlements/sources/${encodeURIComponent(route.query.source)}`);siteId.value=r.siteId;await siteResources();await list();create();sourceEvidence.value=r.evidence;sourceReviewId.value=r.reviewId;draft.value.fromDay=r.evidence.scope.fromDay;draft.value.toDay=r.evidence.scope.toDay;draft.value.lines=[{label:l('已观测上游成本（待核对）','Observed supplier cost (requires verification)'),amount:r.amount}];}}));
 </script>
