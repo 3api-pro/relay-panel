@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, ref, type ComputedRef } from 'vue';
+import { computed, inject, onMounted, ref, watch, type ComputedRef } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { get, patch, put } from '../../api/client';
 import { toast } from '../../components/ui/toast';
@@ -7,10 +7,26 @@ import { Button, EmptyState, Field, Input, Skeleton } from '../../components/ui'
 import type { SiteBrandingResponse } from './types';
 
 /** 设置页：站点品牌（siteName / logoUrl / announcement）读写 + 只读保险丝开关。 */
-const props = defineProps<{ slug: string; readonlyFlag?: boolean }>();
+const props = defineProps<{ slug: string; label: string; readonlyFlag?: boolean }>();
 const emit = defineEmits<{ 'flags-changed': [] }>();
 const { t } = useI18n();
 const canWrite = inject<ComputedRef<boolean>>('canWrite', computed(() => false));
+
+// Panel-only name: remains editable even when the engine is unreachable or read-only.
+const displayName = ref(props.label);
+const nameSaving = ref(false);
+watch(() => props.label, value => { displayName.value = value; });
+async function saveName(): Promise<void> {
+  const label = displayName.value.trim();
+  if (!label || label.length > 64 || !canWrite.value) return;
+  nameSaving.value = true;
+  try {
+    await patch(`/api/sites/${props.slug}`, { label });
+    toast.success(t('siteDetail.settings.toastSaved'));
+    emit('flags-changed');
+  } catch { /* client displays the error */ }
+  finally { nameSaving.value = false; }
+}
 
 // ---- 只读保险丝 ----
 const flagSaving = ref(false);
@@ -71,6 +87,14 @@ async function save(): Promise<void> {
 
 <template>
   <div class="max-w-[600px]">
+    <form class="rp-panel mb-5 space-y-4 p-5" @submit.prevent="saveName">
+      <Field :label="t('sites.adopt.nameLabel')" :hint="t('sites.adopt.editNameHint')">
+        <Input v-model="displayName" maxlength="64" :aria-label="t('sites.adopt.nameLabel')" :disabled="!canWrite || nameSaving" />
+      </Field>
+      <div v-if="canWrite" class="flex justify-end">
+        <Button type="submit" :loading="nameSaving" :disabled="!displayName.trim() || displayName.trim().length > 64 || displayName.trim() === props.label">{{ t('sites.adopt.saveName') }}</Button>
+      </div>
+    </form>
     <div v-if="loading" class="rp-panel p-5"><Skeleton :lines="5" /></div>
 
     <div v-else-if="loadError" class="rp-panel p-8">

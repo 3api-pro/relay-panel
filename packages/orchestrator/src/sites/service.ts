@@ -1,4 +1,5 @@
 import { connect } from 'node:net';
+import { randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type {
   ChannelRecord,
@@ -442,7 +443,7 @@ export interface CreateSiteInput {
 
 /** 自助接管存量站（SaaS 面板版 adopt；凭据二选一：admin key 或 admin 邮箱+密码） */
 export interface AdoptSiteInput {
-  slug: string;
+  slug?: string;
   label?: string;
   baseUrl: string;
   engine: EngineKind;
@@ -1233,7 +1234,7 @@ export class SitesService {
 
   /**
    * 接管存量站（面板自助版；CLI adopt 的带凭据校验加强版）：
-   * 配额检查 → 凭据加密入库 → 健康探测 + admin 凭据实连验证 → 插 managed='external' 行。
+   * 配额检查 → 原子保留站点标识与加密凭据 → 健康探测 + admin 凭据实连验证。
    * 存量站接入即计入配额（activeSites 不区分 managed），统一管理本身是订阅的一部分。
    */
   async adoptSite(ctx: SessionCtx, input: AdoptSiteInput): Promise<{ slug: string; siteId: number }> {
@@ -1266,36 +1267,38 @@ export class SitesService {
 
     const site = await runExclusive(async () => {
       await this.checkQuota(ctx);
-      const dup = await this.deps.db.orm
-        .select({ id: sites.id })
-        .from(sites)
-        .where(eq(sites.slug, input.slug))
-        .limit(1);
-      if (dup.length > 0) throw new ApiError(409, '站点标识已存在');
-
-      // 凭据先入库（enc:<slug>），验证走统一 credstore 路径 —— 与运行期同一条解析链
       const secrets: Record<string, string> = hasKey
         ? { adminApiKey: input.adminApiKey! }
         : { adminEmail: input.adminEmail!, adminPassword: input.adminPassword! };
-      const credentialRef = await makeStoreCredential(this.deps.db, this.deps.config)(input.slug, secrets);
-
-      const inserted = await this.deps.db.orm
-        .insert(sites)
-        .values({
-          operatorId: ctx.operatorId,
-          slug: input.slug,
-          label: input.label ?? input.slug,
-          engine: input.engine,
-          version: 'prod', // 存量站版本未知（探测成功后回填）
-          hostPort,
-          baseUrl,
-          credentialRef,
-          managed: 'external',
-          readonly: input.readonly === true,
-          status: 'active',
-        })
-        .returning();
-      return inserted[0]!;
+      const key = this.deps.config.secretKey;
+      if (!key) throw new ApiError(503, '服务未配置凭据加密，暂时无法接入站点');
+      const ciphertext = encryptSecret(JSON.stringify(secrets), key);
+      const credentialConflict = new Error('Site credential identity already reserved');
+      for (let attempt = 0; attempt < 5; attempt++) {
+        // Opaque internal identity: independent of a mutable, non-unique display name.
+        const slug = input.slug ?? `s-${randomUUID().replace(/-/g, '').slice(0, 30)}`;
+        const credentialRef = `enc:${slug}`;
+        try {
+          const row = await this.deps.db.orm.transaction(async orm => {
+            const [reserved] = await orm.insert(sites).values({
+              operatorId: ctx.operatorId, slug, label: input.label?.trim() || parsed.host.slice(0, 64),
+              engine: input.engine, version: 'prod', hostPort, baseUrl, credentialRef,
+              managed: 'external', readonly: input.readonly === true, status: 'active',
+            }).onConflictDoNothing({ target: sites.slug }).returning();
+            if (!reserved) return null;
+            // Never upsert an existing credential: a collision must not change another site's access.
+            const saved = await orm.insert(credentials).values({ ref: credentialRef, kind: 'admin', ciphertext })
+              .onConflictDoNothing({ target: credentials.ref }).returning({ ref: credentials.ref });
+            if (!saved.length) throw credentialConflict;
+            return reserved;
+          });
+          if (row) return row;
+        } catch (error) {
+          if (error !== credentialConflict) throw error;
+        }
+        if (input.slug !== undefined) throw new ApiError(409, '站点标识已存在');
+      }
+      throw new ApiError(503, '暂时无法分配站点标识，请重试');
     });
 
     // 健康探测 + admin 凭据实连验证；失败回滚（删行+删凭据），不留半接入状态
@@ -1330,7 +1333,7 @@ export class SitesService {
       await writeAudit(this.deps.db, {
         actor: ctx.email,
         action: 'site.adopt',
-        payload: { slug: input.slug, engine: input.engine },
+        payload: { slug: site.slug, engine: input.engine },
         ok: false,
         error: redactText(errMsg(err)),
       });

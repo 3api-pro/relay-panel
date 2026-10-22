@@ -33,8 +33,9 @@ const createSiteBody = z.object({
 
 const adoptSiteBody = z
   .object({
-    slug: z.string().regex(SLUG_RE, '需为 2-32 位小写字母/数字/连字符，且以字母或数字开头'),
-    label: z.string().min(1).max(64).optional(),
+    // Legacy API clients may still supply their own identifier. The UI leaves it to the server.
+    slug: z.string().regex(SLUG_RE, '需为 2-32 位小写字母/数字/连字符，且以字母或数字开头').optional(),
+    label: z.string().trim().min(1).max(64).optional(),
     baseUrl: z.string().url(),
     engine: z.enum(['sub2api', 'newapi']),
     adminApiKey: z.string().min(1).optional(),
@@ -50,7 +51,7 @@ const adoptSiteBody = z
 const siteFlagsBody = z
   .object({
     readonly: z.boolean().optional(),
-    label: z.string().min(1).max(64).optional(),
+    label: z.string().trim().min(1).max(64).optional(),
     notes: z.string().max(500).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, '至少提供一个字段');
@@ -195,7 +196,7 @@ export function registerSitesRoutes(app: FastifyInstance, deps: SitesServiceDeps
     const ctx = requireCtx(req);
     const body = parseBody(adoptSiteBody, req.body);
     const out = await service.adoptSite(ctx, {
-      slug: body.slug,
+      ...(body.slug !== undefined ? { slug: body.slug } : {}),
       baseUrl: body.baseUrl,
       engine: body.engine,
       ...(body.label !== undefined ? { label: body.label } : {}),

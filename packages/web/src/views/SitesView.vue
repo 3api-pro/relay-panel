@@ -359,7 +359,6 @@ async function submitCreate(): Promise<void> {
 const adoptOpen = ref(false);
 const adoptSubmitting = ref(false);
 const aEngine = ref<string | number | null>('sub2api');
-const aSlug = ref('');
 const aLabel = ref('');
 const aBaseUrl = ref('');
 const aCredMode = ref<string | number>('key');
@@ -369,15 +368,14 @@ const aAdminPassword = ref('');
 const aReadonly = ref(true);
 const aErrors = ref<Record<string, string>>({});
 
-// baseUrl 域名 → slug 自动预填；同 create,手改后不覆盖
-const aSlugAuto = ref('');
+// A friendly name defaults to the address; preserve names the user has edited.
+const aLabelAuto = ref('');
 watch(aBaseUrl, (v) => {
-  if (aSlug.value && aSlug.value !== aSlugAuto.value) return;
-  const s = slugify(v);
-  if (s) {
-    aSlug.value = s;
-    aSlugAuto.value = s;
-  }
+  if (aLabel.value && aLabel.value !== aLabelAuto.value) return;
+  let name = '';
+  try { const url = new URL(v); if (['http:', 'https:'].includes(url.protocol)) name = url.host.slice(0, 64); } catch { /* Address still being typed. */ }
+  aLabel.value = name;
+  aLabelAuto.value = name;
 });
 
 const credModeOptions = computed<SelectOption[]>(() => [
@@ -387,8 +385,7 @@ const credModeOptions = computed<SelectOption[]>(() => [
 
 function openAdopt(): void {
   aEngine.value = 'sub2api';
-  aSlug.value = '';
-  aSlugAuto.value = '';
+  aLabelAuto.value = '';
   aLabel.value = '';
   aBaseUrl.value = '';
   aCredMode.value = 'key';
@@ -403,9 +400,7 @@ function openAdopt(): void {
 function validateAdopt(): boolean {
   const e: Record<string, string> = {};
   if (!aEngine.value) e.engine = t('sites.create.errEngine');
-  const slug = aSlug.value.trim();
-  if (!slug) e.slug = t('sites.create.errSlugRequired');
-  else if (!SLUG_RE.test(slug)) e.slug = t('sites.create.errSlugFormat');
+  if (aLabel.value.trim().length > 64) e.label = t('sites.adopt.errLabelLength');
   const url = aBaseUrl.value.trim();
   if (!url || !/^https?:\/\//.test(url)) e.baseUrl = t('sites.adopt.errBaseUrl');
   if (aCredMode.value === 'key') {
@@ -423,7 +418,6 @@ async function submitAdopt(): Promise<void> {
   adoptSubmitting.value = true;
   try {
     const body: Record<string, unknown> = {
-      slug: aSlug.value.trim(),
       baseUrl: aBaseUrl.value.trim().replace(/\/+$/, ''),
       engine: String(aEngine.value),
       readonly: aReadonly.value,
@@ -523,7 +517,7 @@ async function submitAdopt(): Promise<void> {
                   <Lock :size="10" /> {{ t('sites.readonlyBadge') }}
                 </Badge>
               </div>
-              <span class="truncate font-mono text-[11px] text-muted">{{ asSite(row).slug }}</span>
+              <span v-if="asSite(row).managed !== 'external'" class="truncate font-mono text-[11px] text-muted">{{ asSite(row).slug }}</span>
             </div>
           </div>
         </template>
@@ -704,14 +698,9 @@ async function submitAdopt(): Promise<void> {
           </Field>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="slug" required :error="aErrors.slug" :hint="t('sites.adopt.slugHint')">
-            <Input v-model="aSlug" mono placeholder="my-legacy-site" :disabled="adoptSubmitting" />
-          </Field>
-          <Field :label="t('sites.create.labelLabel')">
-            <Input v-model="aLabel" :placeholder="t('sites.create.labelPlaceholder')" :disabled="adoptSubmitting" />
-          </Field>
-        </div>
+        <Field :label="t('sites.adopt.nameLabel')" :hint="t('sites.adopt.nameHint')" :error="aErrors.label">
+          <Input v-model="aLabel" maxlength="64" :aria-label="t('sites.adopt.nameLabel')" :placeholder="t('sites.adopt.namePlaceholder')" :disabled="adoptSubmitting" />
+        </Field>
 
         <div class="border-t border-border/70 pt-4">
           <p class="rp-microlabel mb-3">{{ t('sites.adopt.credSection') }}</p>

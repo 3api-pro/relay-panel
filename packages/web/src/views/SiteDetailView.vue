@@ -183,7 +183,7 @@ async function doDestroy(): Promise<void> {
               <Badge v-if="site.readonly" tone="muted" size="sm">{{ t('sites.readonlyBadge') }}</Badge>
             </div>
             <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
-              <span class="font-mono">{{ site.slug }}</span>
+              <span v-if="!isExternal" class="font-mono">{{ site.slug }}</span>
               <span class="tnum">{{ t('siteDetail.header.port', { n: site.hostPort }) }}</span>
               <span v-if="site.latencyMs !== undefined" class="tnum">{{ t('siteDetail.header.latency', { n: site.latencyMs }) }}</span>
               <span v-if="site.domains && site.domains.length > 0" class="truncate font-mono">
@@ -229,6 +229,7 @@ async function doDestroy(): Promise<void> {
           <SettingsTab
             v-else-if="tabKey === 'settings'"
             :slug="slug"
+            :label="site.label"
             :readonly-flag="site.readonly === true"
             @flags-changed="loadSite(true)"
           />

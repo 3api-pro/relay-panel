@@ -237,6 +237,15 @@ relay-panel 编排器（orchestrator）的 HTTP API 全表。默认监听 `http:
 - 受套餐配额约束（见 §8）：超过配额 → 400。
 - 返回后用 `GET /api/jobs/:jobId` 跟踪 provision 步骤。
 
+### POST /api/sites/adopt
+
+接入已有站点。必填 `baseUrl`、`engine`，凭据提供 `adminApiKey` 或 `adminEmail` + `adminPassword`；可选 `readonly`。
+
+- `label` 是面板内的“站点名称（备注）”，支持中文和重复名称，去掉首尾空白后为 1–64 字符；省略时使用站点域名（含非默认端口，最长 64 字符）。
+- `slug` 可省略，由服务端自动分配全局唯一内部标识。保留旧 API 客户端显式传入合法 `slug` 的兼容行为；面板不展示此输入。
+- 成功返回 `201 { "slug": "s-…", "siteId": 42 }`。探测失败会清理保留的站点和凭据，不覆盖其他站点的凭据。
+- `PATCH /api/sites/:slug` 的 `{ "label": "主站" }` 可修改备注名，不改变内部标识、地址、凭据或引擎前台品牌；仅允许所属站长或管理员。
+
 ### DELETE /api/sites/:slug
 
 ```json

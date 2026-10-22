@@ -1,9 +1,15 @@
 import './public-dns-fixture.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { credentials, sites, subscriptions } from '../src/db/schema.js';
 import { toPgTimestamp } from '../src/auth/sessions.js';
 import { makeTestServer, type TestServer } from './helpers.js';
+
+vi.mock('node:crypto', async importOriginal => {
+  const original = await importOriginal<typeof import('node:crypto')>();
+  return { ...original, randomUUID: vi.fn(original.randomUUID) };
+});
 
 /**
  * 自助接管（POST /api/sites/adopt）+ readonly 保险丝 + 支持面设置 测试。
@@ -49,6 +55,60 @@ function adoptPayload(overrides: Record<string, unknown> = {}): Record<string, u
 }
 
 describe('adopt 自助接管', () => {
+  it('automatically assigns distinct identities to concurrent requests with the same Chinese nickname', async () => {
+    const responses = await Promise.all(Array.from({ length: 3 }, () => ts.app.inject({
+      method: 'POST', url: '/api/sites/adopt', cookies: { rp_session: rootCookie },
+      payload: adoptPayload({ slug: undefined, label: '主站（备注）' }),
+    })));
+    expect(responses.map(r => r.statusCode)).toEqual([201, 201, 201]);
+    const ids = responses.map(r => r.json().slug as string);
+    expect(new Set(ids).size).toBe(3);
+    for (const slug of ids) {
+      expect(slug).toMatch(/^s-[a-f0-9]{30}$/);
+      const [row] = await ts.db.orm.select().from(sites).where(eq(sites.slug, slug));
+      expect(row?.label).toBe('主站（备注）');
+      expect(row?.credentialRef).toBe(`enc:${slug}`);
+    }
+  });
+
+  it('defaults the nickname to the address and allows renaming without changing identity or credentials', async () => {
+    const response = await ts.app.inject({ method: 'POST', url: '/api/sites/adopt', cookies: { rp_session: rootCookie },
+      payload: adoptPayload({ slug: undefined, label: undefined }) });
+    expect(response.statusCode).toBe(201);
+    const slug = response.json().slug as string;
+    const [before] = await ts.db.orm.select().from(sites).where(eq(sites.slug, slug));
+    expect(before?.label).toBe('203.0.113.10:3272');
+    const credBefore = await ts.db.orm.select().from(credentials).where(eq(credentials.ref, `enc:${slug}`));
+    const renamed = await ts.app.inject({ method: 'PATCH', url: `/api/sites/${slug}`, cookies: { rp_session: rootCookie }, payload: { label: '  备用站  ' } });
+    expect(renamed.statusCode).toBe(200);
+    const [after] = await ts.db.orm.select().from(sites).where(eq(sites.slug, slug));
+    expect(after).toMatchObject({ id: before!.id, slug, label: '备用站', baseUrl: before!.baseUrl, credentialRef: before!.credentialRef });
+    expect(await ts.db.orm.select().from(credentials).where(eq(credentials.ref, `enc:${slug}`))).toEqual(credBefore);
+    const denied = await ts.app.inject({ method: 'PATCH', url: `/api/sites/${slug}`, cookies: { rp_session: opCookie }, payload: { label: 'wrong owner' } });
+    expect(denied.statusCode).toBe(404);
+  });
+
+  it('retries a generated identity collision without overwriting the original credential', async () => {
+    const uuid = '11111111-1111-4111-8111-111111111111';
+    vi.mocked(randomUUID).mockReturnValueOnce(uuid);
+    const first = await ts.app.inject({ method: 'POST', url: '/api/sites/adopt', cookies: { rp_session: rootCookie }, payload: adoptPayload({ slug: undefined }) });
+    expect(first.statusCode).toBe(201);
+    const slug = first.json().slug as string;
+    const before = await ts.db.orm.select().from(credentials).where(eq(credentials.ref, `enc:${slug}`));
+    vi.mocked(randomUUID).mockReturnValueOnce(uuid);
+    const second = await ts.app.inject({ method: 'POST', url: '/api/sites/adopt', cookies: { rp_session: rootCookie }, payload: adoptPayload({ slug: undefined, adminApiKey: 'different-test-key' }) });
+    expect(second.statusCode).toBe(201);
+    expect(second.json().slug).not.toBe(slug);
+    expect(await ts.db.orm.select().from(credentials).where(eq(credentials.ref, `enc:${slug}`))).toEqual(before);
+  });
+
+  it('rolls back site reservation when a credential identity already exists', async () => {
+    await ts.db.orm.insert(credentials).values({ ref: 'enc:reserved-name', kind: 'admin', ciphertext: 'existing-ciphertext' });
+    const res = await ts.app.inject({ method: 'POST', url: '/api/sites/adopt', cookies: { rp_session: rootCookie }, payload: adoptPayload({ slug: 'reserved-name' }) });
+    expect(res.statusCode).toBe(409);
+    expect(await ts.db.orm.select().from(sites).where(eq(sites.slug, 'reserved-name'))).toHaveLength(0);
+    expect((await ts.db.orm.select().from(credentials).where(eq(credentials.ref, 'enc:reserved-name')))[0]?.ciphertext).toBe('existing-ciphertext');
+  });
   it('凭据缺失 → 400', async () => {
     const res = await ts.app.inject({
       method: 'POST',
