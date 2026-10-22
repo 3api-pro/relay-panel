@@ -823,3 +823,33 @@ export interface SystemVersionResponse {
   cached: boolean;
   repo: string;
 }
+
+export interface BackupCheckView {
+  id: number;
+  backupId: number;
+  status: 'running' | 'verified' | 'missing' | 'mismatch' | 'unavailable' | 'interrupted';
+  actor: string;
+  startedAt: string;
+  completedAt: string | null;
+  observedBytes: number | null;
+  observedSha256: string | null;
+  detail: string | null;
+}
+export interface BackupRunView {
+  id: number;
+  storageKey: string;
+  databaseKind: 'pg' | 'pglite';
+  status: 'running' | 'succeeded' | 'failed' | 'interrupted';
+  archiveFile: string;
+  bytes: number | null;
+  sha256: string | null;
+  manifestSha256: string | null;
+  excludedTables: string[];
+  actor: string;
+  startedAt: string;
+  completedAt: string | null;
+  error: string | null;
+  lastCheck: BackupCheckView | null;
+}
+export interface BackupsResponse { backups: BackupRunView[]; hasMore: boolean }
+export interface BackupChecksResponse { checks: BackupCheckView[]; hasMore: boolean }
