@@ -52,5 +52,6 @@
   "team": "Team & workspaces",
   "operations": "Operations & backups",
   "reconciliation": "Supplier reconciliation",
-  "localApps": "Self-hosting & applications"
+  "localApps": "Self-hosting & applications",
+  "services": "Service center"
 }

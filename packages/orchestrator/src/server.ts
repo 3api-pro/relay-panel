@@ -12,6 +12,7 @@ import { SESSION_COOKIE, sessionCookieOptions } from './auth/sessions.js';
 import { JobEngine } from './jobs/engine.js';
 import type { SmtpSend } from './alerts/smtp.js';
 import { registerReconciliationRoutes } from './finance/reconciliation.js';
+import { registerServiceRoutes } from './services/routes.js';
 import { registerOperationsRoutes } from './operations/routes.js';
 import { registerTeamRoutes, resolveWorkspace } from './team/routes.js';
 import { registerAftercareRoutes } from './billing/aftercare.js';
@@ -205,6 +206,7 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
   registerTeamRoutes(app, deps);
   registerOperationsRoutes(app, deps);
   registerReconciliationRoutes(app, deps);
+  registerServiceRoutes(app, deps);
   registerTicketRoutes(app, deps);
   registerNotificationRoutes(app, deps);
   registerJobsRoutes(app, deps);

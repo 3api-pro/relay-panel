@@ -38,6 +38,14 @@ relay-panel collapses that into one control plane:
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+## v2.4.0: Site service center
+
+Read existing Sub2API and New API logs to connect channel/model observations, cost signals, incidents, support tickets, partners and operational delivery. No synthetic inference calls or channel heartbeat probes are generated. Coverage, sample limits and freshness are explicit; absent traffic and missing fields remain unknown.
+
+Includes scoped evidence exports, eight case workflows with checklists and progress history, supplier/reseller/operator records, client configuration examples and previewed public status notices. Collection can be paused per site. Partner records grant no implicit external access, and settlements never transfer funds automatically.
+
+[Service guide](docs/SERVICE-CENTER.md) · [Planning and review record](docs/SERVICE-PLATFORM-PLAN.md) · [Release notes](docs/releases/v2.4.0.md)
+
 ## Features
 
 - **Your infrastructure** — install engines on your own machine through the self-hosted panel, or connect existing sites. SaaS provides panel management, not relay hardware or server rental. Existing locally managed installations retain lifecycle support.

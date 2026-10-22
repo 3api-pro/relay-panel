@@ -64,6 +64,7 @@ export interface Config {
   dockerViaWsl: boolean;
   /** 告警监控周期；0=关闭 */
   monitorIntervalMs: number;
+  observationIntervalMs: number;
   /** >0 时启用 low_balance 规则 */
   balanceThreshold: number;
   /**
@@ -156,6 +157,7 @@ const envSchema = z.object({
     .default('18100-18999'),
   RP_DOCKER_VIA_WSL: z.enum(['0', '1']).default('0'),
   RP_MONITOR_INTERVAL_MS: z.coerce.number().int().min(0).default(60_000),
+  RP_OBSERVATION_INTERVAL_MS: z.coerce.number().int().min(0).default(300_000),
   RP_BALANCE_THRESHOLD: z.coerce.number().min(0).default(0),
   RP_CHANNEL_BALANCE_THRESHOLD: z.coerce.number().min(0).default(0),
   RP_PAYMENT_RECONCILE_INTERVAL_MS: z.coerce.number().int().min(0).default(60_000),
@@ -259,6 +261,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     portRange,
     dockerViaWsl: e.RP_DOCKER_VIA_WSL === '1',
     monitorIntervalMs: e.RP_MONITOR_INTERVAL_MS,
+    observationIntervalMs: e.RP_OBSERVATION_INTERVAL_MS,
     balanceThreshold: e.RP_BALANCE_THRESHOLD,
     channelBalanceThreshold: e.RP_CHANNEL_BALANCE_THRESHOLD,
     paymentReconcileIntervalMs: e.RP_PAYMENT_RECONCILE_INTERVAL_MS,

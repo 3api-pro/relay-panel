@@ -117,6 +117,7 @@ describe('db: runMigrations + schema', () => {
       '010_customer_operations.sql',
       '011_organizations.sql',
       '012_finance_reconciliation.sql',
+      '013_service_center.sql',
     ]);
     const second = await runMigrations(db);
     expect(second).toEqual([]);
@@ -134,6 +135,7 @@ describe('db: runMigrations + schema', () => {
       { name: '010_customer_operations.sql' },
       { name: '011_organizations.sql' },
       { name: '012_finance_reconciliation.sql' },
+      { name: '013_service_center.sql' },
     ]);
   });
 

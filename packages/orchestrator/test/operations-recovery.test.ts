@@ -35,8 +35,10 @@ describe('recovery and financial evidence', () => {
       const rows = await restored.query<{ email: string }>('SELECT email FROM operators WHERE id=$1', [account.operatorId]);
       expect(rows.rows[0]!.email).toBe('recovery@tests.example');
       const tables = await restored.query<{ name: string }>('SELECT name FROM schema_migrations ORDER BY name');
-      expect(tables.rows.at(-1)!.name).toBe('012_finance_reconciliation.sql');
+      expect(tables.rows.at(-1)!.name).toBe('013_service_center.sql');
       expect((await restored.query('SELECT * FROM refund_requests')).rows).toEqual([]);
+      expect((await restored.query('SELECT * FROM service_work')).rows).toEqual([]);
+      expect((await restored.query('SELECT * FROM observation_source_rows')).rows).toEqual([]);
     } finally { await restored.close(); }
     const ops = await ts.app.inject({ url: '/api/admin/operations', cookies: { rp_session: account.cookie } });
     expect(ops.json().backupOverdue).toBe(false);

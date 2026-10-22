@@ -52,5 +52,6 @@
   "team": "团队与工作区",
   "operations": "运维与备份",
   "reconciliation": "供应商对账",
-  "localApps": "自部署与应用管理"
+  "localApps": "自部署与应用管理",
+  "services": "站点服务中心"
 }

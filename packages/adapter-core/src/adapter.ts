@@ -105,6 +105,8 @@ export interface EngineAdminClient {
   };
 
   stats: {
+    /** Reads existing logs only; never generates inference or channel-test traffic. */
+    observations?(query: { day: string; page: number }): Promise<import('./types.js').PassivePage>;
     /** Bounded, allowlisted request evidence from the engine's public admin API. */
     usageRecords?(query: UsageRecordQuery): Promise<UsageRecordPage>;
     usage(from: Date, to: Date): Promise<UsageSummary>;

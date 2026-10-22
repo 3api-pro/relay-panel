@@ -1,3 +1,4 @@
+import { observations } from './observations.js';
 import type {
   ChannelRecord,
   ChannelSpec,
@@ -341,6 +342,7 @@ export class NewapiAdminClient implements EngineAdminClient {
   };
 
   stats = {
+    observations: (query: { day: string; page: number }) => observations(this.http, query),
     // /api/data/ 按模型聚合 count/token_used/quota。new-api 不区分 prompt/completion，
     // 故 promptTokens=0，completionTokens=总 token（看板求和口径正确）。
     usageCalendarDays: async (fromDate: string, toDate: string): Promise<UsageSummary> =>

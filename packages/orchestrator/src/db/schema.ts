@@ -508,6 +508,47 @@ export const financeReviewEvents = pgTable('finance_review_events', {
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
 }, t => [index('finance_review_events_case_id_idx').on(t.caseId, t.id)]);
 
+export const observationRuns = pgTable('observation_runs', {
+  id: serial('id').primaryKey(), siteId: integer('site_id').notNull().references(() => sites.id), day: text('day').notNull(),
+  status: text('status').notNull().default('pending'), nextPage: integer('next_page').notNull().default(1),
+  generation: integer('generation').notNull().default(1), total: integer('total'), sourceScope: text('source_scope'),
+  leaseUntil: timestamp('lease_until', { mode: 'string' }), updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(), error: text('error'),
+}, t => [unique('observation_run_day_uk').on(t.siteId, t.day)]);
+export const observedRequests = pgTable('observed_requests', {
+  id: serial('id').primaryKey(), runId: integer('run_id').notNull().references(() => observationRuns.id, { onDelete: 'cascade' }),
+  sourceId: text('source_id').notNull(), generation: integer('generation').notNull(),
+  evidence: jsonb('evidence').$type<import('@relay-panel/adapter-core').PassiveRecord>().notNull(),
+  observedAt: timestamp('observed_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [unique('observed_request_source_uk').on(t.runId, t.sourceId), index('observed_requests_run_idx').on(t.runId, t.generation, t.id)]);
+export const observationSourceRows=pgTable('observation_source_rows',{
+  runId:integer('run_id').notNull().references(()=>observationRuns.id,{onDelete:'cascade'}),sourceId:text('source_id').notNull(),generation:integer('generation').notNull(),
+},t=>[unique('observation_source_rows_pkey').on(t.runId,t.sourceId)]);
+export const servicePartners = pgTable('service_partners', {
+  id: serial('id').primaryKey(), siteId: integer('site_id').notNull().references(() => sites.id), kind: text('kind').notNull(),
+  name: text('name').notNull(), contact: text('contact').notNull().default(''), notes: text('notes').notNull().default(''),
+  status: text('status').notNull().default('active'), version: integer('version').notNull().default(1),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(), updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [index('service_partners_site_idx').on(t.siteId, t.id)]);
+export const serviceWork = pgTable('service_work', {
+  id: serial('id').primaryKey(), siteId: integer('site_id').notNull().references(() => sites.id), kind: text('kind').notNull(),
+  title: text('title').notNull(), description: text('description').notNull(), status: text('status').notNull().default('open'),
+  priority: text('priority').notNull().default('normal'), version: integer('version').notNull().default(1),
+  sourceId: integer('source_id').references(() => observedRequests.id, { onDelete: 'set null' }),
+  evidence: jsonb('evidence').$type<import('@relay-panel/adapter-core').PassiveRecord>(),
+  partnerId: integer('partner_id').references(() => servicePartners.id), ticketId: integer('ticket_id').references(() => supportTickets.id),
+  details: jsonb('details').$type<Record<string, unknown>>().notNull().default({}), createdBy: integer('created_by').notNull().references(() => operators.id),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(), updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [index('service_work_site_idx').on(t.siteId, t.id)]);
+export const serviceEvents = pgTable('service_events', {
+  id: serial('id').primaryKey(), workId: integer('work_id').notNull().references(() => serviceWork.id), actorId: integer('actor_id').notNull().references(() => operators.id),
+  status: text('status').notNull(), note: text('note').notNull(), createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+});
+export const servicePublications = pgTable('service_publications', {
+  siteId: integer('site_id').primaryKey().references(() => sites.id), token: text('token').notNull().unique(), title: text('title').notNull(),
+  body: text('body').notNull(), state: text('state').notNull().default('maintenance'), published: boolean('published').notNull().default(false),
+  version: integer('version').notNull().default(1), updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+});
+
 // 常用行类型（下游模块共享，避免各自重复推导）
 export type OperatorRow = typeof operators.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;

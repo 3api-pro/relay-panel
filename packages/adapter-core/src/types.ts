@@ -427,3 +427,30 @@ export interface UsageRecordPage {
   pageSize: number;
   pages: number;
 }
+
+/** Allowlisted evidence only. A consume log is not proof of an end-to-end successful request. */
+export interface PassiveRecord {
+  id: string;
+  requestId: string | null;
+  createdAt: string;
+  model: string | null;
+  channelId: string | null;
+  outcome: 'consumption' | 'error' | 'unknown';
+  durationMs: number | null;
+  firstTokenMs: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  charge: number | null;
+  supplierCost: number | null;
+  expectedCharge: number | null;
+  currency: 'USD';
+  billingType: 'balance' | 'subscription' | 'unknown';
+}
+export interface PassivePage {
+  items: PassiveRecord[];
+  sourceIds: string[];
+  page: number;
+  pages: number;
+  total: number;
+  sourceScope: 'consumption-only' | 'consume-and-error-logs';
+}

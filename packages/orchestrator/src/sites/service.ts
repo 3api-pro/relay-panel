@@ -727,6 +727,18 @@ export class SitesService {
     );
   }
 
+  async passiveRecords(ctx: SessionCtx, slug: string, query: { day: string; page: number }) {
+    const site = await this.requireSite(ctx, slug);
+    try {
+      const client = await this.client(site);
+      if (!client.stats.observations) throw new ApiError(501, '该引擎未提供可读取的请求日志');
+      return await client.stats.observations(query);
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 501) throw error;
+      throw new ApiError(502, '无法读取现有日志，请核对站点连接、管理权限和引擎版本');
+    }
+  }
+
   async financeUsageRecords(ctx: SessionCtx, slug: string, query: import('@relay-panel/adapter-core').UsageRecordQuery) {
     requireRoot(ctx);
     const site = await this.requireSite(ctx, slug);
