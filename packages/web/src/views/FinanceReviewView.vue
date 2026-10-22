@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { UsageRecord } from '@relay-panel/adapter-core';
 import { get, post } from '../api/client';
-import type { SiteView, SitesResponse } from '../api/types';
+import type { SiteView } from '../api/types';
 import Button from '../components/ui/Button.vue';
 import { toast } from '../components/ui/toast';
 
@@ -17,7 +17,8 @@ interface ScanResult { page: number; pages: number; scanned: number; total: numb
 const { t } = useI18n();
 const tr = (key: string) => t(`financeReview.${key}`);
 const base = '/api/admin/finance-review';
-const sites = ref<SiteView[]>([]);
+type ReviewSite = Pick<SiteView, 'id' | 'slug' | 'label' | 'engine' | 'status'>;
+const sites = ref<ReviewSite[]>([]);
 const slug = ref('');
 const today = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
 const from = ref(today); const to = ref(today); const requestId = ref(''); const scanPage = ref(1);
@@ -85,7 +86,7 @@ watch(stateFilter, () => { listPage.value = 1; void load(); });
 watch(listPage, () => void load());
 onMounted(async () => {
   await run(async () => {
-    sites.value = (await get<SitesResponse>('/api/sites', { silent: true })).sites.filter(s => s.status !== 'destroyed');
+    sites.value = (await get<{ sites: ReviewSite[] }>(`${base}/sites`, { silent: true })).sites;
     slug.value = sites.value.find(s => s.engine === 'sub2api')?.slug ?? '';
     await load();
   });

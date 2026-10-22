@@ -60,11 +60,19 @@ describe('root-only request review workflow', () => {
   });
   it('rejects every route for non-root before reading the engine', async () => {
     for (const cookie of [owner, viewer]) {
-      for (const [path, body] of [['', undefined], ['/1', undefined], ['/scan', query], ['/1/recheck', { version: 1 }], ['/1/review', { version: 1, state: 'reviewing', note: 'x' }]] as const) {
+      for (const [path, body] of [['', undefined], ['/sites', undefined], ['/1', undefined], ['/scan', query], ['/1/recheck', { version: 1 }], ['/1/review', { version: 1, state: 'reviewing', note: 'x' }]] as const) {
         expect((await api(path, body, cookie)).statusCode).toBe(403);
       }
     }
     expect(read).not.toHaveBeenCalled();
+  });
+  it('loads allowlisted site choices even if the engine is down', async () => {
+    ts.adapters.sub2api.calls.length = 0;
+    fail = true;
+    const result = await api('/sites');
+    expect(result.statusCode).toBe(200);
+    expect(Object.keys(result.json().sites[0]).sort()).toEqual(['engine', 'id', 'label', 'slug', 'status']);
+    expect(ts.adapters.sub2api.calls).toHaveLength(0);
   });
   it('validates dates, page limits and input before I/O', async () => {
     for (const patch of [{ from: '2026-02-30' }, { from: '2026-01-01' }, { to: '2099-01-01' }, { page: 0 }]) {

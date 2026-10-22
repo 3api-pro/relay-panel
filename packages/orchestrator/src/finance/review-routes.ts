@@ -27,6 +27,7 @@ function parse<T extends z.ZodTypeAny>(schema: T, input: unknown): z.output<T> {
 export function registerFinanceReviewRoutes(app: FastifyInstance, deps: SitesServiceDeps) {
   const service = new FinanceReview(deps.db, new SitesService(deps));
   const base = '/api/admin/finance-review';
+  app.get(`${base}/sites`, async req => service.siteOptions(root(req)));
   app.get(base, async req => {
     const ctx = root(req);
     const query = parse(z.object({ state: z.enum(REVIEW_STATES).optional(), siteId: positive.optional(), page: positive.default(1) }), req.query);

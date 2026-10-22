@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, ne } from 'drizzle-orm';
 import type { UsageRecord, UsageRecordQuery } from '@relay-panel/adapter-core';
 import type { Db } from '../db/client.js';
 import { financeReviewCases as cases, financeReviewEvents as events, sites } from '../db/schema.js';
@@ -40,6 +40,12 @@ async function event(db: Db, ctx: SessionCtx, row: Case, kind: string, note: str
 
 export class FinanceReview {
   constructor(private db: Db, private siteService: SitesService) {}
+
+  async siteOptions(ctx: SessionCtx) {
+    requireRoot(ctx);
+    return { sites: await this.db.orm.select({ id: sites.id, slug: sites.slug, label: sites.label, engine: sites.engine, status: sites.status })
+      .from(sites).where(ne(sites.status, 'destroyed')).orderBy(asc(sites.id)) };
+  }
 
   async list(ctx: SessionCtx, state: string | undefined, siteId: number | undefined, page: number) {
     requireRoot(ctx);
