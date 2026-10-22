@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { latestSuccessfulBackup, listBackups, listBackupChecks, verifyBackup } from './backupCatalog.js';
 import { and, desc, eq, isNull, like, lt, gt, ne, or, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../db/client.js';
@@ -36,18 +38,39 @@ export function registerOperationsRoutes(app: FastifyInstance, { db, config }: {
     const [failedMail] = await db.orm.select({ count: sql<number>`count(*)::int` }).from(notifications).where(eq(notifications.status, 'failed'));
     const [missingMfa] = await db.orm.select({ count: sql<number>`count(*)::int` }).from(operators)
       .where(and(eq(operators.role, 'root'), eq(operators.status, 'active'), isNull(operators.mfaSecret)));
-    const lastCompleted = Date.parse(String(backup?.value.completedAt ?? ''));
+    const latestSuccess = await latestSuccessfulBackup(db);
+    const ageMs = latestSuccess?.ageMs ?? Date.now() - Date.parse(String(backup?.value.status === 'success' ? backup.value.completedAt ?? '' : ''));
     return { deploymentMode: config.deploymentMode, provisioningDisabled: !config.localProvisionEnabled,
       accountEmailReady: accountMailReady(config), emailVerificationRequired: config.emailVerificationRequired,
       adminMfaRequired: config.adminMfaRequired, adminsWithoutMfa: missingMfa?.count ?? 0,
-      backup: backup?.value ?? null, automaticBackupEnabled: config.backupIntervalMs > 0,
+      backup: backup?.value ?? null, latestSuccessfulBackup: latestSuccess?.backup ?? null, automaticBackupEnabled: config.backupIntervalMs > 0,
       backupExcludedTables: config.backupExcludeTables,
-      backupOverdue: !Number.isFinite(lastCompleted) || Date.now() - lastCompleted > Math.max(86_400_000, config.backupIntervalMs * 1.5),
+      backupOverdue: !Number.isFinite(ageMs) || ageMs > Math.max(86_400_000, config.backupIntervalMs * 1.5),
       paidUnfulfilled: pending?.count ?? 0, failedNotifications: failedMail?.count ?? 0,
       migrations: (await db.orm.select({ name: schemaMigrations.name }).from(schemaMigrations)).map(x => x.name),
     };
   });
   app.post('/api/admin/operations/backup', async req => { requireRoot(req.ctx!); return performPanelBackup(db, config, req.ctx!.email); });
+  const backupId = z.coerce.number().int().positive().max(2147483647);
+  const pageQuery = z.object({ beforeId: backupId.optional(), limit: z.coerce.number().int().min(1).max(100).default(20) });
+  function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.output<T> {
+    const parsed = schema.safeParse(value);
+    if (!parsed.success) throw new ApiError(400, '备份参数无效');
+    return parsed.data;
+  }
+  app.get('/api/admin/operations/backups', async req => {
+    requireRoot(req.ctx!);
+    return listBackups(db, parse(pageQuery.extend({ status: z.enum(['running','succeeded','failed','interrupted']).optional() }).strict(), req.query));
+  });
+  app.get<{ Params: { id: string } }>('/api/admin/operations/backups/:id/checks', async req => {
+    requireRoot(req.ctx!);
+    return listBackupChecks(db, parse(backupId, req.params.id), parse(pageQuery.strict(), req.query));
+  });
+  app.post<{ Params: { id: string } }>('/api/admin/operations/backups/:id/verify', async req => {
+    requireRoot(req.ctx!);
+    parse(z.object({}).strict(), req.body ?? {});
+    return verifyBackup(db, config, parse(backupId, req.params.id), req.ctx!.email);
+  });
   app.get<{ Querystring: { afterId?: string } }>('/api/audit/export.csv', async (req, reply) => {
     const ctx = req.ctx!;
     if (ctx.role === 'viewer') throw new ApiError(403, '平台观察员不能导出审计');

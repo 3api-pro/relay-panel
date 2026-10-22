@@ -126,6 +126,7 @@ describe('db: runMigrations + schema', () => {
       '019_quota_operations.sql',
       '020_settlement_statements.sql',
       '021_job_execution_leases.sql',
+      '022_backup_catalog.sql',
     ]);
     const second = await runMigrations(db);
     expect(second).toEqual([]);
@@ -152,6 +153,7 @@ describe('db: runMigrations + schema', () => {
       { name: '019_quota_operations.sql' },
       { name: '020_settlement_statements.sql' },
       { name: '021_job_execution_leases.sql' },
+      { name: '022_backup_catalog.sql' },
     ]);
   });
 

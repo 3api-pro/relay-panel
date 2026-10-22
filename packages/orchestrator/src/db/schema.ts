@@ -701,3 +701,37 @@ export const settlementEvents = pgTable('settlement_events', {
   id: serial('id').primaryKey(), statementId: integer('statement_id').notNull().references(() => settlementStatements.id), shareId: integer('share_id').references(() => settlementShares.id),
   actorId: integer('actor_id').notNull().references(() => operators.id), action: text('action').notNull(), note: text('note').notNull(), createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
 }, t => [index('settlement_event_statement').on(t.statementId,t.id)]);
+
+
+/** Durable panel backup history; private lease tokens never enter API views. */
+export const backupRuns = pgTable('backup_runs', {
+  id: serial('id').primaryKey(),
+  storageKey: text('storage_key').notNull().unique(),
+  databaseKind: text('database_kind').notNull(),
+  status: text('status').notNull(),
+  archiveFile: text('archive_file').notNull(),
+  bytes: bigint('bytes', { mode: 'number' }),
+  sha256: text('sha256'),
+  manifestSha256: text('manifest_sha256'),
+  excludedTables: jsonb('excluded_tables').$type<string[]>().notNull().default([]),
+  actor: text('actor').notNull(),
+  leaseToken: text('lease_token').notNull(),
+  leaseUntil: timestamp('lease_until', { mode: 'string' }).notNull(),
+  startedAt: timestamp('started_at', { mode: 'string' }).notNull().defaultNow(),
+  completedAt: timestamp('completed_at', { mode: 'string' }),
+  error: text('error'),
+}, t => [index('backup_runs_status_id').on(t.status, t.id)]);
+export const backupChecks = pgTable('backup_checks', {
+  id: serial('id').primaryKey(),
+  backupId: integer('backup_id').notNull().references(() => backupRuns.id),
+  status: text('status').notNull(),
+  actor: text('actor').notNull(),
+  leaseUntil: timestamp('lease_until', { mode: 'string' }).notNull(),
+  startedAt: timestamp('started_at', { mode: 'string' }).notNull().defaultNow(),
+  completedAt: timestamp('completed_at', { mode: 'string' }),
+  observedBytes: bigint('observed_bytes', { mode: 'number' }),
+  observedSha256: text('observed_sha256'),
+  detail: text('detail'),
+}, t => [index('backup_checks_backup_id').on(t.backupId, t.id), uniqueIndex('backup_checks_running').on(t.backupId).where(sql`${t.status}='running'`)]);
+export type BackupRunRow = typeof backupRuns.$inferSelect;
+export type BackupCheckRow = typeof backupChecks.$inferSelect;
