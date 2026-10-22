@@ -2,7 +2,7 @@ import { applyDueChanges } from './changes.js';
 import { and, desc, eq } from 'drizzle-orm';
 import type { Config, SmtpSettings } from '../config.js';
 import type { Db } from '../db/client.js';
-import { appSettings, operators, plans, subscriptions, type SubscriptionRow } from '../db/schema.js';
+import { appSettings, operators, plans, subscriptions, notificationPreferences, type SubscriptionRow } from '../db/schema.js';
 import { fromPgTimestamp, toPgTimestamp } from '../auth/sessions.js';
 import { writeAudit } from '../audit.js';
 import { redactText } from '../jobs/engine.js';
@@ -166,6 +166,8 @@ export function startBillingSweep(deps: BillingSweepDeps, intervalMs: number): B
     now: number,
   ): Promise<Record<string, string>> {
     if (smtp === null || sub.pendingChange) return {}; // 未配 SMTP：静默跳过（收敛仍照常）
+    const [prefs] = await db.orm.select().from(notificationPreferences).where(eq(notificationPreferences.operatorId, sub.operatorId));
+    if (prefs?.billing === false) return {};
     const due = dueReminders(sub, graceDays, now);
     if (due.length === 0) return {};
 

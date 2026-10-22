@@ -112,6 +112,11 @@ describe('db: runMigrations + schema', () => {
       '005_payment_recovery.sql',
       '006_subscription_changes.sql',
       '007_finance_review.sql',
+      '008_account_security.sql',
+      '009_notifications.sql',
+      '010_customer_operations.sql',
+      '011_organizations.sql',
+      '012_finance_reconciliation.sql',
     ]);
     const second = await runMigrations(db);
     expect(second).toEqual([]);
@@ -124,6 +129,11 @@ describe('db: runMigrations + schema', () => {
       { name: '005_payment_recovery.sql' },
       { name: '006_subscription_changes.sql' },
       { name: '007_finance_review.sql' },
+      { name: '008_account_security.sql' },
+      { name: '009_notifications.sql' },
+      { name: '010_customer_operations.sql' },
+      { name: '011_organizations.sql' },
+      { name: '012_finance_reconciliation.sql' },
     ]);
   });
 

@@ -28,6 +28,14 @@ export interface SmtpSettings {
 }
 
 export interface Config {
+  deploymentMode: 'self-hosted' | 'saas';
+  publicUrl?: string;
+  emailVerificationRequired: boolean;
+  adminMfaRequired: boolean;
+  localProvisionEnabled: boolean;
+  backupDirectory: string;
+  backupIntervalMs: number;
+  pgDumpCommand: string;
   /** 监听端口 */
   port: number;
   /** 监听地址；容器部署设 0.0.0.0 */
@@ -118,6 +126,14 @@ export interface Config {
 }
 
 const envSchema = z.object({
+  RP_BACKUP_DIRECTORY: z.string().default('./data/panel-backups'),
+  RP_BACKUP_INTERVAL_MS: z.coerce.number().int().min(0).default(0),
+  RP_PG_DUMP_COMMAND: z.string().default('pg_dump'),
+  RP_DEPLOYMENT_MODE: z.enum(['self-hosted', 'saas']).default('self-hosted'),
+  RP_PUBLIC_URL: z.preprocess(v => v === '' ? undefined : v, z.string().url().refine(v => { const u = new URL(v); return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password; }).optional()),
+  RP_REQUIRE_EMAIL_VERIFICATION: z.preprocess(v => v === '' ? undefined : v, z.enum(['0', '1']).optional()),
+  RP_REQUIRE_ADMIN_MFA: z.enum(['0', '1']).default('0'),
+  RP_LOCAL_PROVISION_ENABLED: z.enum(['0', '1']).default('1'),
   PORT: z.coerce.number().int().min(1).max(65535).default(7100),
   RP_HOST: z.string().default('127.0.0.1'),
   RP_DB: z.string().default('pglite:./data/orchestrator-db'),
@@ -215,6 +231,14 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       : undefined;
 
   return {
+    backupDirectory: e.RP_BACKUP_DIRECTORY,
+    backupIntervalMs: e.RP_BACKUP_INTERVAL_MS,
+    pgDumpCommand: e.RP_PG_DUMP_COMMAND,
+    deploymentMode: e.RP_DEPLOYMENT_MODE,
+    ...(e.RP_PUBLIC_URL ? { publicUrl: new URL(e.RP_PUBLIC_URL).origin } : {}),
+    emailVerificationRequired: e.RP_REQUIRE_EMAIL_VERIFICATION === '1' || (e.RP_REQUIRE_EMAIL_VERIFICATION === undefined && e.RP_DEPLOYMENT_MODE === 'saas'),
+    adminMfaRequired: e.RP_REQUIRE_ADMIN_MFA === '1',
+    localProvisionEnabled: e.RP_DEPLOYMENT_MODE === 'self-hosted' && e.RP_LOCAL_PROVISION_ENABLED === '1',
     port: e.PORT,
     host: e.RP_HOST,
     dbUrl: e.RP_DB,

@@ -4,7 +4,7 @@
 
 ## 1. 前置要求
 
-- 一台 Linux 服务器（编排的站点容器也跑在这台/这批机器上），安装 Docker Engine + compose 插件。
+- 一台你控制的 Linux 服务器（面板和引擎可以部署在不同机器），安装 Docker Engine + compose 插件。
 - 面板对外访问建议配 HTTPS 反代（见 §5）；要用域名自动化再准备 Caddy（见 [CADDY.md](CADDY.md)）。
 - 开发机（Windows 亦可，docker 经 WSL）见 §8。
 
@@ -85,7 +85,7 @@ docker compose up -d
 
 1. 用 `RP_ADMIN_EMAIL/RP_ADMIN_PASSWORD` 登录 → 设置页**立即改密码**（改密会吊销其他会话）。
 2. 邀请团队：`RP_SIGNUP_MODE=invite` 下在"操作员"页生成一次性邀请链接（token 只显示一次）。角色：`root` 管理一切 / `operator` 只见自己站 / `viewer` 全局只读。详见 [SECURITY.md](SECURITY.md) RBAC 矩阵。
-3. 开第一个站：站点页 → 新建站点向导（引擎、钉版本、slug、admin 邮箱、品牌），任务时间线里看 provision 步骤。
+3. 自部署与本机管理 → 检查环境 → 选择 Sub2API / New API 和固定版本 → 安装到本机。标识、端口和管理凭据自动生成；已有站点也可直接接入。
 4. （可选）导入渠道模板、配置告警 webhook、接 Prometheus（[OPERATIONS.md](OPERATIONS.md)）。
 
 另有 CLI 兜底：容器内 `node dist/cli.js create-admin <email>`（密码取 env `RP_NEW_PASSWORD`，缺省生成随机并打印一次）——适用于锁死自己后重建 root。
@@ -197,3 +197,24 @@ node dist/cli.js adopt site-a http://127.0.0.1:18101 --engine sub2api --credenti
 - [ ] 告警 webhook 已配并演练过一条测试告警
 - [ ] 每日备份 cron + 异地同步 + 恢复演练过一次
 - [ ] Caddy admin API 未暴露公网（如启用域名自动化）
+
+## SaaS 安全、团队与备份配置
+
+新增配置与恢复步骤见 [SAAS-OPERATIONS.md](SAAS-OPERATIONS.md)。自部署版默认支持本机安装；SaaS 不提供服务器开站。仅接入已有站点时无需 Docker socket，可移除普通 compose 中的 docker.sock、站点目录挂载和 group_add。
+
+## 本机应用管理
+
+“本机”指运行面板的自有服务器。面板检查环境、安装固定版本、管理启停和升级，并支持失败安装重试。环境不满足时显示具体原因，不会擅自修改宿主系统或安装 Docker。重试复用已有数据和密钥。
+
+原生 Node.js 部署需要本机 Linux Docker 引擎、Compose 2.20+、可写站点目录和足够空间；Windows 可以使用已配置的 WSL Docker。远程 Docker context 不属于本机，不支持。容器化面板在 Linux 上请使用独立配置：
+
+```bash
+# 与普通 docker-compose.yml 二选一，不要同时运行两套
+# 先按 .env 配好数据库密码、密钥、初始管理员和 RP_SITES_ROOT
+sudo install -d -m 700 -o 10001 -g 10001 /srv/relay-panel/sites
+docker compose -f docker-compose.local.yml up -d --build
+```
+
+此配置让面板使用 host network，访问引擎仅绑定本机回环的端口。面板默认监听 127.0.0.1:7100，PostgreSQL 只绑定 127.0.0.1:15432；可修改 RP_PORT / RP_LOCAL_PG_PORT。公网 HTTPS 使用宿主反向代理。普通 compose 适合只接入外部站点。
+
+安装目录至少剩余 2 GiB 才允许开始；这是预检下限，不是容量承诺。Docker 数据卷可能在另一磁盘，须单独监控。Sub2API 带独立 PostgreSQL/Redis；New API 默认独立 SQLite 数据卷。升级前备份数据库和卷；镜像回退无法撤销数据库迁移。回退会检查旧版本健康，恢复失败会明确报错。站点备份恢复见 OPERATIONS.md；面板定时备份仅包含面板数据库。

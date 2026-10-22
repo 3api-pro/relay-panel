@@ -5,7 +5,7 @@ import { computed, ref, onMounted } from 'vue';
 const props = withDefaults(
   defineProps<{
     modelValue: string | number;
-    type?: 'text' | 'password' | 'email' | 'number' | 'url';
+    type?: 'text' | 'password' | 'email' | 'number' | 'url' | 'date';
     placeholder?: string;
     disabled?: boolean;
     /** 等宽字体（slug/token 前缀等） */

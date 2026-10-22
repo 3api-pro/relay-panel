@@ -364,7 +364,7 @@ describe('routes: signup 三模式', () => {
       payload: { email: 'open-user@example.com', password: 'Open-pass-123456', displayName: '开放注册' },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ email: 'open-user@example.com', displayName: '开放注册', role: 'operator' });
+    expect(res.json()).toMatchObject({ email: 'open-user@example.com', displayName: '开放注册', role: 'operator' });
     // 注册后可登录
     await login(appOpen, 'open-user@example.com', 'Open-pass-123456');
 

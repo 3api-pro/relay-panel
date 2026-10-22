@@ -37,3 +37,7 @@ WeChat signature contract: [platform certificate verification](https://pay.wecha
 ## Deployment and rollback
 
 Migrations 005/006 are additive. Back up the database before applying them. Test with the same PostgreSQL major version and a separate validation database/cluster. Preserve the previous application release and static assets. After any new-format payments or scheduled changes have been accepted, do not switch to an old billing implementation that ignores those records; reconcile the activity and use a compatible release or a forward fix. Never restore an older database over new payment activity.
+
+## SaaS additions (2026-10-22)
+
+Account security, workspaces, reviewed refunds, notifications, support, backups and reconciliation: [SAAS-OPERATIONS.md](SAAS-OPERATIONS.md). SaaS supports customer self-deployment and existing-site connection only; no platform relay hardware.

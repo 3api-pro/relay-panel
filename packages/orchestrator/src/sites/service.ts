@@ -1,3 +1,4 @@
+import { tenantId } from '../auth/rbac.js';
 import { connect } from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
@@ -432,7 +433,7 @@ export interface FinanceRecharge {
 }
 
 export interface CreateSiteInput {
-  slug: string;
+  slug?: string;
   label: string;
   engine: EngineKind;
   version: string;
@@ -1169,6 +1170,9 @@ export class SitesService {
   /** 建站：配额检查 → 端口分配 → 插 pending 行 → enqueue provision */
   async createSite(ctx: SessionCtx, input: CreateSiteInput): Promise<{ slug: string; jobId: number; hostPort: number }> {
     requireWrite(ctx);
+    if (!this.deps.config.localProvisionEnabled || this.deps.config.deploymentMode === 'saas') throw new ApiError(410, '平台不提供服务器开站，请在自己的服务器部署后接入');
+
+    const slug = input.slug ?? `s-${randomUUID().replace(/-/g, '').slice(0, 30)}`;
 
     // 配额检查 → 端口分配 → 插行整段串行化（问题 C/D：消除 TOCTOU 双分端口/突破配额）
     const site = await runExclusive(async () => {
@@ -1177,7 +1181,7 @@ export class SitesService {
       const dup = await this.deps.db.orm
         .select({ id: sites.id })
         .from(sites)
-        .where(eq(sites.slug, input.slug))
+        .where(eq(sites.slug, slug))
         .limit(1);
       if (dup.length > 0) throw new ApiError(409, '站点标识已存在');
 
@@ -1199,8 +1203,8 @@ export class SitesService {
         const inserted = await this.deps.db.orm
           .insert(sites)
           .values({
-            operatorId: ctx.operatorId,
-            slug: input.slug,
+            operatorId: tenantId(ctx),
+            slug: slug,
             label: input.label,
             engine: input.engine,
             version: input.version,
@@ -1237,6 +1241,16 @@ export class SitesService {
    * 配额检查 → 原子保留站点标识与加密凭据 → 健康探测 + admin 凭据实连验证。
    * 存量站接入即计入配额（activeSites 不区分 managed），统一管理本身是订阅的一部分。
    */
+  async retryInstall(ctx: SessionCtx, slug: string): Promise<{ jobId: number }> {
+    requireWrite(ctx);
+    if (!this.deps.config.localProvisionEnabled || this.deps.config.deploymentMode !== 'self-hosted') throw new ApiError(410, '本机安装仅在自部署面板可用');
+    const site = await this.requireSite(ctx, slug);
+    if (site.managed !== 'compose' || !['pending', 'provisioning'].includes(site.status) && !site.status.startsWith('failed:')) throw new ApiError(409, '仅失败或中断的本机安装可重试');
+    const [last] = await this.deps.db.orm.select().from(jobsTable).where(eq(jobsTable.siteId, site.id)).orderBy(desc(jobsTable.id)).limit(1);
+    if (!last || last.kind !== 'provision' || last.status !== 'failed' || typeof last.payload?.adminEmail !== 'string') throw new ApiError(409, '没有可重试的失败安装任务');
+    return this.enqueueAudited(ctx, site, 'provision', last.payload, 'site.install.retry', { previousJobId: last.id });
+  }
+
   async adoptSite(ctx: SessionCtx, input: AdoptSiteInput): Promise<{ slug: string; siteId: number }> {
     requireWrite(ctx);
 
@@ -1281,7 +1295,7 @@ export class SitesService {
         try {
           const row = await this.deps.db.orm.transaction(async orm => {
             const [reserved] = await orm.insert(sites).values({
-              operatorId: ctx.operatorId, slug, label: input.label?.trim() || parsed.host.slice(0, 64),
+              operatorId: tenantId(ctx), slug, label: input.label?.trim() || parsed.host.slice(0, 64),
               engine: input.engine, version: 'prod', hostPort, baseUrl, credentialRef,
               managed: 'external', readonly: input.readonly === true, status: 'active',
             }).onConflictDoNothing({ target: sites.slug }).returning();
@@ -1765,8 +1779,8 @@ export class SitesService {
     const db = this.deps.db;
     // 宽限期内配额仍按原计划（graceDays 取自 config）；宽限结束后回落 free 只挡新建站，不动存量站
     const [quota, n] = await Promise.all([
-      quotaFor(db, { operatorId: ctx.operatorId, role: ctx.role }, this.deps.config.billingGraceDays),
-      activeSites(db, ctx.operatorId),
+      quotaFor(db, { operatorId: tenantId(ctx), role: ctx.role }, this.deps.config.billingGraceDays),
+      activeSites(db, tenantId(ctx)),
     ]);
     if (n >= quota) {
       throw new ApiError(403, `站点配额已用完（${n}/${quota}），请升级套餐后再建站`);

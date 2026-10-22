@@ -1,3 +1,4 @@
+import { tenantId } from '../auth/rbac.js';
 import { z } from 'zod';
 import { and, desc, eq } from 'drizzle-orm';
 import type { ChannelSpec, EngineAdapter, EngineKind, InstanceInfo } from '@relay-panel/adapter-core';
@@ -249,7 +250,7 @@ export async function applyGrant(deps: GrantDeps, ctx: SessionCtx, input: GrantI
   // 🔴 managed 渠道订阅门槛（开放注册前置闸 §1）：免费 operator 直接白嫖我方托管上游 key = 烧钱。
   // 要求调用者持 status=active 且未过期的付费订阅（含宽限期算有效）；root 豁免（自用/dogfood）；byo 不受此限。
   if (tpl.source === 'managed' && ctx.role !== 'root') {
-    const sub = await activeSubscription(db, ctx.operatorId, deps.config.billingGraceDays);
+    const sub = await activeSubscription(db, tenantId(ctx), deps.config.billingGraceDays);
     if (!sub) {
       await auditFail('启用托管渠道需有效订阅');
       throw new ApiError(403, '启用托管渠道需有效订阅');

@@ -9,12 +9,16 @@ import type { Me } from './types';
 
 interface SessionState {
   user: Me | null;
+  workspaceRole: string;
+  workspaceName: string;
   /** 是否已完成首次 /api/auth/me 探测（守卫据此避免重复请求） */
   loaded: boolean;
 }
 
 const state = reactive<SessionState>({
   user: null,
+  workspaceRole: 'owner',
+  workspaceName: '',
   loaded: false,
 });
 
@@ -28,6 +32,15 @@ async function ensureLoaded(force = false): Promise<Me | null> {
     try {
       const me = await get<Me>('/api/auth/me', { silent: true, skipAuthRedirect: true });
       state.user = me;
+      try {
+        const selected = localStorage.getItem('rp-workspace');
+        if (selected && me.role === 'operator') {
+          const result = await get<{ workspaces: { ownerId: number; name: string; role: string }[] }>('/api/team/workspaces', { silent: true });
+          const workspace = result.workspaces.find(w => String(w.ownerId) === selected);
+          if (workspace) { state.workspaceRole = workspace.role; state.workspaceName = workspace.name; }
+          else { localStorage.removeItem('rp-workspace'); state.workspaceRole = 'owner'; state.workspaceName = ''; }
+        } else { localStorage.removeItem('rp-workspace'); state.workspaceRole = 'owner'; state.workspaceName = ''; }
+      } catch { state.workspaceRole = 'reader'; }
     } catch {
       state.user = null;
     } finally {
@@ -41,12 +54,18 @@ async function ensureLoaded(force = false): Promise<Me | null> {
 
 /** 登录成功后写入（login 响应与 /me 同构） */
 function setUser(me: Me): void {
+  try { localStorage.removeItem('rp-workspace'); } catch { /* Storage disabled. */ }
+  state.workspaceRole = 'owner';
+  state.workspaceName = '';
   state.user = me;
   state.loaded = true;
 }
 
 function clear(): void {
+  try { localStorage.removeItem('rp-workspace'); } catch { /* Storage disabled. */ }
   state.user = null;
+  state.workspaceRole = 'owner';
+  state.workspaceName = '';
   state.loaded = true;
 }
 
@@ -67,6 +86,6 @@ export const session = {
   clear,
   logout,
   /** viewer 角色为只读；Shell 以此 provide('canWrite') */
-  canWrite: computed(() => state.user !== null && state.user.role !== 'viewer'),
+  canWrite: computed(() => state.user !== null && state.user.role !== 'viewer' && state.workspaceRole !== 'reader'),
   isRoot: computed(() => state.user?.role === 'root'),
 };

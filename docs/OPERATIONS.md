@@ -230,3 +230,7 @@ ORDER BY created_at DESC LIMIT 50;
 - 启动即退：看日志第一行报错——`环境变量配置无效`（对照 [SELF-HOST.md](SELF-HOST.md) env 表）、DB 连不上、迁移失败。
 - 起来但开站报错：`RP_SECRET_KEY` 未设置（开站必需）；docker 不可用（sock 未挂载/权限）。
 - 页面 "web 未构建"：`npm run build -w @relay-panel/web` 后刷新（API 不受影响）。
+
+## SaaS additions (2026-10-22)
+
+Account security, workspaces, reviewed refunds, notifications, support, backups and reconciliation: [SAAS-OPERATIONS.md](SAAS-OPERATIONS.md). SaaS supports customer self-deployment and existing-site connection only; no platform relay hardware.

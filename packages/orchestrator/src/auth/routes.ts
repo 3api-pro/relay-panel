@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { and, asc, desc, eq, gt, isNull, like, ne, sql } from 'drizzle-orm';
 import type { Config } from '../config.js';
 import type { Db } from '../db/client.js';
-import { invites, operators, sites, subscriptions } from '../db/schema.js';
+import { invites, operators, sites, subscriptions, authTokens } from '../db/schema.js';
 import { writeAudit } from '../audit.js';
 import { randomHex } from '../secrets.js';
 import { hashPassword, verifyPassword } from './passwords.js';
@@ -19,6 +19,8 @@ import {
   type SessionMeta,
 } from './sessions.js';
 import { ApiError, authenticate, requireRoot, type OperatorRole, type SessionCtx } from './rbac.js';
+import { accountMailReady, queueAccountMail, issueAccountToken, securityLimit, consumeMfa } from './security.js';
+import { withBillingTransaction } from '../billing/transaction.js';
 import { SlidingWindowLimiter, clientIp, normalizeEmail } from './ratelimit.js';
 
 /**
@@ -43,19 +45,20 @@ const roleEnum = z.enum(['root', 'operator', 'viewer']);
 
 const loginBody = z.object({
   email: z.string().email(),
-  password: z.string().min(1),
+  password: z.string().min(1).max(1024),
 });
 
 const signupBody = z.object({
   email: z.string().email(),
-  password: z.string().min(8, '密码至少 8 位'),
+  password: z.string().min(8, '密码至少 8 位').max(1024),
   displayName: z.string().min(1).max(64).optional(),
   inviteToken: z.string().min(1).optional(),
 });
 
 const passwordBody = z.object({
-  current: z.string().min(1),
-  next: z.string().min(8, '密码至少 8 位'),
+  current: z.string().min(1).max(1024),
+  next: z.string().min(8, '密码至少 8 位').max(1024),
+  code: z.string().max(64).default(''),
 });
 
 const inviteCreateBody = z.object({
@@ -122,6 +125,8 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
     const email = normalizeEmail(body.email);
     // 限速：单 (真实IP, 账号) 失败次数滑窗；超限退避 429（成功即清零，失败才计数）
     const loginKey = `login:${clientIp(req)}:${email}`;
+    await securityLimit(db, `login-account:${email}`, 40);
+    await securityLimit(db, `login-peer:${req.ip}`, 150);
     if (rateLimiter.tooMany(loginKey, LOGIN_WINDOW_MS, config.loginMaxFails)) {
       await writeAudit(db, {
         actor: email,
@@ -165,11 +170,26 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
       throw new ApiError(401, '邮箱或密码错误');
     }
 
+    if (!op.emailVerifiedAt) throw new ApiError(403, '请先验证邮箱；可在登录页重新发送验证邮件');
+    if (op.mfaSecret) {
+      const challenge = await withBillingTransaction(db, op.id, async tx => {
+        const [fresh] = await tx.orm.select().from(operators).where(eq(operators.id, op.id));
+        if (!fresh || fresh.status !== 'active' || fresh.passwordHash !== op.passwordHash) throw new ApiError(401, '请重新登录');
+        return issueAccountToken(tx, op.id, 'mfa', 5);
+      });
+      return { mfaRequired: true, challenge };
+    }
     rateLimiter.clear(loginKey); // 成功清零失败计数
-    const { token } = await createSession(db, op.id, config.sessionTtlHours, requestMeta(req));
+    const { token } = await withBillingTransaction(db, op.id, async tx => {
+      const [fresh] = await tx.orm.select().from(operators).where(eq(operators.id, op.id));
+      if (!fresh || fresh.status !== 'active' || fresh.passwordHash !== op.passwordHash || fresh.mfaSecret || !fresh.emailVerifiedAt) {
+        throw new ApiError(401, 'Account security changed; sign in again');
+      }
+      return createSession(tx, op.id, config.sessionTtlHours, requestMeta(req));
+    });
     await db.orm.update(operators).set({ lastLoginAt: toPgTimestamp(new Date()) }).where(eq(operators.id, op.id));
     await writeAudit(db, { actor: op.email, action: 'auth.login', payload: { email: op.email }, ok: true });
-    reply.setCookie(SESSION_COOKIE, token, sessionCookieOptions(config.sessionTtlHours));
+    reply.setCookie(SESSION_COOKIE, token, sessionCookieOptions(config.sessionTtlHours, config.publicUrl?.startsWith('https:')));
     return { email: op.email, displayName: op.displayName, role: op.role, signupMode: config.signupMode };
   });
 
@@ -186,7 +206,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
 
   // 公开：登出态的注册页据此决定展示（open=直接注册 / invite=要邀请码 / closed=不开放）
   app.get('/api/auth/config', async () => {
-    return { signupMode: config.signupMode };
+    return { signupMode: config.signupMode, emailVerificationRequired: config.emailVerificationRequired, recoveryAvailable: accountMailReady(config), deploymentMode: config.deploymentMode, localProvisionEnabled: config.localProvisionEnabled };
   });
 
   app.get('/api/auth/me', async (req) => {
@@ -200,6 +220,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
   app.post('/api/auth/signup', async (req) => {
     const body = parseBody(signupBody, req.body);
     if (config.signupMode === 'closed') throw new ApiError(403, '注册已关闭');
+    if (config.emailVerificationRequired && !accountMailReady(config)) throw new ApiError(503, '注册邮箱验证服务尚未配置，请联系管理员');
 
     // 邮箱归一化：gmail 别名(点/+tag)收敛到同一账号，杜绝派生海量小号
     const email = normalizeEmail(body.email);
@@ -260,6 +281,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
         .values({
           email,
           passwordHash,
+          emailVerifiedAt: config.emailVerificationRequired ? null : toPgTimestamp(new Date()),
           role,
           status: 'active',
           ...(body.displayName !== undefined ? { displayName: body.displayName } : {}),
@@ -283,25 +305,29 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
       },
       ok: true,
     });
-    return { email: created.email, displayName: created.displayName, role: created.role };
+    if (config.emailVerificationRequired) await queueAccountMail(db, config, created, 'verify');
+    return { email: created.email, displayName: created.displayName, role: created.role, verificationRequired: config.emailVerificationRequired };
   });
 
   app.post('/api/auth/password', async (req) => {
     const ctx = await getCtx(req);
     const body = parseBody(passwordBody, req.body);
+    await securityLimit(db, `password-change:${ctx.operatorId}`, 10);
     const rows = await db.orm.select().from(operators).where(eq(operators.id, ctx.operatorId)).limit(1);
     const op = rows[0];
     if (!op || !(await verifyPassword(body.current, op.passwordHash))) {
       await writeAudit(db, { actor: ctx.email, action: 'auth.password', ok: false, error: 'current password mismatch' });
       throw new ApiError(400, '当前密码错误');
     }
-    await db.orm
-      .update(operators)
-      .set({ passwordHash: await hashPassword(body.next) })
-      .where(eq(operators.id, ctx.operatorId));
-    // 吊销除当前会话外的全部会话
-    const token = req.cookies?.[SESSION_COOKIE];
-    await destroyOperatorSessions(db, ctx.operatorId, token !== undefined ? { exceptToken: token } : {});
+    await withBillingTransaction(db, ctx.operatorId, async tx => {
+      const [fresh] = await tx.orm.select().from(operators).where(eq(operators.id, ctx.operatorId));
+      if (!fresh || fresh.passwordHash !== op.passwordHash) throw new ApiError(409, '账号已变更，请重新登录');
+      await consumeMfa(tx, config, fresh, body.code ?? '');
+      await tx.orm.update(operators).set({ passwordHash: await hashPassword(body.next) }).where(eq(operators.id, ctx.operatorId));
+      const token = req.cookies?.[SESSION_COOKIE];
+      await destroyOperatorSessions(tx, ctx.operatorId, token !== undefined ? { exceptToken: token } : {});
+      await tx.orm.delete(authTokens).where(eq(authTokens.operatorId, ctx.operatorId));
+    });
     await writeAudit(db, { actor: ctx.email, action: 'auth.password', ok: true });
     return { ok: true };
   });

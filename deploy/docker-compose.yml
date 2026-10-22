@@ -34,10 +34,17 @@ services:
       # 首启 root 账号（仅 operators 空表时生效）
       RP_ADMIN_EMAIL: ${RP_ADMIN_EMAIL:-}
       RP_ADMIN_PASSWORD: ${RP_ADMIN_PASSWORD:-}
+      RP_DEPLOYMENT_MODE: ${RP_DEPLOYMENT_MODE:-self-hosted}
+      RP_PUBLIC_URL: ${RP_PUBLIC_URL:-}
+      RP_REQUIRE_EMAIL_VERIFICATION: ${RP_REQUIRE_EMAIL_VERIFICATION:-}
+      RP_REQUIRE_ADMIN_MFA: ${RP_REQUIRE_ADMIN_MFA:-0}
+      RP_LOCAL_PROVISION_ENABLED: ${RP_LOCAL_PROVISION_ENABLED:-1}
+      RP_BACKUP_INTERVAL_MS: ${RP_BACKUP_INTERVAL_MS:-86400000}
+      RP_BACKUP_DIRECTORY: /app/packages/orchestrator/data/panel-backups
       RP_SIGNUP_MODE: ${RP_SIGNUP_MODE:-closed}
       RP_SESSION_TTL_HOURS: ${RP_SESSION_TTL_HOURS:-168}
       # 站点数据根目录：容器内路径必须与宿主路径一致（引擎 compose 文件由宿主 docker 解析）
-      RP_SITES_ROOT: ${RP_SITES_ROOT:?}
+      RP_SITES_ROOT: ${RP_SITES_ROOT:-/srv/relay-panel/sites}
       RP_PORT_RANGE: ${RP_PORT_RANGE:-18100-18999}
       RP_MONITOR_INTERVAL_MS: ${RP_MONITOR_INTERVAL_MS:-60000}
       RP_BALANCE_THRESHOLD: ${RP_BALANCE_THRESHOLD:-0}
@@ -75,11 +82,11 @@ services:
       # 经宿主 docker 编排引擎站点
       - /var/run/docker.sock:/var/run/docker.sock
       # 站点数据目录：左右两侧同一路径（铁律，见上）
-      - ${RP_SITES_ROOT:?}:${RP_SITES_ROOT:?}
+      - ${RP_SITES_ROOT:-/srv/relay-panel/sites}:${RP_SITES_ROOT:-/srv/relay-panel/sites}
       # 编排器本地数据兜底（pglite 模式 / 默认备份目录 ./data/backups）
       - orchestrator_data:/app/packages/orchestrator/data
     healthcheck:
-      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://127.0.0.1:7100/healthz"]
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://127.0.0.1:7100/readyz"]
       interval: 30s
       timeout: 10s
       retries: 3

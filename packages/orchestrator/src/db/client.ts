@@ -21,6 +21,7 @@ export interface Db {
   /** 参数化原始查询（占位符 $1..$n） */
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
   close(): Promise<void>;
+  snapshot?(): Promise<Uint8Array>;
 }
 
 /**
@@ -32,7 +33,7 @@ export interface Db {
 export async function makeDb(url: string): Promise<Db> {
   if (url.startsWith('postgres://') || url.startsWith('postgresql://')) {
     const pg = (await import('pg')).default;
-    const pool = new pg.Pool({ connectionString: url });
+    const pool = new pg.Pool({ connectionString: url, options: '-c timezone=UTC' });
     const { drizzle } = await import('drizzle-orm/node-postgres');
     const orm = drizzle(pool, { schema });
     return {
@@ -55,11 +56,13 @@ export async function makeDb(url: string): Promise<Db> {
     const target = url.slice('pglite:'.length);
     const { PGlite } = await import('@electric-sql/pglite');
     const lite = target === 'memory' ? new PGlite() : new PGlite(target);
+    await lite.exec("SET TIME ZONE 'UTC'");
     const { drizzle } = await import('drizzle-orm/pglite');
     const orm = drizzle(lite, { schema });
     return {
       orm: orm as unknown as Orm,
       kind: 'pglite',
+      async snapshot() { return new Uint8Array(await (await lite.dumpDataDir('gzip')).arrayBuffer()); },
       async exec(sql) {
         await lite.exec(sql);
       },

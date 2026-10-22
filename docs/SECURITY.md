@@ -116,3 +116,7 @@
 - 首选：GitHub 仓库的 **Security → Report a vulnerability**（GitHub Security Advisories 私密通道）。
 - 请附：影响版本、复现步骤、影响面评估。我们会在修复发布并给用户留出升级窗口后公开致谢。
 - 涉及被编排引擎（sub2api / new-api）自身的漏洞，请直接向对应上游项目上报。
+
+## SaaS additions (2026-10-22)
+
+Account security, workspaces, reviewed refunds, notifications, support, backups and reconciliation: [SAAS-OPERATIONS.md](SAAS-OPERATIONS.md). SaaS supports customer self-deployment and existing-site connection only; no platform relay hardware.

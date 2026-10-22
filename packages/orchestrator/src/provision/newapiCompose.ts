@@ -1,3 +1,4 @@
+import { assertPinnedVersion } from './environment.js';
 /**
  * 渲染一个 new-api 站点的 compose 项目。基于 calciumion/new-api 官方镜像。
  * 与 sub2api 的差异：容器内端口 3000；DB 由 SQL_DSN 决定（不设=SQLite）；
@@ -16,6 +17,7 @@ export interface NewapiComposeInput {
 }
 
 export function renderNewapiEnv(input: NewapiComposeInput): string {
+  assertPinnedVersion(input.version);
   const lines = [
     `NEWAPI_VERSION=${input.version}`,
     `SERVER_PORT=${input.hostPort}`,
@@ -27,6 +29,7 @@ export function renderNewapiEnv(input: NewapiComposeInput): string {
 }
 
 export function renderNewapiCompose(input: NewapiComposeInput): string {
+  assertPinnedVersion(input.version);
   if (input.version === 'latest') {
     throw new Error('version must be pinned; "latest" is not allowed');
   }

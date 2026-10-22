@@ -81,7 +81,7 @@ onMounted(() => {
       'pain.line': 'One relay is a project. <b>Ten relays is a second job</b> — the same deploy, upgrade, key-swap and dashboard, multiplied by every instance, on every engine update.',
       'feat.eyebrow': 'What you get',
       'feat.title': 'Everything to operate a <em class="ser">fleet</em>, not just a server.',
-      'f1.t': 'Full site lifecycle', 'f1.d': 'One-click provisioning, version-pinned upgrades with automatic rollback, start, stop and destroy — for every site you run.',
+      'f1.t': 'Your infrastructure, one panel', 'f1.d': 'Deploy engines on your own servers and connect them to the panel. Keep control of hardware, upgrades and data.',
       'f2.t': 'Batch operations', 'f2.d': 'Change a channel across all sites at once. Rotate keys without opening each panel. Dry-run to preview the diff, then apply.',
       'f3.t': 'Onboard existing sites', 'f3.d': 'Bring an existing sub2api or new-api instance under unified management in five minutes. No migration, no data to move.',
       'f4.t': 'Channel marketplace + ledger', 'f4.d': 'Enable built-in upstream channel templates in one click. Usage → cost → margin is metered into a ledger automatically.',
@@ -90,7 +90,7 @@ onMounted(() => {
       'dep.eyebrow': 'Two ways to run it',
       'dep.title': 'Hosted or self-hosted. <em class="ser">Same</em> panel.',
       'dep.host.t': 'Hosted', 'dep.host.pill': 'MANAGED',
-      'dep.host.d': 'We run the control plane on our infrastructure. You manage your relay stations and pay only for what you use, on a self-serve subscription. Zero ops on your side.',
+      'dep.host.d': 'We host the management panel. Connect your own relay stations with a self-serve subscription. Servers, engine upgrades and backups remain under your control.',
       'dep.self.t': 'Self-hosted', 'dep.self.pill': 'OPEN SOURCE',
       'dep.self.d': 'One command on your own box. Fully open source, yours to read and extend. Data never leaves your infrastructure. Community beta.',
       'dep.self.cta': 'View on GitHub',
@@ -100,10 +100,10 @@ onMounted(() => {
       'price.free.n': 'Free', 'price.free.cap': 'Manage 1 relay station',
       'price.free.1': '1 relay station', 'price.free.2': 'Batch operations & dry-run', 'price.free.3': 'Community alerts', 'price.free.4': 'Self-host anytime',
       'price.pro.cap': 'Manage up to 5 stations', 'price.pro.cta': 'Start Pro',
-      'price.pro.1': 'Everything in Free, plus', 'price.pro.2': '5 relay stations', 'price.pro.3': 'Channel marketplace + ledger', 'price.pro.4': 'Email + webhook alerts', 'price.pro.5': 'Version-pinned upgrades',
+      'price.pro.1': 'Everything in Free, plus', 'price.pro.2': '5 relay stations', 'price.pro.3': 'Channel marketplace + ledger', 'price.pro.4': 'Email + webhook alerts', 'price.pro.5': 'Team workspaces',
       'price.scale.n': 'Scale', 'price.scale.cap': 'Manage up to 20 stations', 'price.scale.cta': 'Start Scale',
       'price.scale.1': 'Everything in Pro, plus', 'price.scale.2': '20 relay stations', 'price.scale.3': 'Priority alerting', 'price.scale.4': 'Dry-run automation', 'price.scale.5': 'Priority support',
-      'price.note': 'Every plan includes unmodified engines, per-site data isolation, and open-source self-hosting.',
+      'price.note': 'Plans cover panel management, not relay servers, hardware or upstream API usage. Self-hosting is available.',
       'final.title': 'Bring your whole relay fleet under <em class="ser">one</em> panel.',
       'final.self': 'or run it yourself — <a href="https://github.com/3api-pro/relay-panel" target="_blank" rel="noopener">docker compose up →</a>',
       'foot.tag': 'The control plane for LLM relay fleets. Open-source beta.',
@@ -128,7 +128,7 @@ onMounted(() => {
       'pain.line': '一个中转站是一个项目。<b>十个中转站是第二份全职工作</b>——同样的部署、升级、换 key 和看板，乘以每一个实例、每一次引擎更新。',
       'feat.eyebrow': '你能得到什么',
       'feat.title': '运营一支<em class="ser">舰队</em>所需的一切，而不只是一台服务器。',
-      'f1.t': '站点全生命周期', 'f1.d': '一键开站、钉版本升级带自动回滚、启动、停止与销毁——覆盖你运营的每一个站点。',
+      'f1.t': '自有服务器，统一管理', 'f1.d': '在自己的服务器部署引擎，再接入面板。硬件、引擎升级与数据始终由你掌握。',
       'f2.t': '批量操作', 'f2.d': '一次改所有站点的渠道。换 key 不用逐站点打开面板。先干跑预览 diff，确认后再执行。',
       'f3.t': '接入已有站点', 'f3.d': '5 分钟把现有的 sub2api 或 new-api 实例接入统一管理。不用迁移，不用搬数据。',
       'f4.t': '渠道市场 + 分账账本', 'f4.d': '一键启用内置上游渠道模板。用量 → 成本 → 毛利，自动记入账本。',
@@ -137,7 +137,7 @@ onMounted(() => {
       'dep.eyebrow': '两种运行方式',
       'dep.title': '托管，或自部署。<em class="ser">同一套</em>面板。',
       'dep.host.t': '托管', 'dep.host.pill': 'MANAGED',
-      'dep.host.d': '控制平面跑在我们的基础设施上。你只管你的中转站，按需订阅、用多少付多少。你这边零运维。',
+      'dep.host.d': '我们托管管理面板，你接入自己的中转站并按套餐订阅。服务器、引擎升级与备份由你负责，套餐不包含硬件。',
       'dep.self.t': '自部署', 'dep.self.pill': '开源',
       'dep.self.d': '在你自己的机器上一条命令搞定。完全开源，可读可改。数据永不离开你的基础设施。社区 Beta。',
       'dep.self.cta': '在 GitHub 查看',
@@ -147,10 +147,10 @@ onMounted(() => {
       'price.free.n': '免费版', 'price.free.cap': '管理 1 个中转站',
       'price.free.1': '1 个中转站', 'price.free.2': '批量操作与干跑', 'price.free.3': '社区告警', 'price.free.4': '随时可自部署',
       'price.pro.cap': '最多管理 5 个站点', 'price.pro.cta': '开通专业版',
-      'price.pro.1': '包含免费版全部，另加', 'price.pro.2': '5 个中转站', 'price.pro.3': '渠道市场 + 分账账本', 'price.pro.4': '邮件 + webhook 告警', 'price.pro.5': '钉版本升级',
+      'price.pro.1': '包含免费版全部，另加', 'price.pro.2': '5 个中转站', 'price.pro.3': '渠道市场 + 分账账本', 'price.pro.4': '邮件 + webhook 告警', 'price.pro.5': '团队工作区',
       'price.scale.n': '规模版', 'price.scale.cap': '最多管理 20 个站点', 'price.scale.cta': '开通规模版',
       'price.scale.1': '包含专业版全部，另加', 'price.scale.2': '20 个中转站', 'price.scale.3': '优先告警', 'price.scale.4': '干跑自动化', 'price.scale.5': '优先支持',
-      'price.note': '所有套餐均含：引擎零修改、每站数据隔离、可开源自部署。',
+      'price.note': '套餐提供面板管理服务，不包含服务器、硬件和上游 API 用量。也可自行部署面板。',
       'final.title': '把你的整支中转站舰队，收进<em class="ser">一个</em>面板。',
       'final.self': '或者自己跑 — <a href="https://github.com/3api-pro/relay-panel" target="_blank" rel="noopener">docker compose up →</a>',
       'foot.tag': '面向 LLM 中转站舰队的控制平面。开源 Beta。',
@@ -585,8 +585,8 @@ onUnmounted(() => {
           <div class="fgrid reveal">
             <div class="fcard">
               <div class="fic"><svg class="icon" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg></div>
-              <h3 data-i18n="f1.t">Full site lifecycle</h3>
-              <p data-i18n="f1.d">One-click provisioning, version-pinned upgrades with automatic rollback, start, stop and destroy — for every site you run.</p>
+              <h3 data-i18n="f1.t">Your infrastructure, one panel</h3>
+              <p data-i18n="f1.d">Deploy engines on your own servers and connect them to the panel. Keep control of hardware, upgrades and data.</p>
             </div>
             <div class="fcard">
               <div class="fic"><svg class="icon" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg></div>
@@ -631,7 +631,7 @@ onUnmounted(() => {
                 <h3 data-i18n="dep.host.t">Hosted</h3>
                 <span class="pill" data-i18n="dep.host.pill">MANAGED</span>
               </div>
-              <p data-i18n="dep.host.d">We run the control plane on our infrastructure. You manage your relay stations and pay only for what you use, on a self-serve subscription. Zero ops on your side.</p>
+              <p data-i18n="dep.host.d">We host the management panel. Connect your own relay stations with a self-serve subscription. Servers, engine upgrades and backups remain under your control.</p>
               <RouterLink class="btn btn-primary" to="/signup"><span data-i18n="cta.start">Start free</span><svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></RouterLink>
             </div>
             <div class="dcard">
@@ -680,7 +680,7 @@ onUnmounted(() => {
                 <li><svg class="icon" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span data-i18n="price.pro.2">5 relay stations</span></li>
                 <li><svg class="icon" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span data-i18n="price.pro.3">Channel marketplace + ledger</span></li>
                 <li><svg class="icon" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span data-i18n="price.pro.4">Email + webhook alerts</span></li>
-                <li><svg class="icon" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span data-i18n="price.pro.5">Version-pinned upgrades</span></li>
+                <li><svg class="icon" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span data-i18n="price.pro.5">Team workspaces</span></li>
               </ul>
             </div>
             <!-- Scale -->
@@ -698,7 +698,7 @@ onUnmounted(() => {
               </ul>
             </div>
           </div>
-          <p class="pnote reveal" data-i18n="price.note">Every plan includes unmodified engines, per-site data isolation, and open-source self-hosting.</p>
+          <p class="pnote reveal" data-i18n="price.note">Plans cover panel management, not relay servers, hardware or upstream API usage. Self-hosting is available.</p>
         </div>
       </section>
 

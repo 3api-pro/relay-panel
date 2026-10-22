@@ -13,7 +13,11 @@ export interface SessionCtx {
   operatorId: number;
   email: string;
   role: OperatorRole;
+  tenantOwnerId?: number;
+  teamRole?: 'editor' | 'reader';
 }
+
+export const tenantId = (ctx: { operatorId: number; tenantOwnerId?: number }): number => ctx.tenantOwnerId ?? ctx.operatorId;
 
 /** 带 statusCode 的错误：fastify 默认 error handler 会按此码回包并带 message */
 export class ApiError extends Error {
@@ -80,6 +84,7 @@ export async function authenticate(db: Db, req: AuthRequestLike, ttlHours = 168)
 /** viewer 禁写 */
 export function requireWrite(ctx: SessionCtx): void {
   if (ctx.role === 'viewer') throw new ApiError(403, '当前角色为只读，无写权限');
+  if (ctx.teamRole === 'reader') throw new ApiError(403, '当前团队角色为只读');
 }
 
 export function requireRoot(ctx: SessionCtx): void {
@@ -89,5 +94,5 @@ export function requireRoot(ctx: SessionCtx): void {
 /** root/viewer 全站可见；operator 仅自己名下的站 */
 export function canAccessSite(ctx: SessionCtx, site: Pick<SiteRow, 'operatorId'>): boolean {
   if (ctx.role === 'root' || ctx.role === 'viewer') return true;
-  return site.operatorId === ctx.operatorId;
+  return site.operatorId === tenantId(ctx);
 }

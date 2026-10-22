@@ -1,4 +1,5 @@
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { assertLocalEnvironment, assertPinnedVersion } from './environment.js';
+import { mkdir, writeFile, readFile, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { EngineLifecycle, InstanceInfo, SiteSpec } from '@relay-panel/adapter-core';
 import { dockerCompose, type ComposeRef } from './docker.js';
@@ -57,13 +58,15 @@ export class Sub2apiLifecycle implements EngineLifecycle {
 
   async provision(spec: SiteSpec): Promise<InstanceInfo> {
     if (spec.engine !== 'sub2api') throw new Error(`wrong engine: ${spec.engine}`);
+    assertPinnedVersion(spec.version);
+    await this.step(spec.slug, 'environment-check', () => assertLocalEnvironment(this.opts.sitesRoot));
     const dir = join(this.opts.sitesRoot, spec.slug);
     const ref = composeRef(this.opts.sitesRoot, spec.slug);
     const baseUrl = `http://127.0.0.1:${spec.hostPort}`;
 
     // 1. 目录 + 密钥（幂等：已有 .env 则复用，不重新生成密钥）
     const secrets = await this.step(spec.slug, 'render', async () => {
-      await mkdir(dir, { recursive: true });
+      await mkdir(dir, { recursive: true, mode: 0o700 });
       let existing: string | null = null;
       try {
         existing = await readFile(ref.envFile, 'utf8');
@@ -83,6 +86,7 @@ export class Sub2apiLifecycle implements EngineLifecycle {
             adminPassword: randomPassword(),
           };
       await writeFile(ref.envFile, renderSub2apiEnv(s), 'utf8');
+      await chmod(ref.envFile, 0o600);
       await writeFile(ref.file, renderSub2apiCompose(s), 'utf8');
       return s;
     });
@@ -115,7 +119,7 @@ export class Sub2apiLifecycle implements EngineLifecycle {
   }
 
   async upgrade(inst: InstanceInfo, toVersion: string): Promise<InstanceInfo> {
-    if (toVersion === 'latest') throw new Error('version must be pinned');
+    assertPinnedVersion(toVersion);
     const ref = composeRef(this.opts.sitesRoot, inst.siteSlug);
     const envPath = ref.envFile;
     const env = await readFile(envPath, 'utf8');
@@ -130,8 +134,13 @@ export class Sub2apiLifecycle implements EngineLifecycle {
     } catch (e) {
       // 回滚旧版本 tag 并恢复运行
       await writeFile(envPath, env, 'utf8');
-      await dockerCompose.up(ref).catch(() => undefined);
-      throw new Error(`upgrade to ${toVersion} failed, rolled back to ${prev}: ${e instanceof Error ? e.message : e}`);
+      try {
+        await dockerCompose.up(ref);
+        await waitHealthy(inst.baseUrl);
+      } catch {
+        throw new Error(`upgrade to ${toVersion} failed; rollback to ${prev} also failed health verification. Inspect the job and restore from backup.`);
+      }
+      throw new Error(`upgrade to ${toVersion} failed; previous image ${prev} is healthy again. Database migrations are not reversed: ${e instanceof Error ? e.message : e}`);
     }
     return { ...inst, version: toVersion };
   }

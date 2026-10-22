@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import OnboardingCard from '../components/OnboardingCard.vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
@@ -128,6 +129,7 @@ function jobKindText(kind: string): string {
 
 <template>
   <div class="space-y-5">
+    <OnboardingCard />
     <!-- 统计卡 -->
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard

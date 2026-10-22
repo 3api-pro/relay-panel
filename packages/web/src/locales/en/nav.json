@@ -45,5 +45,12 @@
   "skipToContent": "Skip to content",
   "platformBillingDescription": "Manage operator subscriptions, the plan catalog and payment providers.",
   "platformSettingsDescription": "Configure signup, financial reports and notifications. Manage your password in Account & security.",
-  "financeReview": "Finance review"
+  "financeReview": "Finance review",
+  "aftercare": "Statements & refunds",
+  "tickets": "Support tickets",
+  "notifications": "Notifications",
+  "team": "Team & workspaces",
+  "operations": "Operations & backups",
+  "reconciliation": "Supplier reconciliation",
+  "localApps": "Self-hosting & applications"
 }

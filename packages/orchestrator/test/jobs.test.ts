@@ -462,16 +462,16 @@ describe('jobs 路由: 分页与权限', () => {
     expect((await getJob(ownJob1)).payload).toMatchObject({ apiKey: 'sk-test-payload-9999999999' });
   });
 
-  it('详情权限：own 可看，他站 403，孤儿 slug 对 operator 403，root 可看', async () => {
+  it('详情权限：own 可看，他站 404，孤儿 slug 对 operator 404，root 可看', async () => {
     const ok = await app.inject({ method: 'GET', url: `/api/jobs/${ownJob1}`, headers: ownerHeaders() });
     expect(ok.statusCode).toBe(200);
     expect((ok.json() as { job: JobRow }).job.id).toBe(ownJob1);
 
     const forbidden = await app.inject({ method: 'GET', url: `/api/jobs/${otherJob}`, headers: ownerHeaders() });
-    expect(forbidden.statusCode).toBe(403);
+    expect(forbidden.statusCode).toBe(404);
 
     const ghost = await app.inject({ method: 'GET', url: `/api/jobs/${ghostJob}`, headers: ownerHeaders() });
-    expect(ghost.statusCode).toBe(403);
+    expect(ghost.statusCode).toBe(404);
 
     const rootGhost = await app.inject({ method: 'GET', url: `/api/jobs/${ghostJob}`, headers: rootHeaders() });
     expect(rootGhost.statusCode).toBe(200);

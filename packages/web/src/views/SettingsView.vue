@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { ArrowRight, KeyRound, LineChart, ServerCog, UserRound } from 'lucide-vue-next';
 import { get, post, put } from '../api/client';
+import SecurityCard from '../components/SecurityCard.vue';
 import { session } from '../api/session';
 import type { FinanceReportConfig, FinanceReportTestResponse, Me, OperatorRole } from '../api/types';
 import { Badge, Button, Card, EmptyState, Field, Input, Skeleton, toast } from '../components/ui';
@@ -50,6 +51,7 @@ function signupModeText(mode: Me['signupMode'] | undefined): string {
 const current = ref('');
 const next = ref('');
 const confirm = ref('');
+const mfaCode = ref('');
 const submitting = ref(false);
 
 const nextErr = computed(() =>
@@ -70,7 +72,7 @@ async function submitPassword(): Promise<void> {
   if (!canSubmit.value) return;
   submitting.value = true;
   try {
-    await post('/api/auth/password', { current: current.value, next: next.value });
+    await post('/api/auth/password', { current: current.value, next: next.value, code: mfaCode.value });
     toast.success(t('settings.pwUpdated'));
     current.value = '';
     next.value = '';
@@ -212,6 +214,7 @@ async function sendTestReport(): Promise<void> {
           <Field :label="t('settings.confirmPassword')" required :error="confirmErr">
             <Input v-model="confirm" type="password" :placeholder="t('settings.confirmPasswordPlaceholder')" autocomplete="new-password" />
           </Field>
+          <Field :label="t('security.codeOptional')"><Input v-model="mfaCode" autocomplete="one-time-code" /></Field>
           <div class="flex items-center justify-between gap-3 border-t border-border/60 pt-4">
             <p class="text-xs text-muted/80">{{ t('settings.pwNote') }}</p>
             <Button type="submit" variant="primary" :disabled="!canSubmit" :loading="submitting">
@@ -222,6 +225,7 @@ async function sendTestReport(): Promise<void> {
       </Card>
 
       <div :class="platform ? 'contents' : 'space-y-5'">
+        <SecurityCard v-if="!platform" />
         <!-- 账户信息 -->
         <Card v-if="!platform">
           <template #title>

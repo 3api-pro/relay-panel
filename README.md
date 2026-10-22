@@ -4,7 +4,7 @@
 
 **One control plane for many LLM API relay stations.**
 
-Provision, upgrade, and monitor any number of self-hosted [sub2api](https://github.com/Wei-Shaw/sub2api) / [new-api](https://github.com/QuantumNous/new-api) instances — engines stay unmodified, everything is driven from a single panel.
+Connect, manage, and monitor any number of self-hosted [sub2api](https://github.com/Wei-Shaw/sub2api) / [new-api](https://github.com/QuantumNous/new-api) instances — engines stay unmodified, everything is driven from a single panel.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-3d5afe.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-43d17f.svg)](https://nodejs.org)
@@ -40,7 +40,7 @@ relay-panel collapses that into one control plane:
 
 ## Features
 
-- **Site lifecycle** — one-click provision / pinned-version upgrade with auto-rollback / start / stop / destroy, driven by a job engine with per-step timelines.
+- **Your infrastructure** — install engines on your own machine through the self-hosted panel, or connect existing sites. SaaS provides panel management, not relay hardware or server rental. Existing locally managed installations retain lifecycle support.
 - **Web admin backend** — Vue 3 SPA: fleet overview, per-site drill-down (channels / users / usage / domains / audit), job timelines. Liquid-glass UI with light/dark themes and **10-language i18n** (English / 中文 / 日本語 / 한국어 / Français / Deutsch / Español / Português / Italiano / Bahasa Indonesia).
 - **Multi-engine, zero modification** — sub2api and new-api behind one adapter interface; engines always run official releases.
 - **Channel marketplace** — upstream channel templates, one-click injection into any site (bring-your-own upstream, or managed keys issued by a metering gateway), with a usage/settlement ledger.
@@ -88,20 +88,24 @@ relay-panel collapses that into one control plane:
 
 | | Hosted SaaS | Self-hosted |
 |---|---|---|
-| Get started | Sign up at **[panel.3api.pro](https://panel.3api.pro)** — no server needed | `docker compose up -d` from [`deploy/`](deploy/) |
-| Runs on | Our infrastructure | Yours |
-| You manage | Just your relay stations | The orchestrator + your stations |
+| Get started | Sign up at **[panel.3api.pro](https://panel.3api.pro)** — connect your own servers | `docker compose up -d` from [`deploy/`](deploy/) |
+| Panel runs on | Our infrastructure | Yours |
+| You manage | Your relay servers, engines and backups | The panel + your relay servers |
 | Best for | Ship fast, connect existing stations, pay as you grow | Full control, air-gapped, or your own SaaS |
 
 - **Try before anything** → [demo.3api.pro](https://demo.3api.pro) (read-only, sample data).
-- **Hosted**: create a new station or **connect an existing sub2api / new-api** in minutes, manage your whole fleet from one panel, and grow into the channel marketplace. Self-serve subscriptions; you never touch a server.
+- **Hosted panel**: connect your own Sub2API / New API instances. Plans cover management and site quotas; they do not include hardware, upstream usage, engine hosting or engine backups.
 - **Self-hosted**: one command brings up the full stack; the [self-host guide](docs/SELF-HOST.md) covers reverse proxy, backups, and metering.
+
+## SaaS operations
+
+Account verification and recovery, authenticator MFA/recovery codes, session revocation, team workspaces, notification preferences, support tickets, reviewed refunds and statements, scheduled panel backups, audit export, and supplier invoice reconciliation are available. See [the operating guide](docs/SAAS-OPERATIONS.md) for configuration, limits and acceptance evidence. Refund completion records a verified provider receipt; it does not automatically transfer money.
 
 ## Core principles
 
 1. **Engines are never modified.** sub2api / new-api always run their official releases. All added value lives in the orchestration layer and is applied through each engine's own admin API. This keeps upgrades cheap and licensing clean (see [docs/LICENSE-COMPLIANCE.md](docs/LICENSE-COMPLIANCE.md)).
 2. **One isolated instance per site.** No shared multi-tenancy at the data layer — clean isolation, independent upgrades, and any site can be exported as a stock engine instance at any time.
-3. **Hosted and self-hosted share one codebase.** The only difference is whose server runs the orchestrator.
+3. **Hosted and self-hosted share one codebase.** SaaS disables server provisioning; self-hosting includes local application installation and environment/lifecycle management.
 
 ## Quick start
 

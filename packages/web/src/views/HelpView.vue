@@ -78,7 +78,7 @@ const steps: StepCard[] = [
     title: t('help.pathNew.title'),
     desc: t('help.pathNew.desc'),
     action: t('help.pathNew.action'),
-    to: '/sites',
+    to: '/self-deploy',
   },
   {
     icon: Link2,

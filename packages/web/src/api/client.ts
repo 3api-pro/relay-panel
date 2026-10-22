@@ -45,11 +45,13 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
 
 async function request<T>(method: string, path: string, body?: unknown, opts: RequestOptions = {}): Promise<T> {
   let res: Response;
+  let workspace = '';
+  try { workspace = localStorage.getItem('rp-workspace') ?? ''; } catch { /* Storage disabled. */ }
   try {
     res = await fetch(buildUrl(path, opts.query), {
       method,
       credentials: 'same-origin',
-      headers: body !== undefined ? { 'content-type': 'application/json' } : {},
+      headers: { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(workspace ? { 'x-workspace-id': workspace } : {}) },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
   } catch {

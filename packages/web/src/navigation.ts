@@ -21,6 +21,7 @@ export function navigationFor(role: OperatorRole): NavigationGroup[] {
     { key: 'groupWorkspace', items: [
       item('/', 'overview', 'overview'),
       item('/sites', root ? 'allSites' : 'mySites', 'sites'),
+      item('/self-deploy', 'localApps', 'sites', ['root', 'operator']),
       item('/batch', 'batch', 'batch', ['root', 'operator']),
       ...(!root ? [item('/marketplace', 'marketplace', 'marketplace')] : []),
     ] },
@@ -32,6 +33,7 @@ export function navigationFor(role: OperatorRole): NavigationGroup[] {
       item('/finance', 'finance', 'finance'),
       ...(root ? [
         item('/admin/finance-review', 'financeReview', 'finance'),
+        item('/admin/reconciliation', 'reconciliation', 'finance'),
         item('/customers', 'customerInsights', 'customers'),
         item('/upstream', 'upstream', 'upstream'),
         item('/risk', 'risk', 'risk'),
@@ -42,11 +44,17 @@ export function navigationFor(role: OperatorRole): NavigationGroup[] {
     ...(root ? [{ key: 'groupAdministration', items: [
       item('/operators', 'tenantAccess', 'operators'),
       item('/admin/billing', 'platformBilling', 'billing'),
+      item('/admin/aftercare', 'aftercare', 'billing'),
+      item('/support', 'tickets', 'help'),
       item('/admin/marketplace', 'marketplaceManagement', 'marketplace'),
       item('/admin/settings', 'platformSettings', 'settings'),
+      item('/admin/operations', 'operations', 'settings'),
     ] }] : []),
     { key: 'groupAccount', items: [
       item('/settings', 'accountSettings', 'account'),
+      item('/team', 'team', 'operators', ['root', 'operator']),
+      item('/notifications', 'notifications', 'alerts'),
+      ...(!root ? [item('/billing/aftercare', 'aftercare', 'billing', ['operator']), item('/support', 'tickets', 'help', ['operator'])] : []),
       item('/help', 'help', 'help'),
     ] },
   ];

@@ -45,5 +45,12 @@
   "skipToContent": "跳转到主要内容",
   "platformBillingDescription": "管理站长订阅、套餐目录和平台收款渠道。",
   "platformSettingsDescription": "配置平台注册方式、经营报告与通知。个人密码在“账户与安全”中管理。",
-  "financeReview": "财务复核"
+  "financeReview": "财务复核",
+  "aftercare": "账单与退款",
+  "tickets": "支持工单",
+  "notifications": "通知中心",
+  "team": "团队与工作区",
+  "operations": "运维与备份",
+  "reconciliation": "供应商对账",
+  "localApps": "自部署与应用管理"
 }

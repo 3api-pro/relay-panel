@@ -4,7 +4,7 @@
 
 **一套控制面，管理任意多个 LLM API 中转站。**
 
-一键开站、升级、监控任意数量的自建 [sub2api](https://github.com/Wei-Shaw/sub2api) / [new-api](https://github.com/QuantumNous/new-api) 实例 —— 引擎零修改，全部从一个面板驱动。
+接入、管理、监控任意数量的自建 [sub2api](https://github.com/Wei-Shaw/sub2api) / [new-api](https://github.com/QuantumNous/new-api) 实例 —— 引擎零修改，全部从一个面板驱动。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-3d5afe.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-43d17f.svg)](https://nodejs.org)
@@ -40,7 +40,7 @@ relay-panel 把这些收敛成一个控制面：
 
 ## 功能
 
-- **站点生命周期** —— 一键开站 / 钉版本升级带自动回滚 / 启停 / 销毁，任务引擎驱动、逐步骤时间线。
+- **自部署与已有站点接入** —— 通过自部署版面板在本机安装和管理引擎，也可通过地址和管理凭据接入已有站点。平台不提供中转站硬件或服务器租赁；存量本地托管站点保留生命周期管理。
 - **Web 管理后台** —— Vue 3 SPA：站群总览、单站钻取（渠道 / 用户 / 用量 / 域名 / 审计）、任务时间线。液态玻璃界面，明/暗双主题，**10 国语言 i18n**（English / 中文 / 日本語 / 한국어 / Français / Deutsch / Español / Português / Italiano / Bahasa Indonesia）。
 - **多引擎、零修改** —— sub2api 与 new-api 收敛到同一套适配接口，引擎始终跑官方发行版。
 - **渠道市场** —— 上游渠道模板一键注入任意站点（站长自带上游，或由计量网关签发 managed key），配套用量/结算账本。
@@ -82,11 +82,17 @@ relay-panel 把这些收敛成一个控制面：
 </tr>
 </table>
 
+## SaaS 运营能力
+
+支持邮箱验证与找回密码、身份验证器 MFA 与恢复码、登录设备撤销、团队工作区、通知偏好、支持工单、退款审批与账单、面板定时备份、审计导出、供应商对账与历史费率估算。配置、能力边界和验收记录见 [SaaS 运维指南](docs/SAAS-OPERATIONS.md)。退款需在支付渠道完成并登记真实回执，面板不会自动划款。
+
+套餐仅提供面板管理服务，不包含硬件、服务器、上游 API 用量或引擎数据备份。
+
 ## 核心原则
 
 1. **引擎永不修改。** sub2api / new-api 始终跑官方发行版，所有增值逻辑只存在于编排层，通过引擎自身的 admin API 实现。这让升级成本最小、许可证合规清晰（见 [docs/LICENSE-COMPLIANCE.md](docs/LICENSE-COMPLIANCE.md)）。
 2. **每站一个独立实例。** 数据层不做共享多租户 —— 隔离干净、升级互不影响、任何站随时可作为标准引擎实例导出迁走。
-3. **托管版与自部署版同一份代码。** 唯一区别是编排器跑在谁的服务器上。
+3. **托管版与自部署版同一份代码。** SaaS 禁止新建服务器实例；自部署版可通过面板在自己的机器安装和管理引擎。
 
 ## 快速开始
 

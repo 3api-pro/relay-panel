@@ -11,6 +11,15 @@ import { authenticateDetailed, type SessionCtx } from './auth/rbac.js';
 import { SESSION_COOKIE, sessionCookieOptions } from './auth/sessions.js';
 import { JobEngine } from './jobs/engine.js';
 import type { SmtpSend } from './alerts/smtp.js';
+import { registerReconciliationRoutes } from './finance/reconciliation.js';
+import { registerOperationsRoutes } from './operations/routes.js';
+import { registerTeamRoutes, resolveWorkspace } from './team/routes.js';
+import { registerAftercareRoutes } from './billing/aftercare.js';
+import { registerTicketRoutes } from './support/tickets.js';
+import { registerNotificationRoutes } from './notifications/routes.js';
+import { registerSecurityRoutes } from './auth/security.js';
+import { eq, sql } from 'drizzle-orm';
+import { operators } from './db/schema.js';
 import { registerAuthRoutes } from './auth/routes.js';
 import { registerJobsRoutes } from './jobs/routes.js';
 import { registerSitesRoutes } from './sites/routes.js';
@@ -101,7 +110,7 @@ export interface BuildServerOptions {
 }
 
 /** 免认证的 API 路径（其余 /api/* 一律要求合法 session） */
-const PUBLIC_API_PATHS = new Set(['/api/auth/login', '/api/auth/signup', '/api/auth/config']);
+const PUBLIC_API_PATHS = new Set(['/api/auth/login', '/api/auth/signup', '/api/auth/config', '/api/auth/recovery/request', '/api/auth/recovery/complete', '/api/auth/mfa/login']);
 
 const WEB_NOT_BUILT_HTML = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><title>relay-panel</title></head>
@@ -166,17 +175,38 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
       req.ctx = auth.ctx;
       // 滑动续期发生时回写 Set-Cookie 刷新浏览器 maxAge，否则活跃用户仍按登录时的固定 TTL 被强制登出
       if (auth.renewed) {
-        reply.setCookie(SESSION_COOKIE, auth.token, sessionCookieOptions(config.sessionTtlHours));
+        reply.setCookie(SESSION_COOKIE, auth.token, sessionCookieOptions(config.sessionTtlHours, config.publicUrl?.startsWith('https:')));
       }
     }
     if (!isApi) return;
     if (!auth) return reply.code(401).send({ error: '未登录或会话已过期' });
+    const personalPath = ['/api/auth/', '/api/team', '/api/notifications', '/api/support'].some(prefix => path.startsWith(prefix));
+    if (!personalPath) {
+      req.ctx = await resolveWorkspace(db, auth.ctx, req.headers['x-workspace-id']);
+      if (req.ctx.teamRole && path.startsWith('/api/billing')) return reply.code(403).send({ error: 'Billing is managed by the workspace owner' });
+      if (req.ctx.teamRole === 'reader' && !['GET', 'HEAD'].includes(req.method)) return reply.code(403).send({ error: 'This workspace membership is read-only' });
+    }
+    if (config.adminMfaRequired && auth.ctx.role === 'root' && !path.startsWith('/api/auth/')) {
+      const [op] = await db.orm.select({ mfaSecret: operators.mfaSecret }).from(operators).where(eq(operators.id, auth.ctx.operatorId));
+      if (!op?.mfaSecret) return reply.code(403).send({ error: '请先在账号安全中启用二次验证', code: 'MFA_ENROLLMENT_REQUIRED' });
+    }
   });
 
+  app.get('/readyz', async (_req, reply) => {
+    try { await db.orm.execute(sql`SELECT 1`); return { ok: true }; }
+    catch { return reply.code(503).send({ ok: false }); }
+  });
   app.get('/healthz', async () => ({ ok: true, service: 'relay-panel-orchestrator' }));
 
   // ---- 路由模块集中注册（签名统一 registerXxxRoutes(app, deps)） ----
   registerAuthRoutes(app, deps);
+  registerSecurityRoutes(app, deps);
+  registerAftercareRoutes(app, deps);
+  registerTeamRoutes(app, deps);
+  registerOperationsRoutes(app, deps);
+  registerReconciliationRoutes(app, deps);
+  registerTicketRoutes(app, deps);
+  registerNotificationRoutes(app, deps);
   registerJobsRoutes(app, deps);
   registerSitesRoutes(app, deps);
   registerBatchRoutes(app, deps);

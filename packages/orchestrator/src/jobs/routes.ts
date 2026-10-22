@@ -1,3 +1,4 @@
+import { tenantId } from '../auth/rbac.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, desc, eq, type SQL } from 'drizzle-orm';
 import { redact } from '../audit.js';
@@ -60,7 +61,7 @@ export function registerJobsRoutes(app: FastifyInstance, deps: JobsRoutesDeps): 
         .select({ job: jobs })
         .from(jobs)
         .innerJoin(sites, eq(sites.slug, jobs.slug))
-        .where(and(eq(sites.operatorId, ctx.operatorId), ...conds))
+        .where(and(eq(sites.operatorId, tenantId(ctx)), ...conds))
         .orderBy(desc(jobs.id))
         .limit(limit);
       rows = joined.map((r) => r.job);
@@ -89,9 +90,9 @@ export function registerJobsRoutes(app: FastifyInstance, deps: JobsRoutesDeps): 
       const owned = await deps.db.orm
         .select({ id: sites.id })
         .from(sites)
-        .where(and(eq(sites.slug, job.slug), eq(sites.operatorId, ctx.operatorId)))
+        .where(and(eq(sites.slug, job.slug), eq(sites.operatorId, tenantId(ctx))))
         .limit(1);
-      if (owned.length === 0) return reply.code(403).send({ error: '无权访问该任务' });
+      if (owned.length === 0) return reply.code(404).send({ error: '任务不存在' });
     }
     return { job: toApiJob(job) };
   });

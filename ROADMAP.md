@@ -73,16 +73,22 @@ Turn the read-only dashboard into a real control panel.
 The managed offering. Same codebase, orchestrator runs on our infra.
 
 - [x] Multi-operator tenancy: RBAC + per-operator site ownership on top of per-site container/data isolation
-- [x] Sign-up (open / invite modes) → operators provision their own sites from the panel within quota
+- [x] Sign-up (open / invite modes), verification and recovery → connect customer-owned sites within quota
 - [x] Billing core: plans, subscriptions, per-operator site quotas, self-serve payment recovery, prorated upgrades and term-end downgrades
 - [x] Custom domain automation (add domain → routes pushed to Caddy admin API → auto TLS, see [docs/CADDY.md](docs/CADDY.md))
 - [x] Payment integration: Alipay / WeChat Pay / USDT self-serve checkout with zero-trust webhooks (crediting only via channel re-query; see [docs/PAYMENTS.md](docs/PAYMENTS.md))
 - [x] Self-serve **connect existing site** (`POST /api/sites/adopt` + wizard): credential verified live, encrypted at rest, per-site read-only fuse; counts toward quota
 - [x] Operator-facing onboarding (Help page + empty-state dual-path), docs ([docs/HOSTED.md](docs/HOSTED.md)), support surface (configurable contact via `app_settings`)
 
-**Acceptance target:** a new user signs up, subscribes self-serve, and has a relay station live (new or connected) without ever touching a server.
+**Revised acceptance target (2026-10-22):** a customer signs up, verifies their account, subscribes and connects an existing engine. Customers can first deploy engines on their own servers. Platform-provided relay hardware, server rental and managed provisioning are removed from P4. Engine DNS/TLS and backups remain the customer’s responsibility.
 
-**Current evidence:** core flows have automated coverage; payment concurrency/recovery has isolated PostgreSQL checks, and administrator workflows have production browser checks. This release has not revalidated the complete fresh-operator journey with real payments, both site-delivery paths, domain/TLS, and failure recovery. The full cross-tenant resource matrix and both hosted/self-hosted upgrade drills also remain acceptance work. See [the remaining gates](docs/P4-READINESS.md).
+- [x] MFA, recovery codes, one-use verification/reset links and session revocation
+- [x] Team invitations, tenant reader/editor roles, notification preferences and support tickets
+- [x] Reviewed manual refunds, statement export and explicit entitlement handling
+- [x] Scheduled panel backups, readiness checks and scoped audit export
+- [x] Resumable Sub2API request reconciliation, supplier invoice comparison and historical rate evidence
+
+**Current evidence:** core flows have automated coverage; payment concurrency/recovery has isolated PostgreSQL checks, and administrator workflows have production browser checks. This release has not revalidated the complete fresh-operator journey with real payments, customer-owned site connection and failure recovery. The full cross-tenant resource matrix and both hosted/self-hosted upgrade drills also remain acceptance work. See [the remaining gates](docs/P4-READINESS.md).
 
 ---
 

@@ -16,7 +16,7 @@ const router = useRouter();
 const { t } = useI18n();
 
 type SignupMode = 'open' | 'invite' | 'closed';
-const mode = ref<SignupMode>('open');
+const mode = ref<SignupMode>('closed');
 const modeLoaded = ref(false);
 
 const email = ref('');
@@ -63,7 +63,8 @@ async function submit(): Promise<void> {
     const body: Record<string, string> = { email: email.value, password: password.value };
     if (displayName.value.trim()) body.displayName = displayName.value.trim();
     if (inviteToken.value.trim()) body.inviteToken = inviteToken.value.trim();
-    await post<Me>('/api/auth/signup', body, { silent: true, skipAuthRedirect: true });
+    const created = await post<{ verificationRequired?: boolean }>('/api/auth/signup', body, { silent: true, skipAuthRedirect: true });
+    if (created.verificationRequired) { await router.push('/account-recovery?sent=1'); return; }
     // 注册成功后直接登录，进入面板
     const me = await post<Me>('/api/auth/login', { email: email.value, password: password.value }, { silent: true, skipAuthRedirect: true });
     session.setUser(me);

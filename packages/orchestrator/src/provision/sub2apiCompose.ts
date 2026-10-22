@@ -1,3 +1,4 @@
+import { assertPinnedVersion } from './environment.js';
 /**
  * 渲染一个 sub2api 站点的 compose 项目。
  * 基于上游 deploy/docker-compose.yml（weishaw/sub2api）改写：
@@ -22,6 +23,7 @@ export interface Sub2apiComposeInput {
 }
 
 export function renderSub2apiEnv(input: Sub2apiComposeInput): string {
+  assertPinnedVersion(input.version);
   const lines = [
     `SUB2API_VERSION=${input.version}`,
     `SERVER_PORT=${input.hostPort}`,
@@ -36,6 +38,7 @@ export function renderSub2apiEnv(input: Sub2apiComposeInput): string {
 }
 
 export function renderSub2apiCompose(input: Sub2apiComposeInput): string {
+  assertPinnedVersion(input.version);
   if (input.version === 'latest') {
     throw new Error('version must be pinned; "latest" is not allowed');
   }

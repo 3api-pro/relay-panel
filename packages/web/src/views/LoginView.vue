@@ -17,6 +17,8 @@ const { t } = useI18n();
 
 const email = ref('');
 const password = ref('');
+const challenge = ref('');
+const code = ref('');
 const loading = ref(false);
 const error = ref('');
 
@@ -45,7 +47,9 @@ async function doLogin(em: string, pw: string): Promise<void> {
   error.value = '';
   loading.value = true;
   try {
-    const me = await post<Me>('/api/auth/login', { email: em, password: pw }, { silent: true, skipAuthRedirect: true });
+    const result = await post<Me & { mfaRequired?: boolean; challenge?: string }>('/api/auth/login', { email: em, password: pw }, { silent: true, skipAuthRedirect: true });
+    if (result.mfaRequired && result.challenge) { challenge.value = result.challenge; return; }
+    const me = result;
     session.setUser(me);
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/';
     await router.push(redirect.startsWith('/') ? redirect : '/');
@@ -57,6 +61,13 @@ async function doLogin(em: string, pw: string): Promise<void> {
 }
 
 async function submit(): Promise<void> {
+  if (challenge.value) {
+    loading.value = true; error.value = '';
+    try { const me = await post<Me>('/api/auth/mfa/login', { challenge: challenge.value, code: code.value }, { silent: true, skipAuthRedirect: true }); session.setUser(me); await router.push('/'); }
+    catch (err) { error.value = err instanceof Error ? err.message : t('login.errorFail'); }
+    finally { loading.value = false; }
+    return;
+  }
   if (!email.value || !password.value) {
     error.value = t('login.errorEmpty');
     return;
@@ -108,9 +119,11 @@ async function enterDemo(): Promise<void> {
         <Field :label="t('login.password')" :error="error">
           <Input v-model="password" type="password" placeholder="········" autocomplete="current-password" />
         </Field>
+        <Field v-if="challenge" :label="t('security.code')"><Input v-model="code" autocomplete="one-time-code" :placeholder="t('security.codeHint')" /></Field>
         <Button variant="primary" type="submit" block :loading="loading">{{ t('login.submit') }}</Button>
       </form>
 
+      <p class="mt-4 text-center text-xs"><RouterLink to="/account-recovery" class="text-accent">{{ t('security.recoveryLink') }}</RouterLink></p>
       <p v-if="signupMode === 'closed'" class="mt-4 text-center text-[11px] text-muted/80">{{ t('login.noRegister') }}</p>
       <p v-else class="mt-4 text-center text-[11px] text-muted/80">
         {{ t('login.newHere') }}

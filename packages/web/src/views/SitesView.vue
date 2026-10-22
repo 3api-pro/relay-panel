@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { ComputedRef } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { Link2, Lock, Plus, Server } from 'lucide-vue-next';
 import { del, get, post } from '../api/client';
@@ -24,29 +24,16 @@ import { toast } from '../components/ui/toast';
 import SiteRowActions from './sites/SiteRowActions.vue';
 
 /**
- * 站点列表 + 新建站点向导。
+ * 站点列表、自部署引导与接入已有站点。
  * 数据源 GET /api/sites，30s 轻量自刷新。写操作 inject canWrite 后可见；
  * external（外部接管）站隐藏全部生命周期操作。销毁走 ConfirmDanger 逐字确认。
  */
 const router = useRouter();
+const route = useRoute();
 const { t } = useI18n();
 const canWrite = inject<ComputedRef<boolean>>('canWrite', computed(() => false));
 
 // ---- 本视图专属请求/响应类型（不污染共享 types.ts） ----
-interface CreateSiteBody {
-  slug: string;
-  label: string;
-  engine: string;
-  version: string;
-  adminEmail: string;
-  hostPort?: number;
-  branding?: { siteName: string; announcement?: string };
-}
-interface CreateSiteResult {
-  slug: string;
-  jobId: number;
-  hostPort: number;
-}
 interface JobRef {
   slug: string;
   jobId: number;
@@ -75,6 +62,7 @@ async function refresh(initial = false): Promise<void> {
 }
 
 onMounted(() => {
+  if (route.query.adopt === '1') openAdopt();
   void refresh(true);
   void loadVersions();
   timer = window.setInterval(() => void refresh(), 30_000);
@@ -216,143 +204,16 @@ async function submitDestroy(): Promise<void> {
   }
 }
 
-// ---- 新建站点向导 ----
-const createOpen = ref(false);
-const submitting = ref(false);
+// Shared engine options and versions for connection and upgrades.
 const engineOptions = computed<SelectOption[]>(() => [
-  { value: 'sub2api', label: t('sites.create.engineRecommended') },
-  { value: 'newapi', label: 'newapi' },
+  { value: 'sub2api', label: 'Sub2API' },
+  { value: 'newapi', label: 'New API' },
 ]);
-
-const fEngine = ref<string | number | null>('sub2api');
-const fVersion = ref('');
-const fSlug = ref('');
-const fLabel = ref('');
-const fPort = ref<string | number>('');
-const fEmail = ref('');
-const fSiteName = ref('');
-const fAnnouncement = ref('');
-const errors = ref<Record<string, string>>({});
-
-const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,31}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// slug 自动派生：域名/名称 → 合法 slug；派生失败（如纯中文）返回 ''
-function slugify(raw: string): string {
-  const s = raw
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .split(/[/?#]/, 1)
-    .join('')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 32)
-    .replace(/-+$/g, '');
-  return SLUG_RE.test(s) ? s : '';
-}
-const CUSTOM_VERSION = '__custom__';
-
-// 版本 = 官方镜像 tag（我们不托管 exe，provision 拉官方镜像）。下拉给已知 tag + 自定义兜底
 const engineVersions = ref<{ sub2api: string[]; newapi: string[] }>({ sub2api: [], newapi: [] });
-const fVersionSelect = ref<string | number>('');
-const versionOptions = computed<SelectOption[]>(() => {
-  const list = fEngine.value === 'newapi' ? engineVersions.value.newapi : engineVersions.value.sub2api;
-  return [
-    ...list.map((v) => ({ value: v, label: v })),
-    { value: CUSTOM_VERSION, label: t('sites.create.versionCustom') },
-  ];
-});
 async function loadVersions(): Promise<void> {
-  try {
-    engineVersions.value = await get<{ sub2api: string[]; newapi: string[] }>('/api/engines/versions', { silent: true });
-  } catch {
-    engineVersions.value = { sub2api: [], newapi: [] };
-  }
-}
-// 引擎切换：版本选择重置为该引擎最新
-watch(fEngine, () => {
-  const list = fEngine.value === 'newapi' ? engineVersions.value.newapi : engineVersions.value.sub2api;
-  fVersionSelect.value = list[0] ?? CUSTOM_VERSION;
-  fVersion.value = list[0] ?? '';
-});
-watch(fVersionSelect, (v) => {
-  if (v === CUSTOM_VERSION) fVersion.value = '';
-  else fVersion.value = String(v);
-});
-
-// 名称 → slug 自动预填；slug 被手改过（当前值 ≠ 上次自动值）就不再覆盖
-const fSlugAuto = ref('');
-watch(fLabel, (v) => {
-  if (fSlug.value && fSlug.value !== fSlugAuto.value) return;
-  const s = slugify(v);
-  if (s) {
-    fSlug.value = s;
-    fSlugAuto.value = s;
-  }
-});
-
-function openCreate(): void {
-  fEngine.value = 'sub2api';
-  const list = engineVersions.value.sub2api;
-  fVersionSelect.value = list[0] ?? CUSTOM_VERSION;
-  fVersion.value = list[0] ?? '';
-  fSlug.value = '';
-  fSlugAuto.value = '';
-  fLabel.value = '';
-  fPort.value = '';
-  fEmail.value = '';
-  fSiteName.value = '';
-  fAnnouncement.value = '';
-  errors.value = {};
-  createOpen.value = true;
-}
-
-function validateCreate(): boolean {
-  const e: Record<string, string> = {};
-  if (!fEngine.value) e.engine = t('sites.create.errEngine');
-  if (!fVersion.value.trim()) e.version = t('sites.create.errVersion');
-  const slug = fSlug.value.trim();
-  if (!slug) e.slug = t('sites.create.errSlugRequired');
-  else if (!SLUG_RE.test(slug)) e.slug = t('sites.create.errSlugFormat');
-  if (!fLabel.value.trim()) e.label = t('sites.create.errLabel');
-  if (fPort.value !== '' && fPort.value !== null) {
-    const p = Number(fPort.value);
-    if (!Number.isInteger(p) || p < 1 || p > 65535) e.hostPort = t('sites.create.errPort');
-  }
-  const email = fEmail.value.trim();
-  if (!email) e.adminEmail = t('sites.create.errEmailRequired');
-  else if (!EMAIL_RE.test(email)) e.adminEmail = t('sites.create.errEmailFormat');
-  errors.value = e;
-  return Object.keys(e).length === 0;
-}
-
-async function submitCreate(): Promise<void> {
-  if (!validateCreate()) return;
-  submitting.value = true;
-  try {
-    const body: CreateSiteBody = {
-      slug: fSlug.value.trim(),
-      label: fLabel.value.trim(),
-      engine: String(fEngine.value),
-      version: fVersion.value.trim(),
-      adminEmail: fEmail.value.trim(),
-    };
-    if (fPort.value !== '' && fPort.value !== null) body.hostPort = Number(fPort.value);
-    const siteName = fSiteName.value.trim();
-    if (siteName) {
-      body.branding = { siteName };
-      const announcement = fAnnouncement.value.trim();
-      if (announcement) body.branding.announcement = announcement;
-    }
-    const res = await post<CreateSiteResult>('/api/sites', body);
-    toast.success(t('sites.toast.created'));
-    createOpen.value = false;
-    void router.push(`/sites/${res.slug}`);
-  } catch {
-    /* client 已弹错误 toast */
-  } finally {
-    submitting.value = false;
-  }
+  try { engineVersions.value = await get('/api/engines/versions', { silent: true }); }
+  catch { engineVersions.value = { sub2api: [], newapi: [] }; }
 }
 
 // ---- 接入已有站点（adopt）----
@@ -458,9 +319,9 @@ async function submitAdopt(): Promise<void> {
           <Link2 :size="14" />
           {{ t('sites.adopt.button') }}
         </Button>
-        <Button variant="primary" @click="openCreate">
+        <Button variant="primary" @click="router.push('/self-deploy')">
           <Plus :size="14" />
-          {{ t('sites.new') }}
+          {{ t('security.selfDeploy') }}
         </Button>
       </div>
     </div>
@@ -484,9 +345,9 @@ async function submitAdopt(): Promise<void> {
               <Link2 :size="14" />
               {{ t('sites.adopt.button') }}
             </Button>
-            <Button variant="primary" @click="openCreate">
+            <Button variant="primary" @click="router.push('/self-deploy')">
               <Plus :size="14" />
-              {{ t('sites.new') }}
+              {{ t('security.selfDeploy') }}
             </Button>
           </div>
         </EmptyState>
@@ -610,77 +471,6 @@ async function submitAdopt(): Promise<void> {
       :loading="destroyBusy"
       @confirm="submitDestroy"
     />
-
-    <!-- 新建站点向导 -->
-    <Modal v-model:open="createOpen" :title="t('sites.create.title')" width="560px">
-      <div class="space-y-4">
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field :label="t('sites.create.engineLabel')" required :error="errors.engine">
-            <Select v-model="fEngine" :options="engineOptions" :disabled="submitting" />
-          </Field>
-          <Field
-            :label="t('sites.create.versionLabel')"
-            required
-            :error="errors.version"
-            :hint="t('sites.create.versionHintDropdown')"
-          >
-            <Select v-model="fVersionSelect" :options="versionOptions" :disabled="submitting" />
-            <Input
-              v-if="fVersionSelect === CUSTOM_VERSION"
-              v-model="fVersion"
-              mono
-              class="mt-2"
-              placeholder="0.1.160"
-              :disabled="submitting"
-            />
-          </Field>
-        </div>
-
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field :label="t('sites.create.labelLabel')" required :error="errors.label">
-            <Input v-model="fLabel" :placeholder="t('sites.create.labelPlaceholder')" :disabled="submitting" />
-          </Field>
-          <Field
-            label="slug"
-            required
-            :error="errors.slug"
-            :hint="t('sites.create.slugHint')"
-          >
-            <Input v-model="fSlug" mono placeholder="my-site" :disabled="submitting" />
-          </Field>
-        </div>
-
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field :label="t('sites.create.portLabel')" :error="errors.hostPort" :hint="t('sites.create.portHint')">
-            <Input v-model="fPort" type="number" :placeholder="t('sites.create.portPlaceholder')" :disabled="submitting" />
-          </Field>
-          <Field
-            :label="t('sites.create.emailLabel')"
-            required
-            :error="errors.adminEmail"
-            :hint="t('sites.create.emailHint')"
-          >
-            <Input v-model="fEmail" type="email" placeholder="admin@example.com" :disabled="submitting" />
-          </Field>
-        </div>
-
-        <div class="border-t border-border/70 pt-4">
-          <p class="rp-microlabel mb-3">{{ t('sites.create.brandSection') }}</p>
-          <div class="space-y-4">
-            <Field :label="t('sites.create.siteNameLabel')" :error="errors.siteName">
-              <Input v-model="fSiteName" :placeholder="t('sites.create.siteNamePlaceholder')" :disabled="submitting" />
-            </Field>
-            <Field :label="t('sites.create.announcementLabel')" :hint="t('sites.create.announcementHint')">
-              <Input v-model="fAnnouncement" :placeholder="t('sites.create.announcementPlaceholder')" :disabled="submitting" />
-            </Field>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <Button variant="ghost" :disabled="submitting" @click="createOpen = false">{{ t('common.cancel') }}</Button>
-        <Button variant="primary" :loading="submitting" @click="submitCreate">{{ t('sites.create.submit') }}</Button>
-      </template>
-    </Modal>
 
     <!-- 接入已有站点（adopt） -->
     <Modal v-model:open="adoptOpen" :title="t('sites.adopt.title')" width="560px">

@@ -1,3 +1,4 @@
+import { tenantId } from '../auth/rbac.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { and, desc, eq, type SQL } from 'drizzle-orm';
@@ -126,7 +127,7 @@ export function registerAlertsRoutes(app: FastifyInstance, deps: AlertsRoutesDep
     // （全局告警仅 root/viewer 可见）。root/viewer 不加可见性过滤。
     const conds: SQL[] = [];
     if (status !== 'all') conds.push(eq(alerts.status, status));
-    if (ctx.role === 'operator') conds.push(eq(sites.operatorId, ctx.operatorId));
+    if (ctx.role === 'operator') conds.push(eq(sites.operatorId, tenantId(ctx)));
 
     const rows = await db.orm
       .select({

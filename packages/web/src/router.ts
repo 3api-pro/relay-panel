@@ -23,6 +23,7 @@ declare module 'vue-router' {
 }
 
 const routes: RouteRecordRaw[] = [
+  { path: '/account-recovery', component: () => import('./views/AccountRecoveryView.vue'), meta: { title: '账号恢复与验证', public: true } },
   { path: '/login', component: LoginView, meta: { title: '登录', public: true } },
   { path: '/signup', component: () => import('./views/SignupView.vue'), meta: { title: '注册', public: true } },
   // 登出态门面（获客漏斗落地页）：裸首页未登录时由守卫重定向到此
@@ -54,6 +55,14 @@ const routes: RouteRecordRaw[] = [
       { path: 'admin/settings', component: () => import('./views/SettingsView.vue'), props: { section: 'platform' }, meta: { title: '平台设置' } },
       { path: 'batch', component: () => import('./views/BatchView.vue'), meta: { title: '批量操作' } },
       { path: 'help', component: () => import('./views/HelpView.vue'), meta: { title: '帮助与支持' } },
+      { path: 'billing/aftercare', component: () => import('./views/AftercareView.vue'), meta: { title: '账单与退款' } },
+      { path: 'admin/aftercare', component: () => import('./views/AftercareView.vue'), meta: { title: '退款与账单' } },
+      { path: 'support', component: () => import('./views/SupportTicketsView.vue'), meta: { title: '支持工单' } },
+      { path: 'notifications', component: () => import('./views/NotificationsView.vue'), meta: { title: '通知中心' } },
+      { path: 'admin/reconciliation', component: () => import('./views/ReconciliationView.vue'), meta: { title: 'Supplier reconciliation' } },
+      { path: 'admin/operations', component: () => import('./views/OperationsView.vue'), meta: { title: 'Operations' } },
+      { path: 'team', component: () => import('./views/TeamView.vue'), meta: { title: '团队与工作区' } },
+      { path: 'self-deploy', component: () => import('./views/SelfDeployView.vue'), meta: { title: '自部署指南' } },
       { path: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: '设置' } },
     ],
   },

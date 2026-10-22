@@ -12,14 +12,15 @@ export const SESSION_COOKIE = 'rp_session';
 
 export interface SessionCookieOptions {
   httpOnly: boolean;
+  secure?: boolean;
   sameSite: 'lax';
   path: string;
   maxAge: number;
 }
 
 /** maxAge 单位秒；不设 secure（自部署常见 http 内网/localhost，HTTPS 由反代层保障） */
-export function sessionCookieOptions(ttlHours: number): SessionCookieOptions {
-  return { httpOnly: true, sameSite: 'lax', path: '/', maxAge: Math.floor(ttlHours * 3600) };
+export function sessionCookieOptions(ttlHours: number, secure = false): SessionCookieOptions {
+  return { secure, httpOnly: true, sameSite: 'lax', path: '/', maxAge: Math.floor(ttlHours * 3600) };
 }
 
 /**

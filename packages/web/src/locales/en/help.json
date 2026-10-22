@@ -1,9 +1,9 @@
 {
   "gettingStarted": "Getting started",
   "pathNew": {
-    "title": "Launch a new site",
-    "desc": "Provision a fresh relay site in one click — pick an engine and version, and the panel brings it up with an isolated database and admin account. No server access needed.",
-    "action": "Go to Sites → New site"
+    "title": "Install and manage local applications",
+    "desc": "Self-host the panel on your server, check its environment, install Sub2API or New API, and manage lifecycle, upgrades and jobs. Hardware is yours.",
+    "action": "Open local application management"
   },
   "pathAdopt": {
     "title": "Connect an existing site",
@@ -30,10 +30,10 @@
     "q1": "Does connecting an existing site change it in any way?",
     "a1": "No. Connect only verifies the URL and admin credential, then stores the credential encrypted. The panel talks to your site exclusively through its public admin API; enable read-only mode and it will not perform any write at all.",
     "q2": "What counts toward my site quota?",
-    "a2": "Every non-destroyed site you own — both sites provisioned by the panel and existing sites you connected.",
+    "a2": "Every site you own that has not been removed counts toward quota, including connected sites. Plans cover panel management only.",
     "q3": "How is a payment confirmed?",
     "a3": "After you pay, the panel verifies the order directly with the payment channel and activates the subscription automatically, usually within seconds. If a paid order does not activate, contact support with the order number.",
-    "q4": "Can I move a connected site to full management later?",
-    "a4": "Yes. Turn off read-only in the site's settings to allow channel, user and branding management from the panel. Container lifecycle (start/stop/upgrade) remains available only for panel-provisioned sites."
+    "q4": "Does the platform operate my server and upgrades?",
+    "a4": "You manage servers, domains, TLS, engine upgrades and engine backups. Disable read-only to manage channels, users and branding through the panel. Connected sites do not support container start, stop or upgrades."
   }
 }

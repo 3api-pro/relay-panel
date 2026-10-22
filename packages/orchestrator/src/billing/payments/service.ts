@@ -359,9 +359,9 @@ export class PaymentsService {
   async confirmOrder(orderNo: string): Promise<void> {
     const { db } = this.deps;
     const row = await this.orderByNo(orderNo);
-    if (!row || row.status === 'completed') return;
+    if (!row || ['completed', 'refunded'].includes(row.status)) return;
     await db.orm.update(paymentOrders).set({ lastCheckedAt: nowPg() })
-      .where(and(eq(paymentOrders.id, row.id), sql`${paymentOrders.status} <> 'completed'`));
+      .where(and(eq(paymentOrders.id, row.id), sql`${paymentOrders.status} NOT IN ('completed','refunded')`));
     // A pre-v1 paid order has an ambiguous crash boundary. Never guess and double-grant it.
     if (row.status === 'paid' && row.fulfillmentVersion === 0) {
       await db.orm.update(paymentOrders).set({ reconciliationError: 'legacy_paid_requires_review', lastCheckedAt: nowPg() })
@@ -376,7 +376,7 @@ export class PaymentsService {
         status = await gateway.query(row.orderNo, row.providerTradeNo, { amountCny: row.amount, ...(settlement ? { settlement } : {}) });
       } catch (error) {
         await db.orm.update(paymentOrders).set({ reconciliationError: error instanceof PaymentVerificationError ? 'payment_mismatch_requires_review' : 'provider_query_failed', lastCheckedAt: nowPg() })
-          .where(and(eq(paymentOrders.id, row.id), sql`${paymentOrders.status} <> 'completed'`));
+          .where(and(eq(paymentOrders.id, row.id), sql`${paymentOrders.status} NOT IN ('completed','refunded')`));
         throw new ApiError(502, '支付渠道查单失败，请稍后重试');
       }
       if (status !== 'paid') {
@@ -418,7 +418,7 @@ export class PaymentsService {
   /** Fair bounded reconciliation independent of the browser or webhook delivery. */
   async reconcile(limit = 25): Promise<{ checked: number; failed: number }> {
     const rows = await this.deps.db.orm.select({ orderNo: paymentOrders.orderNo }).from(paymentOrders)
-      .where(sql`${paymentOrders.status} <> 'completed' AND (${paymentOrders.status} = 'paid' OR ${paymentOrders.createdAt} > timezone('UTC', now()) - interval '7 days')`)
+      .where(sql`${paymentOrders.status} NOT IN ('completed','refunded') AND (${paymentOrders.status} = 'paid' OR ${paymentOrders.createdAt} > timezone('UTC', now()) - interval '7 days')`)
       .orderBy(sql`${paymentOrders.lastCheckedAt} ASC NULLS FIRST`, asc(paymentOrders.id)).limit(limit);
     let failed = 0;
     for (const row of rows) {

@@ -20,10 +20,10 @@ const brandingSchema = z.object({
 });
 
 const createSiteBody = z.object({
-  slug: z.string().regex(SLUG_RE, '需为 2-32 位小写字母/数字/连字符，且以字母或数字开头'),
+  slug: z.string().regex(SLUG_RE, '需为 2-32 位小写字母/数字/连字符，且以字母或数字开头').optional(),
   label: z.string().min(1).max(64),
   engine: z.enum(['sub2api', 'newapi']),
-  version: z.string().min(1).refine(notLatest, '版本必须钉住，不允许 latest'),
+  version: z.string().regex(/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/).refine(notLatest, '版本必须钉住，不允许 latest'),
   hostPort: z.number().int().min(1).max(65535).optional(),
   adminEmail: z.string().email(),
   branding: brandingSchema
@@ -57,7 +57,7 @@ const siteFlagsBody = z
   .refine((v) => Object.keys(v).length > 0, '至少提供一个字段');
 
 const upgradeBody = z.object({
-  toVersion: z.string().min(1).refine(notLatest, '版本必须钉住，不允许 latest'),
+  toVersion: z.string().regex(/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/).refine(notLatest, '版本必须钉住，不允许 latest'),
 });
 
 const destroyBody = z.object({
@@ -176,11 +176,13 @@ export function registerSitesRoutes(app: FastifyInstance, deps: SitesServiceDeps
 
   // ---- 写：站点生命周期 ----
 
+  app.post<SlugParams>('/api/sites/:slug/retry-install', async req => service.retryInstall(requireCtx(req), req.params.slug));
+
   app.post('/api/sites', async (req, reply) => {
     const ctx = requireCtx(req);
     const body = parseBody(createSiteBody, req.body);
     const out = await service.createSite(ctx, {
-      slug: body.slug,
+      ...(body.slug ? { slug: body.slug } : {}),
       label: body.label,
       engine: body.engine,
       version: body.version,

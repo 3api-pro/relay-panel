@@ -534,3 +534,7 @@ curl -b /tmp/rp.cookie -X POST -H 'Content-Type: application/json' \
 # Prometheus 抓取
 curl -H 'Authorization: Bearer <RP_METRICS_TOKEN>' http://127.0.0.1:7100/metrics
 ```
+
+## SaaS additions (2026-10-22)
+
+Account security, workspaces, reviewed refunds, notifications, support, backups and reconciliation: [SAAS-OPERATIONS.md](SAAS-OPERATIONS.md). SaaS supports customer self-deployment and existing-site connection only; no platform relay hardware.

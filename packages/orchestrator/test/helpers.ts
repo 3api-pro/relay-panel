@@ -19,7 +19,7 @@ export async function makeTestDb(): Promise<Db> {
 /** 全默认值 Config（不读 process.env），可按需覆盖；secretKey 预置测试值 */
 export function makeTestConfig(overrides: Partial<Config> = {}): Config {
   const base = loadConfig({});
-  return { ...base, dbUrl: 'pglite:memory', secretKey: 'test-master-key', ...overrides };
+  return { ...base, localProvisionEnabled: true, dbUrl: 'pglite:memory', secretKey: 'test-master-key', ...overrides };
 }
 
 let operatorSeq = 1;

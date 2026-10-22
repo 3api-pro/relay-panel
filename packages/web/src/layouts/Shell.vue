@@ -46,7 +46,7 @@ const icons: Record<string, Component> = {
   customers: UserRound, jobs: ListChecks, operators: Users, billing: CreditCard,
   settings: Settings, account: UserRound, help: LifeBuoy,
 };
-const navGroups = computed(() => navigationFor(session.state.user?.role ?? 'operator'));
+const navGroups = computed(() => navigationFor(session.state.user?.role ?? 'operator').map(g => ({ ...g, items: g.items.filter(i => session.state.workspaceRole === 'owner' || !i.to.startsWith('/billing')) })));
 const navItems = computed(() => navGroups.value.flatMap(g => g.items));
 const mainGroups = computed(() => navGroups.value.filter(g => g.key !== 'groupAccount'));
 const accountItems = computed(() => navGroups.value.find(g => g.key === 'groupAccount')?.items ?? []);
@@ -153,6 +153,7 @@ async function onLogout(): Promise<void> {
           <p class="mt-0.5 text-[10px] text-muted">{{ t(isRoot ? 'nav.adminScope' : user?.role === 'viewer' ? 'nav.viewerScope' : 'nav.userScope') }}</p>
         </div>
       </div>
+      <RouterLink v-if="session.state.workspaceName" to="/team" class="mx-3 rounded border border-border px-3 py-2 text-xs text-accent">{{ session.state.workspaceName }} · {{ t(`team.${session.state.workspaceRole}`) }}</RouterLink>
       <nav class="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3" :aria-label="t('nav.navigation')">
         <section v-for="group in mainGroups" :key="group.key" :aria-labelledby="`nav-${group.key}`">
           <h2 :id="`nav-${group.key}`" class="mb-1.5 px-2.5 text-[10px] font-semibold tracking-wide text-muted/70">{{ t(`nav.${group.key}`) }}</h2>

@@ -1,3 +1,5 @@
+import { startBackupWorker } from './operations/backup.js';
+import { startNotificationWorker, TenantNotifier } from './notifications/worker.js';
 import { Sub2apiAdapter } from '@relay-panel/adapter-sub2api';
 import { NewapiAdapter } from '@relay-panel/adapter-newapi';
 import type { EngineAdapter, EngineKind, EngineLifecycle } from '@relay-panel/adapter-core';
@@ -84,6 +86,7 @@ if (config.demo) {
   notifier = new FanoutNotifier([
     new WebhookNotifier(db),
     new EmailNotifier(db, config.smtp ?? null),
+    new TenantNotifier(db, config),
   ]);
 
   // G2: 计量网关装配——RP_METERING_GATEWAY_URL 未配置时保持 null（managed 模板不可启用）
@@ -153,7 +156,12 @@ const customerSnapshot =
 const paymentReconciliation = !config.demo
   ? startPaymentReconciliation({ config, db }, config.paymentReconcileIntervalMs) : null;
 
+const backupWorker = !config.demo ? startBackupWorker(db, config) : null;
+const notificationWorker = !config.demo ? startNotificationWorker(db, config) : null;
+
 async function shutdown(): Promise<void> {
+  await notificationWorker?.stop();
+  await backupWorker?.stop();
   paymentReconciliation?.stop();
   stopLedgerPull?.();
   customerSnapshot?.stop();

@@ -28,6 +28,12 @@ export const operators = pgTable('operators', {
   displayName: text('display_name'),
   // scrypt: "scrypt:N=16384,r=8,p=1:<salt hex>:<hash hex>"
   passwordHash: text('password_hash'),
+  emailVerifiedAt: timestamp('email_verified_at', { mode: 'string' }).defaultNow(),
+  mfaSecret: text('mfa_secret'),
+  mfaPendingSecret: text('mfa_pending_secret'),
+  mfaPendingExpiresAt: timestamp('mfa_pending_expires_at', { mode: 'string' }),
+  mfaLastCounter: bigint('mfa_last_counter', { mode: 'number' }).notNull().default(-1),
+  mfaRecoveryHashes: jsonb('mfa_recovery_hashes').$type<string[]>().notNull().default([]),
   role: text('role').notNull().default('operator'), // 'root' | 'operator' | 'viewer'
   status: text('status').notNull().default('active'), // 'active' | 'disabled'
   lastLoginAt: timestamp('last_login_at', { mode: 'string' }),
@@ -336,6 +342,144 @@ export const customerSnapshots = pgTable(
 export const schemaMigrations = pgTable('schema_migrations', {
   name: text('name').primaryKey(),
   appliedAt: timestamp('applied_at', { mode: 'string' }).notNull().defaultNow(),
+});
+
+/** Only hashes of short-lived, one-use authentication tokens are stored. */
+export const authTokens = pgTable('auth_tokens', {
+  tokenHash: text('token_hash').primaryKey(),
+  operatorId: integer('operator_id').notNull().references(() => operators.id),
+  purpose: text('purpose').notNull(),
+  expiresAt: timestamp('expires_at', { mode: 'string' }).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [index('auth_tokens_owner_idx').on(t.operatorId, t.purpose)]);
+
+/** Persistent limits survive restarts and apply across application workers. */
+export const authAttempts = pgTable('auth_attempts', {
+  key: text('key').primaryKey(),
+  count: integer('count').notNull().default(1),
+  expiresAt: timestamp('expires_at', { mode: 'string' }).notNull(),
+});
+
+export const notificationPreferences = pgTable('notification_preferences', {
+  operatorId: integer('operator_id').primaryKey().references(() => operators.id),
+  alerts: boolean('alerts').notNull().default(true),
+  billing: boolean('billing').notNull().default(true),
+  support: boolean('support').notNull().default(true),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+});
+
+export const notifications = pgTable('notifications', {
+  id: serial('id').primaryKey(),
+  operatorId: integer('operator_id').notNull().references(() => operators.id),
+  category: text('category').notNull(),
+  dedupeKey: text('dedupe_key').notNull().unique(),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  mailCiphertext: text('mail_ciphertext'),
+  status: text('status').notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  nextAttemptAt: timestamp('next_attempt_at', { mode: 'string' }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { mode: 'string' }),
+  readAt: timestamp('read_at', { mode: 'string' }),
+  lastError: text('last_error'),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [index('notifications_owner_idx').on(t.operatorId, t.id), index('notifications_delivery_idx').on(t.status, t.nextAttemptAt)]);
+
+export const refundRequests = pgTable('refund_requests', {
+  id: serial('id').primaryKey(),
+  operatorId: integer('operator_id').notNull().references(() => operators.id),
+  orderId: integer('order_id').notNull().references(() => paymentOrders.id),
+  amount: numeric('amount', { precision: 10, scale: 2, mode: 'number' }).notNull(),
+  reason: text('reason').notNull(),
+  status: text('status').notNull().default('requested'),
+  version: integer('version').notNull().default(1),
+  note: text('note'),
+  receipt: text('receipt'),
+  reviewedBy: text('reviewed_by'),
+  entitlement: text('entitlement'),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [index('refund_requests_owner_idx').on(t.operatorId), uniqueIndex('refund_receipt_uk').on(t.receipt)]);
+
+export const supportTickets = pgTable('support_tickets', {
+  id: serial('id').primaryKey(),
+  operatorId: integer('operator_id').notNull().references(() => operators.id),
+  subject: text('subject').notNull(),
+  status: text('status').notNull().default('open'),
+  version: integer('version').notNull().default(1),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [index('support_tickets_owner_idx').on(t.operatorId, t.id)]);
+
+export const supportMessages = pgTable('support_messages', {
+  id: serial('id').primaryKey(),
+  ticketId: integer('ticket_id').notNull().references(() => supportTickets.id),
+  actorId: integer('actor_id').notNull().references(() => operators.id),
+  staff: boolean('staff').notNull().default(false),
+  body: text('body').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+});
+
+export const organizations = pgTable('organizations', {
+  ownerId: integer('owner_id').primaryKey().references(() => operators.id),
+  name: text('name').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+});
+export const organizationMembers = pgTable('organization_members', {
+  id: serial('id').primaryKey(),
+  ownerId: integer('owner_id').notNull().references(() => organizations.ownerId),
+  operatorId: integer('operator_id').notNull().references(() => operators.id),
+  role: text('role').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [unique('organization_member_uk').on(t.ownerId, t.operatorId)]);
+export const organizationInvites = pgTable('organization_invites', {
+  id: serial('id').primaryKey(),
+  ownerId: integer('owner_id').notNull().references(() => organizations.ownerId),
+  email: text('email').notNull(),
+  role: text('role').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  expiresAt: timestamp('expires_at', { mode: 'string' }).notNull(),
+  usedAt: timestamp('used_at', { mode: 'string' }),
+  revokedAt: timestamp('revoked_at', { mode: 'string' }),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+});
+
+export const reconciliationRuns = pgTable('reconciliation_runs', {
+  id: serial('id').primaryKey(),
+  siteId: integer('site_id').notNull().references(() => sites.id),
+  fromDate: text('from_date').notNull(),
+  toDate: text('to_date').notNull(),
+  supplier: text('supplier').notNull(),
+  invoiceRef: text('invoice_ref').notNull(),
+  invoiceAmount: numeric('invoice_amount', { precision: 18, scale: 6, mode: 'number' }).notNull(),
+  accountId: text('account_id'),
+  status: text('status').notNull().default('scanning'),
+  nextPage: integer('next_page').notNull().default(1),
+  expectedRows: integer('expected_rows'),
+  version: integer('version').notNull().default(1),
+  note: text('note').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [unique('reconciliation_invoice_uk').on(t.siteId, t.supplier, t.invoiceRef)]);
+
+export const reconciliationRecords = pgTable('reconciliation_records', {
+  id: serial('id').primaryKey(),
+  runId: integer('run_id').notNull().references(() => reconciliationRuns.id),
+  sourceId: text('source_id').notNull(),
+  evidence: jsonb('evidence').$type<import('@relay-panel/adapter-core').UsageRecord>().notNull(),
+}, t => [unique('reconciliation_record_uk').on(t.runId, t.sourceId)]);
+
+export const historicalRates = pgTable('historical_rates', {
+  id: serial('id').primaryKey(),
+  siteId: integer('site_id').notNull().references(() => sites.id),
+  userId: text('user_id').notNull(),
+  model: text('model').notNull(),
+  fromAt: timestamp('from_at', { mode: 'string' }).notNull(),
+  toAt: timestamp('to_at', { mode: 'string' }).notNull(),
+  multiplier: numeric('multiplier', { precision: 14, scale: 6, mode: 'number' }).notNull(),
+  note: text('note').notNull(),
+  voidedAt: timestamp('voided_at', { mode: 'string' }),
+  voidReason: text('void_reason'),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
 });
 
 export const financeReviewCases = pgTable('finance_review_cases', {
