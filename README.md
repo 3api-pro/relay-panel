@@ -38,6 +38,12 @@ relay-panel collapses that into one control plane:
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+## v2.10.0: Reviewable engine user quotas
+
+Administrators can configure Sub2API user/platform quotas directly from budgets or risk management. A write is bound to a ten-minute preview, recorded durably before execution, checked for drift and independently read back. Duplicate submissions never repeat a successful write. Uncertain results fence further writes for that user until reviewed; administrators can read back or document acceptance of the observed configuration. Missing fields are rejected instead of treated as unlimited.
+
+Upstream coverage is standard-mode balance billing; subscriptions and simple mode are excluded. Daily/weekly windows follow the engine timezone, and monthly windows span 30 days, independently of panel calendar budgets. Matching configuration is not proof of runtime enforcement or zero overshoot. Writes remain disabled unless `RP_RISK_ENFORCE=1`; readonly sites still reject writes. Integrations must now preview first and submit the returned `operationId` with scope acknowledgement instead of sending raw amounts to the enforcement endpoint.
+
 ## v2.9.0: Delegated support and internal notes
 
 Platform administrators can assign individual support tickets to existing verified accounts, with separate reply, resolution and internal-note permissions and a maximum 90-day lifetime. Staff see only assigned conversations; customer identity fields, site access and financial access are not inherited. Internal notes stay outside customer messages and notifications. Search, status filters and cursor pagination retain older tickets and conversations; replies, notifications and revocation use transactional checks.
