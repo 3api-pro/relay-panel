@@ -45,6 +45,7 @@
     "unresolved": "未解决",
     "unreachable": "不可达",
     "cancelled": "已取消",
-    "destroyed": "已销毁"
+    "destroyed": "已销毁",
+    "uncertain": "结果待复核"
   }
 }

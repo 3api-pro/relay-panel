@@ -45,6 +45,7 @@
     "unresolved": "Unresolved",
     "unreachable": "Unreachable",
     "cancelled": "Cancelled",
-    "destroyed": "Destroyed"
+    "destroyed": "Destroyed",
+    "uncertain": "Needs review"
   }
 }

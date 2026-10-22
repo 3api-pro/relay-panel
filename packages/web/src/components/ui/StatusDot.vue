@@ -36,6 +36,8 @@ function mapStatus(s: string): Mapped {
       return { tone: 'green', pulse: false, key: 'succeeded' };
     case 'resolved':
       return { tone: 'green', pulse: false, key: 'resolved' };
+    case 'uncertain':
+      return { tone: 'amber', pulse: false, key: 'uncertain' };
     case 'running':
       return { tone: 'accent', pulse: true, key: 'running' };
     case 'provisioning':

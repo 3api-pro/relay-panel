@@ -359,6 +359,12 @@ export interface JobView {
   siteId: number | null;
   slug: string;
   status: string;
+  leaseUntil?: string | null;
+  heartbeatAt?: string | null;
+  reviewVersion?: number;
+  reviewNote?: string | null;
+  reviewOutcome?: string | null;
+  reviewedAt?: string | null;
   steps: JobStep[];
   error?: string | null;
   createdBy: string;
@@ -369,6 +375,7 @@ export interface JobView {
 
 export interface JobsResponse {
   jobs: JobView[];
+  hasMore?: boolean;
 }
 
 export interface JobResponse {
