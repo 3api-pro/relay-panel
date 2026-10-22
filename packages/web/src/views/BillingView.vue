@@ -779,7 +779,7 @@ async function doCancel(): Promise<void> {
       <template #title><h2 class="text-[13px] font-semibold">{{ t(isRoot ? 'billing.allOrders' : 'billing.myOrders') }}</h2></template>
       <template #actions><Button size="sm" variant="ghost" @click="loadMyOrders">{{ t('common.refresh') }}</Button></template>
       <p v-if="ordersError" class="p-4 text-sm text-red" role="alert">{{ ordersError }}</p>
-      <Table v-else :columns="orderColumns" :rows="orderRows" row-key="orderNo" :empty="t('billing.noOrders')">
+      <Table v-else class="[&_table]:min-w-[920px]" :columns="orderColumns" :rows="orderRows" row-key="orderNo" :empty="t('billing.noOrders')">
         <template #cell-orderNo="{ row }"><span class="font-mono">{{ row.orderNo }}</span><p v-if="isRoot" class="mt-1 text-xs text-muted">{{ row.operatorEmail }}</p></template>
         <template #cell-planKey="{ row }">{{ planTitle(String(row.planKey)) }}<p v-if="asOrder(row).change" class="mt-1 text-xs text-muted">{{ t(`billing.changeKind.${asOrder(row).change?.kind}`) }}</p></template>
         <template #cell-months="{ row }">{{ asOrder(row).change?.kind === 'upgrade' ? t('billing.sameExpiry') : row.months }}</template>
