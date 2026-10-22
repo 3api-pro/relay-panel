@@ -25,9 +25,12 @@ export function navigationFor(role: OperatorRole): NavigationGroup[] {
       item('/batch', 'batch', 'batch', ['root', 'operator']),
       ...(!root ? [item('/marketplace', 'marketplace', 'marketplace')] : []),
     ] },
-    { key: 'groupMonitoring', items: [
+    { key: 'groupServices', items: [
       item('/services', 'services', 'overview'),
+      item('/knowledge', 'knowledge', 'help'),
       item('/collaboration', 'collaboration', 'operators', ['root', 'operator']),
+    ] },
+    { key: 'groupMonitoring', items: [
       item('/alerts', 'alerts', 'alerts'),
       item('/jobs', 'jobs', 'jobs'),
     ] },

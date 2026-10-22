@@ -54,5 +54,7 @@
   "reconciliation": "供应商对账",
   "localApps": "自部署与应用管理",
   "services": "站点服务中心",
-  "collaboration": "协作工作台"
+  "collaboration": "协作工作台",
+  "knowledge": "客户知识库",
+  "groupServices": "服务与协作"
 }

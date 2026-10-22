@@ -38,6 +38,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', component: OverviewView, meta: { title: '总览' } },
       { path: 'finance', component: () => import('./views/FinanceView.vue'), meta: { title: '经营' } },
+      { path: 'knowledge', component: () => import('./views/KnowledgeView.vue'), meta: { title: '客户知识库' } },
       { path: 'services', component: () => import('./views/ServiceCenterView.vue'), meta: { title: '站点服务中心' } },
       { path: 'collaboration', component: () => import('./views/CollaborationView.vue'), meta: { title: '协作工作台' } },
       { path: 'admin/finance-review', component: () => import('./views/FinanceReviewView.vue'), meta: { title: '财务复核' } },

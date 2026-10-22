@@ -54,5 +54,7 @@
   "reconciliation": "Supplier reconciliation",
   "localApps": "Self-hosting & applications",
   "services": "Service center",
-  "collaboration": "Collaboration"
+  "collaboration": "Collaboration",
+  "knowledge": "Customer knowledge",
+  "groupServices": "Services & collaboration"
 }

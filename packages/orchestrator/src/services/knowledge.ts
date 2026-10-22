@@ -163,6 +163,6 @@ export function registerKnowledgeRoutes(app: FastifyInstance, deps: SitesService
     const [row] = await db.orm.select({ content: documents.published, publishedAt: documents.publishedAt }).from(documents)
       .where(and(eq(documents.siteId, space.siteId), eq(documents.token, req.params.documentToken), isNotNull(documents.published)));
     if (!row) throw new ApiError(404, 'Not found');
-    return reply.type('text/html; charset=utf-8').send(page(row.content!.title, `<a href="/public/help/${space.token}">← ${esc(space.title)}</a>${renderContent(row.content!)}<p><small>发布时间：${esc(row.publishedAt!)} UTC · 站长维护的服务说明</small></p>`));
+    return reply.type('text/html; charset=utf-8').send(page(row.content!.title, `<p><a href="/public/help/${space.token}">← ${esc(space.title)}</a></p>${renderContent(row.content!)}<p><small>发布时间：${esc(row.publishedAt!)} UTC · 站长维护的服务说明</small></p>`));
   });
 }
