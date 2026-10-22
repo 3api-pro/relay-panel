@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EngineAdapter, EngineKind, PlatformQuota } from '@relay-panel/adapter-core';
 import type { Db } from '../src/db/client.js';
+import { QuotaService } from '../src/risk/quotas.js';
 import { sites } from '../src/db/schema.js';
 import { clearSiteCaches } from '../src/sites/service.js';
 import {
@@ -204,11 +205,11 @@ describe('RiskService scan / enforce', () => {
     const adapter = new FakeAdapter('sub2api');
     adapter.setPlatformQuotas('risk-enf-off', '5', [quota('anthropic', 100, null, 500)]);
     const { deps } = makeDeps(adapter, false);
-    const service = new RiskService(deps);
+    const service = new QuotaService(deps);
     const change: QuotaChange = { platform: 'anthropic', window: 'daily', limitUsd: 20 };
 
     await expect(
-      service.enforceQuota({ operatorId: 1, email: 'root@x.com', role: 'root' }, 'risk-enf-off', '5', change),
+      service.apply({ operatorId: 1, email: 'root@x.com', role: 'root' }, 'risk-enf-off', '5', 1),
     ).rejects.toMatchObject({ statusCode: 403 });
     expect(adapter.calls.some((c) => c.startsWith('users.setPlatformQuotas'))).toBe(false);
     expect(adapter.calls.some((c) => c.startsWith('users.getPlatformQuotas'))).toBe(false);
@@ -222,10 +223,12 @@ describe('RiskService scan / enforce', () => {
       quota('openai', null, 0, null),
     ]);
     const { deps } = makeDeps(adapter, true);
-    const service = new RiskService(deps);
+    const service = new QuotaService(deps);
     const change: QuotaChange = { platform: 'anthropic', window: 'daily', limitUsd: 20 };
 
-    const res = await service.enforceQuota({ operatorId: 1, email: 'root@x.com', role: 'root' }, 'risk-enf-on', '5', change);
+    const ctx = { operatorId: 1, email: 'root@x.com', role: 'root' as const };
+    const preview = await service.preview(ctx, 'risk-enf-on', '5', change);
+    const res = await service.apply(ctx, 'risk-enf-on', '5', preview.operation.id);
     // GET 与 PUT 都调过
     expect(adapter.calls.some((c) => c.startsWith('users.getPlatformQuotas'))).toBe(true);
     expect(adapter.calls.some((c) => c.startsWith('users.setPlatformQuotas'))).toBe(true);
@@ -320,11 +323,13 @@ describe('/api/risk/* 权限门控', () => {
       });
       ts.adapters.sub2api.setPlatformQuotas('http-on', '5', [quota('anthropic', 100, null, 500)]);
 
+      const preview = await ts.app.inject({ method: 'POST', url: '/api/risk/users/http-on/5/quota-preview', cookies: { rp_session: cookie }, payload: { platform: 'anthropic', window: 'daily', limitUsd: 20 } });
+      expect(preview.statusCode).toBe(200);
       const enf = await ts.app.inject({
         method: 'POST',
         url: '/api/risk/users/http-on/5/enforce',
         cookies: { rp_session: cookie },
-        payload: { platform: 'anthropic', window: 'daily', limitUsd: 20 },
+        payload: { operationId: preview.json().operation.id, acknowledgeScope: true },
       });
       expect(enf.statusCode).toBe(200);
       expect(enf.json().enforce).toBe(true);

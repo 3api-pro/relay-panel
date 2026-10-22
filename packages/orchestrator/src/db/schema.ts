@@ -645,3 +645,24 @@ export const supportInternalNotes = pgTable('support_internal_notes', {
   id: serial('id').primaryKey(), ticketId: integer('ticket_id').notNull().references(() => supportTickets.id), actorId: integer('actor_id').notNull().references(() => operators.id),
   body: text('body').notNull(), createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
 }, t => [index('support_note_ticket').on(t.ticketId, t.id)]);
+
+/** Explicit root quota changes; uncertain writes remain fenced until reviewed. */
+export const quotaOperations = pgTable('quota_operations', {
+  id: serial('id').primaryKey(),
+  siteId: integer('site_id').notNull().references(() => sites.id),
+  actorId: integer('actor_id').notNull().references(() => operators.id),
+  userId: text('user_id').notNull(),
+  siteFingerprint: text('site_fingerprint').notNull(),
+  change: jsonb('change').$type<{ platform: string; window: 'daily' | 'weekly' | 'monthly'; limitUsd: number | null }>().notNull(),
+  beforeLimits: jsonb('before_limits').$type<import('@relay-panel/adapter-core').PlatformQuotaInput[]>().notNull(),
+  requestedLimits: jsonb('requested_limits').$type<import('@relay-panel/adapter-core').PlatformQuotaInput[]>().notNull(),
+  observed: jsonb('observed').$type<import('@relay-panel/adapter-core').PlatformQuota[]>(),
+  status: text('status').notNull().default('preview'),
+  detail: text('detail').notNull().default(''),
+  resolutionNote: text('resolution_note'),
+  expiresAt: timestamp('expires_at', { mode: 'string' }).notNull(),
+  startedAt: timestamp('started_at', { mode: 'string' }),
+  checkedAt: timestamp('checked_at', { mode: 'string' }),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [uniqueIndex('quota_operation_inflight').on(t.siteId, t.userId).where(sql`${t.status} IN ('applying','uncertain')`), index('quota_operation_history').on(t.siteId,t.id)]);

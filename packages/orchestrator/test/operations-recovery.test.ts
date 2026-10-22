@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 import { makeTestServer, type TestServer } from './helpers.js';
 import { performPanelBackup } from '../src/operations/backup.js';
 import { estimateCharge } from '../src/finance/reconciliation.js';
-import { notifications, operators } from '../src/db/schema.js';
+import { notifications, operators, sites, quotaOperations } from '../src/db/schema.js';
 import { queueNotification, deliverNotifications } from '../src/notifications/service.js';
 import { toPgTimestamp } from '../src/auth/sessions.js';
 import { loadConfig } from '../src/config.js';
@@ -27,6 +27,8 @@ describe('recovery and financial evidence', () => {
     temp = await mkdtemp(join(tmpdir(), 'relay-recovery-'));
     ts = await makeTestServer({ config: { backupDirectory: temp } });
     const account = await ts.seedLogin({ email: 'recovery@tests.example', password: 'correct-password' });
+    const [site] = await ts.db.orm.insert(sites).values({ operatorId: account.operatorId, slug: 'recovery-quota', label: 'Quota recovery', engine: 'sub2api', version: 'v1', hostPort: 0, managed: 'external', baseUrl: 'https://example.test' }).returning();
+    await ts.db.orm.insert(quotaOperations).values({ siteId: site!.id, actorId: account.operatorId, userId: '7', siteFingerprint: 'fixture', change: { platform: 'anthropic', window: 'daily', limitUsd: 10 }, beforeLimits: [], requestedLimits: [{ platform: 'anthropic', dailyLimitUsd: 10, weeklyLimitUsd: null, monthlyLimitUsd: null }], status: 'uncertain', expiresAt: '2030-01-01', startedAt: '2026-01-01' });
     const result = await performPanelBackup(ts.db, ts.config);
     const archive = await readFile(join(String(result.folder), String(result.file)));
     expect(createHash('sha256').update(archive).digest('hex')).toBe(result.sha256);
@@ -35,7 +37,8 @@ describe('recovery and financial evidence', () => {
       const rows = await restored.query<{ email: string }>('SELECT email FROM operators WHERE id=$1', [account.operatorId]);
       expect(rows.rows[0]!.email).toBe('recovery@tests.example');
       const tables = await restored.query<{ name: string }>('SELECT name FROM schema_migrations ORDER BY name');
-      expect(tables.rows.at(-1)!.name).toBe('018_support_assignments.sql');
+      expect(tables.rows.at(-1)!.name).toBe('019_quota_operations.sql');
+      expect((await restored.query('SELECT status,user_id,requested_limits FROM quota_operations')).rows[0]).toMatchObject({ status: 'uncertain', user_id: '7', requested_limits: [{ platform: 'anthropic', dailyLimitUsd: 10 }] });
       expect((await restored.query('SELECT * FROM refund_requests')).rows).toEqual([]);
       expect((await restored.query('SELECT * FROM service_work')).rows).toEqual([]);
       expect((await restored.query('SELECT * FROM observation_source_rows')).rows).toEqual([]);

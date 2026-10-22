@@ -6,15 +6,11 @@ import type {
   EngineAdminClient,
   EngineKind,
   InstanceInfo,
-  PlatformQuota,
-  PlatformQuotaInput,
 } from '@relay-panel/adapter-core';
 import type { Config } from '../config.js';
 import type { Db } from '../db/client.js';
 import { appSettings, sites, type SiteRow } from '../db/schema.js';
-import { ApiError, type SessionCtx } from '../auth/rbac.js';
 import { toPgTimestamp } from '../auth/sessions.js';
-import { writeAudit } from '../audit.js';
 import { makeCredentialStoreV2 } from '../credstore.js';
 import { redactText } from '../jobs/engine.js';
 import { findOpenAlert, openAlert, resolveAlert } from '../alerts/engine.js';
@@ -28,9 +24,8 @@ import type { Notifier } from '../alerts/notify.js';
  *   （spikeMultiplier/absFloorUsd/baselineDays）判 spend_spike；单站一条 open（detail 枚举骤增用户去重）。
  *
  * 护栏（限额）：platform-quotas 是 user×platform 粒度且日/周/月窗口，骤增是 user 总额——「哪个平台限多少」
- *   无法从总额安全自动派生，故写回永远 root 显式传 {platform,window,limitUsd}，preview 只做 GET-合并展示。
- *   🔴 默认【仅告警】：config.riskEnforce===false 时 enforceQuota 直接抛（绝不调 setPlatformQuotas）；
- *   true 才 GET→合并（保留未涉及 platform 与同 platform 其它窗口，null≠0）→PUT 全量写回 + openAlert + 审计。
+ *   无法从总额安全自动派生。quotas.ts 提供 root 显式预览、持久化执行意图、冲突检查与回读复核。
+ *   默认仅告警；本扫描服务不写入引擎限额，不自动把预算或异常消费换算为限额。
  *
  * 与 alerts/engine.ts 完全解耦：独立 setInterval（unref）+ 重入锁；intervalMs<=0 不起循环。
  * 复用 alerts/engine.ts 已 export 的 openAlert/resolveAlert/findOpenAlert 与 makeCredentialStoreV2。
@@ -115,43 +110,7 @@ export function detectSpikes(
 // 限额合并（GET-合并，纯函数，供单测直接驱动）
 // ---------------------------------------------------------------------------
 
-export type QuotaWindow = 'daily' | 'weekly' | 'monthly';
-
-export interface QuotaChange {
-  platform: string;
-  window: QuotaWindow;
-  /** null=不限；0=完全禁用；>0=USD 上限 */
-  limitUsd: number | null;
-}
-
-/**
- * GET-合并：把 change 叠加到 current 全量限额上，产出 PUT【全量替换】输入。
- * 🔴 必须保留：(a) 未涉及的其它 platform 行（否则被软删）(b) 同 platform 未涉及的其它两窗口 limit。
- * null≠0：各窗口按 current 的 limitUsd（null=不限）原样搬运，绝不把「清空/不限」落成 0=禁用。
- */
-export function mergeQuotaInput(current: PlatformQuota[], change: QuotaChange): PlatformQuotaInput[] {
-  const byPlatform = new Map<string, PlatformQuotaInput>();
-  // 先把现有全部平台搬进来（保留每平台三窗口现值：null=不限 / 0=禁用 / >0=上限 原样）
-  for (const p of current) {
-    byPlatform.set(p.platform, {
-      platform: p.platform,
-      dailyLimitUsd: p.daily.limitUsd,
-      weeklyLimitUsd: p.weekly.limitUsd,
-      monthlyLimitUsd: p.monthly.limitUsd,
-    });
-  }
-  // 目标平台不存在则新建（其余两窗口=不限 null）
-  let target = byPlatform.get(change.platform);
-  if (!target) {
-    target = { platform: change.platform, dailyLimitUsd: null, weeklyLimitUsd: null, monthlyLimitUsd: null };
-    byPlatform.set(change.platform, target);
-  }
-  // 覆盖目标窗口（null=不限/0=禁用/>0=上限）
-  if (change.window === 'daily') target.dailyLimitUsd = change.limitUsd;
-  else if (change.window === 'weekly') target.weeklyLimitUsd = change.limitUsd;
-  else target.monthlyLimitUsd = change.limitUsd;
-  return [...byPlatform.values()];
-}
+export { mergeQuotaInput, type QuotaChange, type QuotaWindow } from './quota-input.js';
 
 // ---------------------------------------------------------------------------
 // RiskService
@@ -170,16 +129,6 @@ export interface SiteSpikes {
   siteSlug: string;
   siteLabel: string;
   spikes: SpikeRow[];
-}
-
-/** GET-合并预览（不写回） */
-export interface QuotaPreview {
-  platform: string;
-  window: QuotaWindow;
-  /** 当前全量限额（GET 回读） */
-  current: PlatformQuota[];
-  /** 合并后将写回的全量输入（若 enforce=on 才会实际 PUT） */
-  merged: PlatformQuotaInput[];
 }
 
 function errText(err: unknown): string {
@@ -331,79 +280,7 @@ export class RiskService {
     return results;
   }
 
-  // ---- 护栏（限额）----
 
-  private async requireSite(slug: string): Promise<SiteRow> {
-    const rows = await this.deps.db.orm
-      .select()
-      .from(sites)
-      .where(and(eq(sites.slug, slug), ne(sites.status, 'destroyed')))
-      .limit(1);
-    const site = rows[0];
-    if (!site) throw new ApiError(404, '站点不存在');
-    return site;
-  }
-
-  private async connectSite(site: SiteRow): Promise<EngineAdminClient> {
-    const adapter = this.deps.adapters[site.engine as EngineKind];
-    if (!adapter) throw new ApiError(400, `没有引擎 ${site.engine} 的 adapter`);
-    return adapter.connect(instOf(site), this.credstore);
-  }
-
-  /** GET-合并预览（不写回）：拉当前全量限额，算合并后的全量输入供 root 确认 */
-  async previewQuota(slug: string, userId: string, change: QuotaChange): Promise<QuotaPreview> {
-    const site = await this.requireSite(slug);
-    const client = await this.connectSite(site);
-    const getQuotas = client.users.getPlatformQuotas;
-    if (!getQuotas) throw new ApiError(400, '该站引擎不支持平台限额');
-    const current = await getQuotas(userId);
-    const merged = mergeQuotaInput(current, change);
-    return { platform: change.platform, window: change.window, current, merged };
-  }
-
-  /**
-   * 写回：🔴 仅 config.riskEnforce===true 才执行（否则抛 403）。GET→合并→PUT 全量写回 + openAlert + 审计。
-   * readonly 站（dogfood 保险丝）一律拒绝引擎写。
-   */
-  async enforceQuota(
-    ctx: SessionCtx,
-    slug: string,
-    userId: string,
-    change: QuotaChange,
-  ): Promise<{ quotas: PlatformQuota[] }> {
-    if (!this.deps.config.riskEnforce) {
-      throw new ApiError(403, '仅告警模式：限额写回需 RP_RISK_ENFORCE=on');
-    }
-    const site = await this.requireSite(slug);
-    if (site.readonly) throw new ApiError(403, '该站为只读，拒绝限额写回');
-    const client = await this.connectSite(site);
-    const getQuotas = client.users.getPlatformQuotas;
-    const setQuotas = client.users.setPlatformQuotas;
-    if (!getQuotas || !setQuotas) throw new ApiError(400, '该站引擎不支持平台限额');
-    // 🔴 全量替换：先 GET 合并（保留未涉及 platform 与同 platform 其它窗口）再写回
-    const current = await getQuotas(userId);
-    const merged = mergeQuotaInput(current, change);
-    const quotas = await setQuotas(userId, merged);
-
-    await openAlert(this.deps.db, this.deps.notifier, {
-      kind: 'quota_breach',
-      siteId: site.id,
-      severity: 'info',
-      title: `${site.label} 限额触发`,
-      detail: `已对用户 #${userId} 的 ${change.platform} ${change.window} 窗口设限额: ${
-        change.limitUsd === null ? '不限' : change.limitUsd === 0 ? '禁用' : `${fmtUsd(change.limitUsd)} USD`
-      }`,
-      site: { slug: site.slug, label: site.label },
-    });
-    await writeAudit(this.deps.db, {
-      siteId: site.id,
-      actor: ctx.email,
-      action: 'risk.quota.enforce',
-      payload: { slug: site.slug, userId, platform: change.platform, window: change.window, limitUsd: change.limitUsd },
-      ok: true,
-    });
-    return { quotas };
-  }
 }
 
 // ---------------------------------------------------------------------------

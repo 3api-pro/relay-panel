@@ -1,3 +1,4 @@
+import { parsePlatformQuotas, quotaUserPath } from './quotas.js';
 import type {
   ChannelRecord,
   ChannelSpec,
@@ -263,36 +264,6 @@ interface S2ARawUser {
   subscriptions?: { id: number; status?: string }[];
 }
 
-/** GET/PUT /admin/users/:id/platform-quotas 的原始行（各窗口 *_usage_usd / *_limit_usd(null=不限) / *_window_resets_at） */
-interface S2ARawPlatformQuota {
-  platform: string;
-  daily_usage_usd?: number;
-  daily_limit_usd?: number | null;
-  daily_window_resets_at?: string;
-  weekly_usage_usd?: number;
-  weekly_limit_usd?: number | null;
-  weekly_window_resets_at?: string;
-  monthly_usage_usd?: number;
-  monthly_limit_usd?: number | null;
-  monthly_window_resets_at?: string;
-}
-
-/** 原始平台限额行 → adapter-core PlatformQuota（limit 的 null=不限原样保留，与 0=禁用区分） */
-function rawToPlatformQuota(q: S2ARawPlatformQuota): PlatformQuota {
-  const win = (usage: number | undefined, limit: number | null | undefined, resetsAt: string | undefined) => ({
-    usageUsd: usage ?? 0,
-    // 🔴 null=不限 原样保留（不可折成 0=禁用）；缺字段视为不限
-    limitUsd: limit === undefined ? null : limit,
-    ...(resetsAt !== undefined ? { resetsAt } : {}),
-  });
-  return {
-    platform: q.platform,
-    daily: win(q.daily_usage_usd, q.daily_limit_usd, q.daily_window_resets_at),
-    weekly: win(q.weekly_usage_usd, q.weekly_limit_usd, q.weekly_window_resets_at),
-    monthly: win(q.monthly_usage_usd, q.monthly_limit_usd, q.monthly_window_resets_at),
-  };
-}
-
 const PROTOCOL_TO_PLATFORM: Record<ChannelSpec['protocol'], string> = {
   anthropic: 'anthropic',
   openai: 'openai',
@@ -520,10 +491,8 @@ export class Sub2apiAdminClient implements EngineAdminClient {
 
     // 平台限额读（F3 风控护栏）：GET → http 已剥 data 信封 → 读 platform_quotas[]。
     getPlatformQuotas: async (id: string): Promise<PlatformQuota[]> => {
-      const d = await this.http.get<{ platform_quotas?: S2ARawPlatformQuota[] }>(
-        `/api/v1/admin/users/${id}/platform-quotas`,
-      );
-      return (d.platform_quotas ?? []).map(rawToPlatformQuota);
+      const d = await this.http.get<unknown>(quotaUserPath(id));
+      return parsePlatformQuotas(d);
     },
 
     // 平台限额写：PUT 同路径【全量替换】，body={quotas:[{platform,daily_limit_usd,weekly_limit_usd,monthly_limit_usd}]}。
@@ -537,11 +506,8 @@ export class Sub2apiAdminClient implements EngineAdminClient {
           monthly_limit_usd: q.monthlyLimitUsd ?? null,
         })),
       };
-      const d = await this.http.put<{ platform_quotas?: S2ARawPlatformQuota[] }>(
-        `/api/v1/admin/users/${id}/platform-quotas`,
-        body,
-      );
-      return (d.platform_quotas ?? []).map(rawToPlatformQuota);
+      const d = await this.http.put<unknown>(quotaUserPath(id), body);
+      return parsePlatformQuotas(d);
     },
   };
 
