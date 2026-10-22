@@ -53,5 +53,6 @@
   "operations": "Operations & backups",
   "reconciliation": "Supplier reconciliation",
   "localApps": "Self-hosting & applications",
-  "services": "Service center"
+  "services": "Service center",
+  "collaboration": "Collaboration"
 }

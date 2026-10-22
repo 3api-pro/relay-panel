@@ -39,6 +39,7 @@ const routes: RouteRecordRaw[] = [
       { path: '', component: OverviewView, meta: { title: '总览' } },
       { path: 'finance', component: () => import('./views/FinanceView.vue'), meta: { title: '经营' } },
       { path: 'services', component: () => import('./views/ServiceCenterView.vue'), meta: { title: '站点服务中心' } },
+      { path: 'collaboration', component: () => import('./views/CollaborationView.vue'), meta: { title: '协作工作台' } },
       { path: 'admin/finance-review', component: () => import('./views/FinanceReviewView.vue'), meta: { title: '财务复核' } },
       { path: 'upstream', component: () => import('./views/ChannelBalanceView.vue'), meta: { title: '上游管理' } },
       { path: 'sites', component: () => import('./views/SitesView.vue'), meta: { title: '站点' } },
@@ -86,6 +87,14 @@ setUnauthorizedHandler(() => {
 
 // 守卫：boot 时 GET /api/auth/me 缓存到 session store；未登录跳 /login
 router.beforeEach(async (to) => {
+  // Keep invitation secrets out of the login redirect query and request logs.
+  if (to.path === '/collaboration' && to.hash) {
+    const token = new URLSearchParams(to.hash.slice(1)).get('invite');
+    if (token && /^[a-f0-9]{64}$/.test(token)) {
+      try { sessionStorage.setItem('rp-collaboration-invite', token); } catch { /* The user can paste the code after login. */ }
+    }
+    return { path: to.path, query: to.query, hash: '', replace: true };
+  }
   if (to.meta.public) {
     // 已登录访问登录页 / 落地页 → 回后台总览
     if (to.path === '/login' || to.path === '/welcome') {

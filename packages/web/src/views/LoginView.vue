@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { get, post, ApiError } from '../api/client';
 import { session } from '../api/session';
+import { loginRedirect } from '../api/login-redirect';
 import type { Me } from '../api/types';
 import Button from '../components/ui/Button.vue';
 import Field from '../components/ui/Field.vue';
@@ -51,8 +52,7 @@ async function doLogin(em: string, pw: string): Promise<void> {
     if (result.mfaRequired && result.challenge) { challenge.value = result.challenge; return; }
     const me = result;
     session.setUser(me);
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/';
-    await router.push(redirect.startsWith('/') ? redirect : '/');
+    await router.push(loginRedirect(route.query.redirect));
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : t('login.errorFail');
   } finally {
@@ -63,7 +63,7 @@ async function doLogin(em: string, pw: string): Promise<void> {
 async function submit(): Promise<void> {
   if (challenge.value) {
     loading.value = true; error.value = '';
-    try { const me = await post<Me>('/api/auth/mfa/login', { challenge: challenge.value, code: code.value }, { silent: true, skipAuthRedirect: true }); session.setUser(me); await router.push('/'); }
+    try { const me = await post<Me>('/api/auth/mfa/login', { challenge: challenge.value, code: code.value }, { silent: true, skipAuthRedirect: true }); session.setUser(me); await router.push(loginRedirect(route.query.redirect)); }
     catch (err) { error.value = err instanceof Error ? err.message : t('login.errorFail'); }
     finally { loading.value = false; }
     return;

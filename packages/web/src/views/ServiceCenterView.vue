@@ -80,6 +80,7 @@ async function copyConfig(){await action(async()=>{await navigator.clipboard.wri
 </script>
 
 <template><div class="rp-page space-y-5">
+  <RouterLink v-if="session.state.user?.role!=='viewer'" :to="{path:'/collaboration',query:{mode:'manage',...(siteId?{site:String(siteId)}:{})}}" class="text-sm text-accent">{{l('协作工作台：邀请伙伴与岗位协作者','Collaboration: invite partners and specialists')}} →</RouterLink>
   <div><p class="text-xs uppercase tracking-widest text-accent">SERVICE CENTER</p><h1 class="mt-1 text-xl font-semibold">{{l('站点服务中心','Site service center')}}</h1><p class="mt-2 max-w-3xl text-sm leading-6 text-muted">{{l('从真实请求中发现问题，把质量、费用、合作和运维处理连接起来。只检索已有日志，不额外调用模型进行心跳测试。','Use existing request evidence to connect quality, costs, partners and operational work. Collection reads logs and never generates model probes.')}}</p></div>
   <p v-if="error" role="alert" class="rounded border border-red/30 bg-red/10 p-3 text-sm text-red">{{error}}</p><p v-if="notice" role="status" class="text-sm text-accent">{{notice}}</p>
   <EmptyState v-if="!sites.length&&!busy" :title="l('先接入一个站点','Connect a site to begin')" />

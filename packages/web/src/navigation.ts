@@ -27,6 +27,7 @@ export function navigationFor(role: OperatorRole): NavigationGroup[] {
     ] },
     { key: 'groupMonitoring', items: [
       item('/services', 'services', 'overview'),
+      item('/collaboration', 'collaboration', 'operators', ['root', 'operator']),
       item('/alerts', 'alerts', 'alerts'),
       item('/jobs', 'jobs', 'jobs'),
     ] },
