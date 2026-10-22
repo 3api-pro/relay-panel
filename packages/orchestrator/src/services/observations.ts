@@ -14,7 +14,7 @@ export function signals(r: PassiveRecord): string[] {
   return result;
 }
 const quantile = (values: number[], p: number): number | null => values.length ? [...values].sort((a,b) => a-b)[Math.max(0, Math.ceil(values.length * p)-1)]! : null;
-export function summarize(records: PassiveRecord[], now = Date.now()) {
+export function summarize(records: PassiveRecord[], now = Date.now(), sourceScope = 'unavailable') {
   const groups = new Map<string, PassiveRecord[]>();
   for (const row of records) { const key = JSON.stringify([row.channelId, row.model]); const group=groups.get(key)??[];group.push(row);groups.set(key,group); }
   return [...groups.values()].map(rows => {
@@ -24,7 +24,7 @@ export function summarize(records: PassiveRecord[], now = Date.now()) {
     const charges = rows.filter(r => r.charge !== null), costs = rows.filter(r => r.supplierCost !== null);
     const matched = rows.filter(r => r.charge !== null && r.supplierCost !== null && r.billingType === 'balance');
     return { channelId: rows[0]!.channelId, model: rows[0]!.model, records: rows.length,
-      consumeLogs: rows.filter(r => r.outcome === 'consumption').length, errorLogs: rows.filter(r => r.outcome === 'error').length,
+      consumeLogs: rows.filter(r => r.outcome === 'consumption').length, errorLogs: sourceScope==='consume-and-error-logs' ? rows.filter(r => r.outcome === 'error').length : null,
       successRate: null, latestEvidenceAt: new Date(last).toISOString(), freshness: now-last > 30*60000 ? 'stale' : 'recent',
       durationP50Ms: quantile(duration, .5), durationP95Ms: quantile(duration, .95), durationSamples: duration.length,
       firstTokenP95Ms: quantile(first,.95), firstTokenSamples: first.length,
@@ -45,6 +45,7 @@ export class Observations {
   }
   async scan(ctx: SessionCtx, siteId: number, day: string) {
     const { db } = this.deps, site = await this.site(ctx,siteId), now = toPgTimestamp(new Date());
+    if(site.status!=='active')throw new ApiError(409,'当前站点尚未运行，请先完成安装或恢复服务');
     await db.orm.insert(observationRuns).values({ siteId, day }).onConflictDoNothing();
     const lease = toPgTimestamp(new Date(Date.now()+120000));
     const [run] = await db.orm.update(observationRuns).set({ leaseUntil: lease })
@@ -96,7 +97,7 @@ export class Observations {
     const selected=rows.slice(0,10000), records=selected.map(r=>r.evidence);
     return { site:{id:site.id,label:site.label,engine:site.engine,version:site.version,managed:site.managed},run,
       retentionDays:30, sampleLimit:10000, sampleLimited:rows.length>10000, records:selected.map(r=>({...r,signals:signals(r.evidence)})),
-      groups:summarize(records), inferenceRequestsGenerated:0, successRate:null, sourceScope:run?.sourceScope ?? 'unavailable',
+      groups:summarize(records,Date.now(),run?.sourceScope??'unavailable'), inferenceRequestsGenerated:0, successRate:null, sourceScope:run?.sourceScope ?? 'unavailable',
       latestEvidenceAt:records.length ? new Date(Math.max(...records.map(r=>Date.parse(r.createdAt)))).toISOString() : null };
   }
 }

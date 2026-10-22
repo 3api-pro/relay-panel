@@ -40,7 +40,7 @@ describe('passive service center and workspace isolation',()=>{
     expect((await api('/collect',{siteId,day})).json().run.status).toBe('partial');
     expect((await api('/collect',{siteId,day})).json().run.status).toBe('complete');
     const r=(await api(`/quality?siteId=${siteId}&day=${day}`)).json();sourceId=r.records[0].id;
-    expect(r.groups[0]).toMatchObject({records:2,recordedCharge:0,observedSupplierCost:2,successRate:null,firstTokenP95Ms:null,flagged:2});
+    expect(r.groups[0]).toMatchObject({records:2,recordedCharge:0,observedSupplierCost:2,successRate:null,errorLogs:null,firstTokenP95Ms:null,flagged:2});
     expect(ts.adapters.sub2api.calls.some(x=>/health|channels.test|channels.update/.test(x))).toBe(false);
     await api('/collect',{siteId,day});await api('/collect',{siteId,day});
     expect((await api(`/quality?siteId=${siteId}&day=${day}`)).json().records).toHaveLength(2);

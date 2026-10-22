@@ -42,7 +42,7 @@ export function registerServiceRoutes(app: FastifyInstance, deps: SitesServiceDe
     const [row]=await db.orm.select().from(servicePartners).where(eq(servicePartners.id,id(value)));
     if(!row)throw new ApiError(404,'伙伴不存在');await obs.site(ctx,row.siteId);return row;
   }
-  app.get(`${base}/catalog`, async req=>({sites:(await db.orm.select().from(sites).where(sql`${sites.status}<>'destroyed'`).orderBy(asc(sites.id))).filter(s=>canAccessSite(req.ctx!,s)).map(s=>({id:s.id,label:s.label,slug:s.slug,engine:s.engine,version:s.version,managed:s.managed})),checklists,
+  app.get(`${base}/catalog`, async req=>({sites:(await db.orm.select().from(sites).where(sql`${sites.status}<>'destroyed'`).orderBy(asc(sites.id))).filter(s=>canAccessSite(req.ctx!,s)).map(s=>({id:s.id,label:s.label,slug:s.slug,engine:s.engine,version:s.version,managed:s.managed,status:s.status})),checklists,
     modes:{collection:'existing-logs-only',inferenceProbes:false,automaticFinancialTransfers:false,externalPartnerLogin:false},
     intervalMs:deps.config.observationIntervalMs}));
   const querySchema=z.object({siteId:z.coerce.number().int().positive(),day:daySchema,requestId:z.string().trim().min(1).max(256).optional(),channelId:z.string().trim().min(1).max(256).optional(),model:z.string().trim().min(1).max(256).optional()});
