@@ -38,6 +38,10 @@ relay-panel collapses that into one control plane:
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+## v2.13.3: Observation retention for inactive sites
+
+The enabled observation worker cleans expired request records before selecting sites or waiting for collection. Cleanup therefore also runs when all sites are inactive. Linked case evidence and history remain available. Setting `RP_OBSERVATION_INTERVAL_MS=0` disables both automatic collection and this cleanup; no migration or extra upstream request is added.
+
 ## v2.13.2: Service workspace interaction safety
 
 The service center serializes interactions while loading or saving. A slow case response cannot replace another selection, site changes clear the previous notice before loading, and editing notice content requires a new preview before publication. These are browser workflow fixes; no database migration or engine call is added.
