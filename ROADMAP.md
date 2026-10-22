@@ -1,6 +1,6 @@
 # Roadmap — v2 capabilities and release acceptance
 
-Feature checkboxes track implementation. Release acceptance is tracked separately: a shipped feature does not by itself prove every hosted deployment path. The v2.2.0 assessment is in [docs/P4-READINESS.md](docs/P4-READINESS.md).
+Feature checkboxes track implementation. Release acceptance is tracked separately: a shipped feature does not by itself prove every hosted deployment path. The current assessment is in [docs/P4-READINESS.md](docs/P4-READINESS.md).
 
 Legend: ✅ done · 🚧 in progress · ⬜ planned
 
@@ -85,7 +85,7 @@ The managed offering. Same codebase, orchestrator runs on our infra.
 - [x] MFA, recovery codes, one-use verification/reset links and session revocation
 - [x] Team invitations, tenant reader/editor roles, notification preferences and support tickets
 - [x] Reviewed manual refunds, statement export and explicit entitlement handling
-- [x] Scheduled panel backups, readiness checks and scoped audit export
+- [x] Scheduled panel backups, retained backup/check history, file integrity verification, readiness checks and scoped audit export
 - [x] Resumable Sub2API request reconciliation, supplier invoice comparison and historical rate evidence
 
 **Current evidence:** core flows have automated coverage; payment concurrency/recovery has isolated PostgreSQL checks, and administrator workflows have production browser checks. This release has not revalidated the complete fresh-operator journey with real payments, customer-owned site connection and failure recovery. The full cross-tenant resource matrix and both hosted/self-hosted upgrade drills also remain acceptance work. See [the remaining gates](docs/P4-READINESS.md).

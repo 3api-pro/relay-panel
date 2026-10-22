@@ -38,6 +38,12 @@ relay-panel collapses that into one control plane:
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+## v2.13.0: Backup history and file verification
+
+The operations page retains every new panel backup attempt and its verification history. A later failure no longer hides the last successful backup. Administrators can filter and page records, inspect checksums and check the archive plus manifest for missing, changed or unreadable files. Database leases serialize creation across processes, long backups renew their reservation, and late results cannot replace an interrupted record.
+
+Checks read only registered private files and never restore databases or serve archive contents over HTTP. Matching files prove integrity at check time, not recoverability or an off-machine copy. History starts with backups created after migration 022; older files are not imported or deleted automatically. See [backup operations](docs/SAAS-OPERATIONS.md#backup-history-and-integrity-checks-v2130).
+
 ## v2.12.0: Durable lifecycle execution and interrupted-job review
 
 Install, upgrade, start, stop and destroy jobs now reserve their site and execution slot in the database. Concurrent submissions are serialized, and live workers share a two-job limit. Expired execution leases become “Needs review” and retain both reservations instead of automatically rerunning an uncertain operation. Late workers cannot overwrite guarded panel state after losing ownership; Docker commands have cancellation signals and a finite deadline.

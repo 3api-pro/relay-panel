@@ -41,7 +41,7 @@ Notifications have personal alert/billing/support preferences, an inbox, dedupli
 
 Archives contain the **panel database only**, including encrypted credentials and customer/security/payment records. PostgreSQL uses online custom-format `pg_dump`; PGlite uses an online data-directory snapshot. Each archive has a SHA-256 manifest. Engine databases and environment secrets are excluded. Preserve the original `RP_SECRET_KEY` separately. Restrict Windows directory ACLs/POSIX permissions, copy backups off-machine and manage retention externally; old archives are not automatically deleted.
 
-Before upgrading, verify a backup, stage the application, restore into an isolated database, run additive migrations and compare row counts. Apply migrations with a single application owner before exposing the new process. New migrations are 008–012; never edit already-applied migrations.
+Before upgrading, verify a backup, stage the application, restore into an isolated database, run additive migrations and compare row counts. Apply migrations with a single application owner before exposing the new process. New migrations are 008–022; never edit already-applied migrations.
 
 Restore PostgreSQL into a **new empty database** with `pg_restore --no-owner --no-privileges --dbname=<target> panel.dump`, keeping passwords out of argv. Start with the original encryption key and background mail/monitor/payment workers disabled until verified. For PGlite use `PGlite.create({ dataDir: '<new-empty-directory>', loadDataDir: new Blob([archiveBytes]) })`, close it, then configure `RP_DB=pglite:<directory>`. Never restore over a live database. Verify accounts, sites, orders, subscriptions, MFA and pending changes before switching traffic.
 
@@ -75,3 +75,16 @@ New API equivalent request-level evidence is not supported. Recharge totals pres
 ## Restricted legacy maintenance archives
 
 If an installation retains maintenance archive tables that the application role intentionally cannot read, `RP_BACKUP_EXCLUDE_TABLES` can list their exact `public.ops_backup_<name>` names, separated by commas. It defaults empty. Wildcards, other schemas and core application tables are rejected. This does not grant the panel access to old archived credentials. Exclusions appear in the administrator operations page and backup manifest; retain those archives separately if needed.
+
+
+## Backup history and integrity checks (v2.13.0)
+
+The root operations page records every new panel backup as running, succeeded, failed or interrupted, with cursor pagination and status filters. The latest successful creation is retained independently of the last attempt. Its most recent file check is displayed separately; freshness and scheduling use database time. Existing v1 manifests and archives are left in place, and the prior single-result summary remains a fallback until a new backup succeeds. Older files are not scanned or imported automatically.
+
+Migration 022 adds `backup_runs` and `backup_checks`. Backup creation holds a database lease, renews it during long work and bounds the command/hash operation to ten minutes. Expired records retain interruption evidence; late results cannot publish success. PGlite snapshot generation itself has no cancellation API: a stalled snapshot can finish later, but its expired execution cannot publish a successful record. A database snapshot contains history as it existed at snapshot time, so its own attempt may still appear running after restoration; recheck the target host and files.
+
+Each new archive has a v2 manifest. The database anchors both archive and manifest SHA-256 values. Root can verify a registered successful backup; the server bounds reads, rejects symlinks/non-regular files and arbitrary API paths, and records matching, missing, mismatched, unavailable or interrupted checks. Concurrent checks of the same archive are serialized, and stale checks cannot overwrite later evidence. Check results and their audit event commit together. The API exposes metadata only, never the archive body, credentials or private execution tokens.
+
+A matching checksum means the file matched its creation record at check time. It does not prove a successful restore, an available encryption key, external engine backups or an off-machine copy. Continue isolated restoration drills before traffic switches. Failed/partial archives and older backups are not deleted automatically; filesystem permissions, Windows ACLs, off-machine copies and retention remain operator responsibilities. Stop old application/backup workers before upgrading; mixed old/new workers are unsupported.
+
+New root routes: `GET /api/admin/operations/backups` (`status`, `beforeId`, `limit`), `GET /api/admin/operations/backups/:id/checks` (`beforeId`, `limit`), and `POST /api/admin/operations/backups/:id/verify` with no path or file input. The existing `POST /api/admin/operations/backup` remains available.
