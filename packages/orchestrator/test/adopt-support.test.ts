@@ -1,3 +1,4 @@
+import './public-dns-fixture.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { credentials, sites, subscriptions } from '../src/db/schema.js';

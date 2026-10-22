@@ -1,3 +1,4 @@
+import './public-dns-fixture.js';
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import type { SiteUpstreamWalletCandidate } from '../src/sites/service.js';
