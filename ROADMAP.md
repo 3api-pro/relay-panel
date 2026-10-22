@@ -88,7 +88,7 @@ The managed offering. Same codebase, orchestrator runs on our infra.
 - [x] Scheduled panel backups, retained backup/check history, file integrity verification, readiness checks and scoped audit export
 - [x] Resumable Sub2API request reconciliation, supplier invoice comparison and historical rate evidence
 
-**Current evidence:** core flows have automated coverage; payment concurrency/recovery has isolated PostgreSQL checks, and administrator workflows have production browser checks. This release has not revalidated the complete fresh-operator journey with real payments, customer-owned site connection and failure recovery. The full cross-tenant resource matrix and both hosted/self-hosted upgrade drills also remain acceptance work. See [the remaining gates](docs/P4-READINESS.md).
+**Current evidence:** core flows have automated coverage, including positive and negative role controls across both engine adapters for site resources, service cases, budgets, jobs and exports. Separate suites cover external collaboration, finance scopes, support assignments, settlements and billing. Payment concurrency/recovery has isolated PostgreSQL checks; recent service-platform releases use the existing administrator against restored isolated databases for browser acceptance. These checks are not an independent penetration test. The complete fresh-customer journey with real payments and customer-owned engines, real Docker upgrade/recovery, and target production rollout remain external acceptance gates. See [the remaining gates](docs/P4-READINESS.md).
 
 ---
 

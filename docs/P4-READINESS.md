@@ -5,7 +5,7 @@ Scope revised 2026-10-22: **customer self-deployment and existing-site connectio
 | Area | Implemented | Acceptance boundary |
 | --- | --- | --- |
 | Accounts | Verification, recovery, MFA, one-use recovery codes, session revocation and persistent limits | Automated replay/expiry/session tests. Administrator phone enrollment remains a personal action. |
-| Tenancy | Owner sites, workspace reader/editor roles, tab-local workspace selection, email-bound invites and revocation | Cross-account resource/job/export/support/refund tests and browser tab/request isolation checks; not an independent penetration test. |
+| Tenancy | Owner sites, workspace reader/editor roles, tab-local workspace selection, email-bound invites and revocation | Both-engine route matrix checks authorized and denied reads/writes, personal versus team context, membership revocation and disabled owners. Specialist tests cover external grants, finance, support, refunds and settlements; browser tab/request isolation is checked separately. Not an independent penetration test. |
 | Delivery | Self-deployment guide, adoption, automatic IDs, nicknames and onboarding | Actual administrator browser acceptance required for each target release. No new platform hardware. |
 | Billing | Verified payment recovery, prorated upgrades, scheduled downgrades, reviewed refunds and statements | Refunds happen in provider consoles. Controlled real-provider transactions remain necessary; tests do not prove settlement. |
 | Customer operations | Preferences, notification retry, support tickets and audit export | SMTP configuration is not inbox delivery proof; crash retries can duplicate mail. |
