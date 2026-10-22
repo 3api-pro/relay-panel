@@ -666,3 +666,30 @@ export const quotaOperations = pgTable('quota_operations', {
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
 }, t => [uniqueIndex('quota_operation_inflight').on(t.siteId, t.userId).where(sql`${t.status} IN ('applying','uncertain')`), index('quota_operation_history').on(t.siteId,t.id)]);
+
+export const settlementStatements = pgTable('settlement_statements', {
+  id: serial('id').primaryKey(), siteId: integer('site_id').notNull().references(() => sites.id), ownerId: integer('owner_id').notNull().references(() => operators.id),
+  partnerId: integer('partner_id').notNull().references(() => servicePartners.id), partnerName: text('partner_name').notNull(),
+  reference: text('reference').notNull(), title: text('title').notNull(), direction: text('direction').notNull(), currency: text('currency').notNull(),
+  fromDay: text('from_day').notNull(), toDay: text('to_day').notNull(), dueDay: text('due_day'),
+  lines: jsonb('lines').$type<{ label: string; amount: string }[]>().notNull(), total: numeric('total', { precision: 24, scale: 6 }).notNull(),
+  publicNote: text('public_note').notNull().default(''), internalNote: text('internal_note').notNull().default(''),
+  sourceReviewId: integer('source_review_id').references(() => financeSubmissions.id), sourceEvidence: jsonb('source_evidence').$type<import('../services/finance-access.js').SharedFinanceReport>(),
+  status: text('status').notNull().default('draft'), version: integer('version').notNull().default(1), issuedAt: timestamp('issued_at', { mode: 'string' }),
+  cancelledAt: timestamp('cancelled_at', { mode: 'string' }), cancelReason: text('cancel_reason'),
+  createdBy: integer('created_by').notNull().references(() => operators.id), createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(), updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [unique('settlement_statement_reference').on(t.ownerId,t.partnerId,t.reference), index('settlement_statement_site').on(t.siteId,t.id), uniqueIndex('settlement_source_review').on(t.sourceReviewId).where(sql`${t.sourceReviewId} IS NOT NULL AND ${t.status}<>'cancelled'`)]);
+export const settlementShares = pgTable('settlement_shares', {
+  id: serial('id').primaryKey(), statementId: integer('statement_id').notNull().references(() => settlementStatements.id), accessId: integer('access_id').notNull().references(() => serviceAccess.id),
+  status: text('status').notNull().default('pending'), note: text('note').notNull().default(''), version: integer('version').notNull().default(1), revokedAt: timestamp('revoked_at', { mode: 'string' }),
+  sharedBy: integer('shared_by').notNull().references(() => operators.id), createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(), updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [uniqueIndex('settlement_share_active').on(t.statementId,t.accessId).where(sql`${t.revokedAt} IS NULL`),index('settlement_share_access').on(t.accessId,t.id)]);
+export const settlementReceipts = pgTable('settlement_receipts', {
+  id: serial('id').primaryKey(), statementId: integer('statement_id').notNull().references(() => settlementStatements.id), ownerId: integer('owner_id').notNull().references(() => operators.id),
+  amount: numeric('amount', { precision: 24, scale: 6 }).notNull(), reference: text('reference').notNull(), method: text('method').notNull(), receivedDay: text('received_day').notNull(), note: text('note').notNull().default(''),
+  recordedBy: integer('recorded_by').notNull().references(() => operators.id), voidedAt: timestamp('voided_at', { mode: 'string' }), voidReason: text('void_reason'), createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [uniqueIndex('settlement_receipt_reference').on(t.ownerId,t.reference).where(sql`${t.voidedAt} IS NULL`),index('settlement_receipt_statement').on(t.statementId,t.id)]);
+export const settlementEvents = pgTable('settlement_events', {
+  id: serial('id').primaryKey(), statementId: integer('statement_id').notNull().references(() => settlementStatements.id), shareId: integer('share_id').references(() => settlementShares.id),
+  actorId: integer('actor_id').notNull().references(() => operators.id), action: text('action').notNull(), note: text('note').notNull(), createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [index('settlement_event_statement').on(t.statementId,t.id)]);
