@@ -80,6 +80,7 @@ async function unshare(){if(!selected.value)return;await run(async()=>{await del
 </script>
 
 <template><div class="rp-page space-y-5">
+  <RouterLink :to="{path:'/finance-access',query:{...(mode==='manage'?{mode:'manage'}:{}),...(siteId?{site:String(siteId)}:{})}}" class="text-sm text-accent">{{l('财务协作：单独设置数据范围与权限','Finance collaboration: configure data scopes and permissions')}} →</RouterLink>
   <h1 class="text-xl font-semibold">{{l('协作工作台','Collaboration')}}</h1>
   <p class="text-sm text-muted">{{l('按事项邀请供应商、代理、运维、客服和财务协作。协作者仅查看明确共享的内容，提交结果后由站点方复核。','Invite suppliers, resellers, operations, support and finance to specific cases. Collaborators see explicitly shared content and submit results for owner review.')}}</p>
   <div class="flex flex-wrap gap-2"><Button :variant="mode==='mine'?'primary':'outline'" :disabled="busy" @click="mode='mine'">{{l('分配给我的事项','Assigned to me')}}</Button><Button v-if="canManage" :variant="mode==='manage'?'primary':'outline'" :disabled="busy" @click="mode='manage'">{{l('管理协作授权','Manage collaboration')}}</Button><Button :disabled="busy||loading" @click="run(load)">{{l('刷新','Refresh')}}</Button></div>
