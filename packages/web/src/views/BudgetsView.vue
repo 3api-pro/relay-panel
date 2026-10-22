@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { RouterLink, useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { get, post } from '../api/client';
 import { session } from '../api/session';
@@ -44,6 +44,7 @@ async function exportCsv() { if (!selected.value) return; await action(async () 
 </script>
 <template>
   <div class="rp-page space-y-5">
+    <RouterLink v-if="session.isRoot.value" :to="{ path: '/risk', query: siteId ? { site: String(siteId) } : {}, hash: '#native-quotas' }" class="inline-block text-sm text-accent">{{ l('配置引擎用户限额（与观测预算独立）', 'Configure engine user quotas (independent of observation budgets)') }}</RouterLink>
     <div><p class="text-xs uppercase tracking-widest text-accent">BUDGET OBSERVATIONS</p><h1 class="mt-1 text-xl font-semibold">{{ l('预算与阈值提醒', 'Budgets and threshold alerts') }}</h1><p class="mt-2 max-w-3xl text-sm leading-6 text-muted">{{ l('按站点、渠道或模型跟踪已有日志中的金额。无额外模型探测；采集缺口会明确显示，预算策略不会自动停用渠道或修改引擎限额。', 'Track existing log amounts by site, channel or model without model probes. Collection gaps remain visible. Budget policies do not disable channels or change engine limits.') }}</p></div>
     <p v-if="error" role="alert" class="rounded border border-red/30 bg-red/10 p-3 text-sm text-red">{{ error }}</p><p v-if="notice" role="status" class="text-sm text-accent">{{ notice }}</p>
     <EmptyState v-if="!sites.length && !busy" :title="l('先接入一个站点', 'Connect a site to begin')" />

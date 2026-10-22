@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
+import QuotaHistory from '../components/QuotaHistory.vue';
 import { useI18n } from 'vue-i18n';
 import { RefreshCw, Scan, ShieldAlert, ShieldCheck, SlidersHorizontal, TriangleAlert } from 'lucide-vue-next';
 import { get, post, put } from '../api/client';
 import type {
-  PlatformQuota,
+  QuotaOperation,
   PlatformQuotaInput,
   QuotaPreviewResponse,
   QuotaWindow,
@@ -30,11 +32,17 @@ import {
  *  - 规则编辑：骤增倍率 / 绝对下限USD / 基线天数（PUT /api/risk/rules）。
  *  - 骤增榜：POST /api/risk/scan（站点/客户/近期消费/基线/倍数）。
  *  - 每行「将限额」：GET-合并预览 + 写回；写回按钮受 API 返回的 enforce 门控
- *    （off 时禁用并提示「仅告警模式，写回需 RP_RISK_ENFORCE=on」）。
- * 金额显式标 USD（本行业 USD:RMB 1:1，无汇率）。
+ *    （off 时禁用并提示「仅告警模式，写回需 RP_RISK_ENFORCE=1」）。
+ * 金额显式标 USD。
  */
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
+const route = useRoute();
+const l = (zh: string, en: string) => locale.value.startsWith('zh') ? zh : en;
+const quotaSites = ref<{ id: number; slug: string; label: string; engine: string }[]>([]);
+const quotaSite = ref<string | number>(''), userNumber = ref(''), historyVersion = ref(0), acknowledged = ref(false);
+const selectedSite = computed(() => quotaSites.value.find(s => s.slug === quotaSite.value));
+function openManual() { const site = selectedSite.value; if (site && /^[1-9]\d{0,18}$/.test(userNumber.value)) openLimit({ siteSlug: site.slug, siteLabel: site.label, userId: userNumber.value, email: '' }); }
 
 // enforce 快照：每次读实时值（GET rules / scan / preview 都回该字段），勿缓存旧值
 const enforce = ref(false);
@@ -119,7 +127,7 @@ function fmtRatio(r: number | null): string {
 
 // ---- 限额（将限额）弹窗 ----
 const limitOpen = ref(false);
-const activeRow = ref<RiskSpikeRow | null>(null);
+const activeRow = ref<{ siteSlug: string; siteLabel: string; userId: string | number; email: string } | null>(null);
 const platform = ref<string | number>('anthropic');
 const quotaWindow = ref<string | number>('daily');
 /** 空=不限(null)；0=禁用；正数=USD 上限 */
@@ -141,8 +149,10 @@ const windowOptions = computed<SelectOption[]>(() => [
   { value: 'monthly', label: t('risk.windowMonthly') },
 ]);
 
-function openLimit(row: RiskSpikeRow): void {
+function openLimit(row: NonNullable<typeof activeRow.value>): void {
   activeRow.value = row;
+  quotaSite.value = row.siteSlug;
+  acknowledged.value = false;
   platform.value = 'anthropic';
   quotaWindow.value = 'daily';
   limitInput.value = '';
@@ -150,11 +160,12 @@ function openLimit(row: RiskSpikeRow): void {
   limitOpen.value = true;
 }
 
-/** 输入 → limitUsd：空=不限(null)，否则数值（0=禁用；非数回落 null） */
+/** 输入 → limitUsd：空=不限(null)，否则数值（0=禁用；非数拒绝预览） */
 function limitUsdValue(): number | null {
   if (limitInput.value === '') return null;
   const n = Number(limitInput.value);
-  return Number.isFinite(n) ? n : null;
+  if (!Number.isFinite(n) || n < 0 || n > 1_000_000_000) throw new Error(l('限额必须是有效的非负金额', 'Enter a valid non-negative limit'));
+  return n;
 }
 
 /** 当前 {platform, window, limitUsd} 请求体 */
@@ -177,8 +188,10 @@ async function doPreview(): Promise<void> {
     );
     preview.value = res;
     enforce.value = res.enforce;
-  } catch {
-    // client 已弹错误
+    historyVersion.value++;
+  } catch (e) {
+    preview.value = null;
+    toast.error(String(e));
   } finally {
     previewing.value = false;
   }
@@ -186,19 +199,23 @@ async function doPreview(): Promise<void> {
 
 async function doApply(): Promise<void> {
   const row = activeRow.value;
-  if (!row || !enforce.value) return;
+  if (!row || !enforce.value || !preview.value || !acknowledged.value || !preview.value.writable) return;
   applying.value = true;
   try {
-    await post(
+    const result = await post<{ operation: QuotaOperation }>(
       `/api/risk/users/${encodeURIComponent(row.siteSlug)}/${encodeURIComponent(String(row.userId))}/enforce`,
-      changeBody(),
+      { operationId: preview.value.operation.id, acknowledgeScope: true },
     );
+    if (result.operation.status !== 'verified') { toast.error(result.operation.detail); return; }
     toast.success(t('risk.applied'));
     limitOpen.value = false;
   } catch {
     // client 已弹错误（含 off 时 403 仅告警模式）
   } finally {
     applying.value = false;
+    preview.value = null;
+    acknowledged.value = false;
+    historyVersion.value++;
   }
 }
 
@@ -221,8 +238,10 @@ function mergedLimit(row: PlatformQuotaInput, w: QuotaWindow): number | null | u
 }
 const windowKeys: QuotaWindow[] = ['daily', 'weekly', 'monthly'];
 
-onMounted(() => {
+watch([platform, quotaWindow, limitInput], () => { preview.value = null; acknowledged.value = false; });
+onMounted(async () => {
   void loadRules();
+  try { const r = await get<{ sites: typeof quotaSites.value }>('/api/services/catalog'); quotaSites.value = r.sites.filter(s => s.engine === 'sub2api'); quotaSite.value = quotaSites.value.find(s => String(s.id) === route.query.site)?.slug ?? quotaSites.value[0]?.slug ?? ''; } catch { /* API shows the failure. */ }
 });
 </script>
 
@@ -242,6 +261,18 @@ onMounted(() => {
         </Badge>
       </div>
     </div>
+
+    <section id="native-quotas" class="rp-panel space-y-4 p-4">
+      <h2 class="text-sm font-semibold">{{ l('引擎用户限额', 'Engine user quotas') }}</h2>
+      <p class="max-w-3xl text-xs leading-6 text-muted">{{ l('Sub2API 的限额作用于标准运行模式下，单个用户与平台的余额计费请求；订阅流量和简易模式不在覆盖范围。日、周窗口跟随引擎时区，月窗口为 30 天。面板预算按北京时间自然周期观测，二者独立配置。面板仅核实配置，实际运行模式与拦截需在引擎侧确认；并发请求仍可能产生超额。', 'Sub2API quotas cover one user and platform in standard balance-billing mode. Subscription traffic and simple mode are excluded. Daily and weekly windows follow the engine timezone; monthly windows span 30 days. Panel budgets observe Beijing calendar periods and are configured independently. The panel verifies configuration only. Confirm runtime mode and enforcement in the engine; concurrent requests may overshoot.') }}</p>
+      <form class="flex flex-wrap items-end gap-3" @submit.prevent="openManual">
+        <Field :label="l('站点', 'Site')"><Select v-model="quotaSite" :options="quotaSites.map(s => ({ value: s.slug, label: s.label }))" /></Field>
+        <Field :label="l('引擎用户编号', 'Engine user ID')" :hint="l('填写该站点内的用户编号。', 'Use the user ID inside the selected engine.')"><Input v-model="userNumber" inputmode="numeric" pattern="[1-9][0-9]{0,18}" maxlength="19" required /></Field>
+        <Button type="submit" :disabled="!selectedSite">{{ l('配置限额', 'Configure quota') }}</Button>
+      </form>
+      <p v-if="!quotaSites.length" class="text-xs text-muted">{{ l('尚无可用的 Sub2API 站点。NewAPI 限额接口尚未接入。', 'No Sub2API sites are available. NewAPI quotas are not integrated yet.') }}</p>
+      <QuotaHistory v-if="quotaSite" :slug="String(quotaSite)" :revision="historyVersion" />
+    </section>
 
     <!-- 规则编辑 -->
     <section class="rp-panel p-4">
@@ -346,6 +377,7 @@ onMounted(() => {
     <Modal v-model:open="limitOpen" :title="t('risk.limitTitle')" width="560px" :closable="!applying && !previewing">
       <div class="space-y-4">
         <p class="text-[13px] leading-relaxed text-muted">{{ t('risk.limitDesc') }}</p>
+        <p class="text-xs leading-6 text-amber">{{ l('仅覆盖标准模式余额计费；不覆盖订阅流量、简易模式或整个企业预算。日、周按引擎时区，月为 30 天；并发消费可能超额。', 'Covers standard balance billing only, not subscriptions, simple mode or an organization-wide budget. Daily and weekly follow the engine timezone; monthly spans 30 days. Concurrent spend may overshoot.') }}</p>
 
         <div v-if="activeRow" class="rounded-lg border border-border/70 bg-panel-2/40 px-3 py-2 text-xs text-muted">
           <span class="text-muted/70">{{ t('risk.customerField') }}:</span>
@@ -355,18 +387,18 @@ onMounted(() => {
 
         <div class="grid gap-3 sm:grid-cols-3">
           <Field :label="t('risk.platformLabel')">
-            <Select v-model="platform" :options="platformOptions" :disabled="applying" />
+            <Select v-model="platform" :options="platformOptions" :disabled="applying || previewing" />
           </Field>
           <Field :label="t('risk.windowLabel')">
-            <Select v-model="quotaWindow" :options="windowOptions" :disabled="applying" />
+            <Select v-model="quotaWindow" :options="windowOptions" :disabled="applying || previewing" />
           </Field>
           <Field :label="t('risk.limitLabel')" :hint="t('risk.limitHint')">
-            <Input v-model="limitInput" type="number" placeholder="USD" :disabled="applying" />
+            <Input v-model="limitInput" type="number" placeholder="USD" :disabled="applying || previewing" />
           </Field>
         </div>
 
         <div class="flex justify-start">
-          <Button size="sm" :loading="previewing" @click="doPreview">
+          <Button size="sm" :loading="previewing" :disabled="applying" @click="doPreview">
             <RefreshCw :size="13" />
             {{ previewing ? t('risk.previewing') : t('risk.previewBtn') }}
           </Button>
@@ -411,6 +443,8 @@ onMounted(() => {
           <TriangleAlert :size="13" class="mt-0.5 shrink-0" />
           {{ t('risk.applyDisabledHint') }}
         </p>
+        <p v-if="preview && !preview.writable" class="text-xs text-amber">{{ l('该站点只允许读取限额。', 'This site permits quota reads only.') }}</p>
+        <label v-if="preview" class="flex items-start gap-2 text-xs leading-6"><input v-model="acknowledged" type="checkbox" class="mt-1.5" :disabled="applying" /><span>{{ l('已确认适用范围，按上方预览写入。预览十分钟内有效，配置有变化时需重新预览。', 'I confirm the scope and the preview above. It expires after ten minutes; configuration changes require a new preview.') }}</span></label>
       </div>
 
       <template #footer>
@@ -418,7 +452,7 @@ onMounted(() => {
         <Button
           variant="primary"
           :loading="applying"
-          :disabled="!enforce || !preview"
+          :disabled="!enforce || !preview || !preview.writable || !acknowledged || previewing"
           :title="!enforce ? t('risk.applyDisabledHint') : ''"
           @click="doApply"
         >

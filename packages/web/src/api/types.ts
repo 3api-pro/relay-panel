@@ -545,6 +545,8 @@ export interface PlatformQuotaInput {
 
 /** POST /api/risk/users/:slug/:userId/quota-preview 响应（GET-合并预览，不写） */
 export interface QuotaPreviewResponse {
+  operation: QuotaOperation;
+  writable: boolean;
   platform: string;
   window: QuotaWindow;
   /** 当前全量限额 */
@@ -553,6 +555,15 @@ export interface QuotaPreviewResponse {
   merged: PlatformQuotaInput[];
   enforce: boolean;
   costUnit: string;
+}
+
+export interface QuotaOperation {
+  id: number; siteId: number; userId: string;
+  change: { platform: string; window: QuotaWindow; limitUsd: number | null };
+  beforeLimits: PlatformQuotaInput[]; requestedLimits: PlatformQuotaInput[];
+  observed: PlatformQuota[] | null; observedFingerprint: string | null;
+  status: string; detail: string; resolutionNote: string | null;
+  expiresAt: string; startedAt: string | null; checkedAt: string | null; createdAt: string;
 }
 
 // ---------------------------------------------------------------------------
