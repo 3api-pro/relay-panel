@@ -166,6 +166,8 @@ export interface UsageSummary {
   costUnit: string;
   /** 对客计费额（用户被扣费用，对客价）——运营视角即营收流水 */
   cost: number;
+  /** 消费记账是否可用于财务汇总；标价回退不可当成已记账消费。 */
+  billingSource?: 'billed' | 'list_price' | 'quota';
   /**
    * 上游账户实际成本（引擎按上游账户计费口径记账的真实 COGS）。
    * 引擎不提供该口径时为 undefined（此时成本需由上层用成本率估算）。

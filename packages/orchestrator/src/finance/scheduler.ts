@@ -164,8 +164,8 @@ export function startFinanceReports(deps: FinanceReportsDeps, intervalMs: number
     const curRows = resolveSummaryRows(curUsage, ratios);
     const prevRows = resolveSummaryRows(prevUsage, ratios);
     // 口径铁律：合计/环比先剔除 ok===false 降级站（探测失败不误报）
-    const curTotals = summaryTotals(curRows.filter((r) => r.ok !== false), null);
-    const prevTotals = summaryTotals(prevRows.filter((r) => r.ok !== false), null);
+    const curTotals = summaryTotals(curRows, null);
+    const prevTotals = summaryTotals(prevRows, null);
 
     // ---- 发信（未配 SMTP 或无收件人则静默跳过；跳过视为「已处理」，仍写标记）----
     let delivered = true;
@@ -188,7 +188,7 @@ export function startFinanceReports(deps: FinanceReportsDeps, intervalMs: number
         m.slug,
         m.label,
         `${m.label} 毛利率偏低`,
-        `毛利率 ${(m.margin * 100).toFixed(1)}% 低于阈值 ${(cfg.marginLowPct * 100).toFixed(0)}%（营收 ${fmt(m.revenue)} USD / 成本 ${fmt(m.cost)} USD）`,
+        `毛利率 ${(m.margin * 100).toFixed(1)}% 低于阈值 ${(cfg.marginLowPct * 100).toFixed(0)}%（营收 ${fmt(m.revenue)} ${curTotals.costUnit} / 成本 ${fmt(m.cost)} ${curTotals.costUnit}）`,
         slugToId,
       );
     }
@@ -198,7 +198,7 @@ export function startFinanceReports(deps: FinanceReportsDeps, intervalMs: number
         c.slug,
         c.label,
         `${c.label} 成本环比异常`,
-        `成本环比 ${c.factor.toFixed(2)}× 超阈值 ${cfg.costSpikeFactor.toFixed(2)}×（当期 ${fmt(c.curCost)} USD / 上期 ${fmt(c.prevCost)} USD）`,
+        `成本环比 ${c.factor.toFixed(2)}× 超阈值 ${cfg.costSpikeFactor.toFixed(2)}×（当期 ${fmt(c.curCost)} ${curTotals.costUnit} / 上期 ${fmt(c.prevCost)} ${prevTotals.costUnit}）`,
         slugToId,
       );
     }

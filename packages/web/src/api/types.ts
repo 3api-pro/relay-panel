@@ -138,6 +138,9 @@ export interface FinanceSummaryRow {
 }
 
 export interface FinanceTotals {
+  costUnit: string;
+  costedRevenue: number;
+  coverage: FinanceCoverage;
   requests: number;
   tokens: number;
   revenue: number;
@@ -148,18 +151,30 @@ export interface FinanceTotals {
   recharge: Record<string, number> | null;
 }
 
+export interface FinanceCoverage {
+  expectedSites: number;
+  availableSites: number;
+  costedSites: number;
+  estimatedSites: number;
+}
+
 /** 走势/每日明细单日点：充值/营收(消耗)/成本/毛利/请求/token 均为该北京日历日真实值。recharge 全站无数据为 null */
 export interface FinanceTrendPoint {
   date: string;
-  revenue: number;
-  requests: number;
-  tokens: number;
-  cost: number;
-  profit: number;
+  costUnit: string;
+  costedRevenue: number;
+  coverage: FinanceCoverage;
+  rechargeCoverage: { expectedSites: number; availableSites: number };
+  revenue: number | null;
+  requests: number | null;
+  tokens: number | null;
+  cost: number | null;
+  profit: number | null;
   recharge: Record<string, number> | null;
 }
 
 export interface FinanceSummaryResponse {
+  rechargeCoverage: { expectedSites: number; availableSites: number };
   /** 北京日历日闭区间 YYYY-MM-DD */
   from: string;
   to: string;

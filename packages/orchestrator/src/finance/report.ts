@@ -8,7 +8,7 @@ import type { FinanceSummaryRow, FinanceSummaryTotals } from './summary.js';
  *  - renderDailyReport / renderWeeklyReport：中文纯文本报告（每站营收/成本/毛利/毛利率/请求 + 合计，
  *    周报附环比）；金额显式标 USD；root 全站汇总，不含任何上游供应商名/加价倍率/成本×倍数。
  *
- * 🔴 USD:RMB 1:1（本行业无汇率）；金额单位 USD。
+ * 金额保留引擎记账单位，不做隐含汇率转换。
  */
 
 // ---- 存储 key（与 finance_cost_ratios 一样是 app_settings 的独立行）----
@@ -214,7 +214,7 @@ export function evaluateThresholds(
     }
 
     const prev = prevBySlug.get(r.slug);
-    if (prev && prev.cost !== null && prev.cost > 0) {
+    if (prev && prev.cost !== null && prev.cost > 0 && prev.costUnit === r.costUnit && prev.costSource === r.costSource && prev.costRatio === r.costRatio) {
       const factor = r.cost / prev.cost;
       if (factor > cfg.costSpikeFactor) {
         costSpike.push({ slug: r.slug, label: r.label, curCost: r.cost, prevCost: prev.cost, factor });
@@ -261,8 +261,8 @@ function renderSiteLines(rows: FinanceSummaryRow[]): string[] {
       continue;
     }
     lines.push(
-      `- ${r.label}：营收 ${fmtUsd(r.revenue)} USD | 成本 ${fmtUsd(r.cost)} USD | ` +
-        `毛利 ${fmtUsd(r.profit)} USD | 毛利率 ${fmtMargin(r.revenue, r.profit)} | 请求 ${r.requests}`,
+      `- ${r.label}：营收 ${fmtUsd(r.revenue)} ${r.costUnit ?? 'USD'} | 成本 ${fmtUsd(r.cost)} ${r.costUnit ?? 'USD'} | ` +
+        `毛利 ${fmtUsd(r.profit)} ${r.costUnit ?? 'USD'} | 毛利率 ${fmtMargin(r.revenue, r.profit)} | 请求 ${r.requests}`,
     );
   }
   return lines;
@@ -276,9 +276,10 @@ function renderSiteLines(rows: FinanceSummaryRow[]): string[] {
  */
 function renderTotalsLines(totals: FinanceSummaryTotals): string[] {
   return [
-    `营收合计: ${fmtUsd(totals.revenue)} USD`,
-    `成本合计: ${fmtUsd(totals.cost)} USD`,
-    `毛利合计: ${fmtUsd(totals.profit)} USD`,
+    `数据覆盖: ${totals.coverage.availableSites}/${totals.coverage.expectedSites} 站；成本已知 ${totals.coverage.costedSites} 站，其中比例估算 ${totals.coverage.estimatedSites} 站`,
+    `营收合计: ${fmtUsd(totals.coverage.availableSites ? totals.revenue : null)} ${totals.costUnit}`,
+    `成本合计: ${fmtUsd(totals.coverage.costedSites ? totals.cost : null)} ${totals.costUnit}`,
+    `毛利合计: ${fmtUsd(totals.coverage.costedSites ? totals.profit : null)} ${totals.costUnit}`,
     `毛利率: ${fmtMargin(totals.costedRevenue, totals.profit)}`,
   ];
 }
@@ -294,8 +295,8 @@ function costCaveatNote(rows: FinanceSummaryRow[], totals: FinanceSummaryTotals)
   const uncostedRevenue = totals.revenue - totals.costedRevenue;
   return [
     '',
-    `⚠ ${uncosted.length} 个站点引擎未提供账户成本且未配成本率，其营收 ${fmtUsd(uncostedRevenue)} USD ` +
-      `未计入毛利/毛利率（毛利率以已计成本营收 ${fmtUsd(totals.costedRevenue)} USD 为分母）。`,
+    `⚠ ${uncosted.length} 个站点引擎未提供账户成本且未配成本率，其营收 ${fmtUsd(uncostedRevenue)} ${totals.costUnit} ` +
+      `未计入毛利/毛利率（毛利率以已计成本营收 ${fmtUsd(totals.costedRevenue)} ${totals.costUnit} 为分母）。`,
   ];
 }
 
@@ -319,7 +320,7 @@ export function renderDailyReport(
   const lines = [
     `relay-panel 经营日报 · ${from}（北京时间）`,
     '',
-    '各站明细（金额单位 USD）：',
+    `各站明细（记账单位 ${totals.costUnit}，非现金收入；比例成本为估算）：`,
     ...renderSiteLines(rows),
     '',
     '合计：',
@@ -347,17 +348,17 @@ export function renderWeeklyReport(
   const lines = [
     `relay-panel 经营周报 · ${from} ~ ${to}（北京时间）`,
     '',
-    '各站明细（金额单位 USD）：',
+    `各站明细（记账单位 ${totals.costUnit}，非现金收入；比例成本为估算）：`,
     ...renderSiteLines(rows),
     '',
     '合计：',
     ...renderTotalsLines(totals),
     `请求合计: ${totals.requests}`,
   ];
-  if (prevTotals !== undefined) {
+  if (prevTotals !== undefined && prevTotals.costUnit === totals.costUnit) {
     lines.push(
       '',
-      '环比上一周（金额单位 USD）：',
+      `环比上一周（记账单位 ${totals.costUnit}）：`,
       `营收: ${fmtUsd(totals.revenue)} vs ${fmtUsd(prevTotals.revenue)}（${fmtDelta(totals.revenue, prevTotals.revenue)}）`,
       `成本: ${fmtUsd(totals.cost)} vs ${fmtUsd(prevTotals.cost)}（${fmtDelta(totals.cost, prevTotals.cost)}）`,
       `毛利: ${fmtUsd(totals.profit)} vs ${fmtUsd(prevTotals.profit)}（${fmtDelta(totals.profit, prevTotals.profit)}）`,

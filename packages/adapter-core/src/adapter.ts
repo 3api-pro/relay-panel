@@ -104,6 +104,8 @@ export interface EngineAdminClient {
 
   stats: {
     usage(from: Date, to: Date): Promise<UsageSummary>;
+    /** 北京日历日闭区间；时间戳型引擎可覆盖默认的日期锚点适配。 */
+    usageCalendarDays?(fromDate: string, toDate: string): Promise<UsageSummary>;
     /** 经营下钻（可选：引擎支持才实现）。按 from/to 日历日闭区间聚合。 */
     modelBreakdown?(from: Date, to: Date): Promise<ModelUsageStat[]>;
     customerBreakdown?(from: Date, to: Date, limit?: number): Promise<CustomerUsageStat[]>;

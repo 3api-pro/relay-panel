@@ -85,7 +85,7 @@ const FINANCE_TTL_MS = 300_000;
  * 经营走势：单站单日用量缓存；key=`<slug>:<YYYY-MM-DD>`。
  * 历史日不变→长 TTL（6h）；今日/未来→短 TTL（2min）。这样多日走势冷启动后仅今日会重拉。
  */
-const financeDailyCache = new Map<string, { at: number; body: { revenue: number; accountCost: number | null; requests: number; tokens: number } }>();
+const financeDailyCache = new Map<string, { at: number; body: Omit<FinanceSiteDailyPoint, 'date'> }>();
 const FINANCE_DAILY_HIST_TTL_MS = 21_600_000;
 const FINANCE_DAILY_TODAY_TTL_MS = 120_000;
 
@@ -148,6 +148,15 @@ function enumerateBjDates(from: string, to: string): string[] {
 function bjDateAnchor(dateStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1, 12));
+}
+
+async function financeCalendarUsage(client: EngineAdminClient, from: string, to: string) {
+  const usage = await (client.stats.usageCalendarDays?.(from, to) ?? client.stats.usage(bjDateAnchor(from), bjDateAnchor(to)));
+  if (usage.billingSource === 'list_price') throw new Error('引擎未提供消费记账金额，仅提供标价；未计入财务合计');
+  if (![usage.cost, usage.requests, usage.promptTokens, usage.completionTokens].every(Number.isFinite)) {
+    throw new Error('引擎返回的用量或金额无效');
+  }
+  return usage;
 }
 
 /** 测试辅助：清空全部站点级缓存（生产不调用） */
@@ -319,6 +328,8 @@ export interface FinanceSiteUsage {
 /** 单站按天走势点（revenue/accountCost/tokens 均为该北京日历日的精确值） */
 export interface FinanceSiteDailyPoint {
   date: string;
+  ok: boolean;
+  costUnit: string;
   revenue: number;
   accountCost: number | null;
   requests: number;
@@ -410,6 +421,7 @@ export interface SiteChannelBalanceRow {
 
 /** 充值(现金到账)跨站汇总。金额按实际支付币种分别累计，与营收(消费)口径不同。 */
 export interface FinanceRecharge {
+  coverage: { expectedSites: number; availableSites: number };
   /** 区间充值合计，按实际支付币种分开 */
   periodAmount: CurrencyAmounts;
   /** 北京日历日 → 该日充值(跨站、按币种合计)，供每日明细/走势逐日展示 */
@@ -673,8 +685,6 @@ export class SitesService {
    */
   async financeUsage(ctx: SessionCtx, fromDate: string, toDate: string): Promise<FinanceSiteUsage[]> {
     const visible = await this.visibleSites(ctx);
-    const from = bjDateAnchor(fromDate);
-    const to = bjDateAnchor(toDate);
 
     return Promise.all(
       visible.map(async (site): Promise<FinanceSiteUsage> => {
@@ -684,7 +694,7 @@ export class SitesService {
         if (cached && nowMs - cached.at < FINANCE_TTL_MS) return cached.body;
         try {
           const client = await this.client(site);
-          const s = await client.stats.usage(from, to);
+          const s = await financeCalendarUsage(client, fromDate, toDate);
           const body: FinanceSiteUsage = {
             slug: site.slug,
             label: site.label,
@@ -692,7 +702,7 @@ export class SitesService {
             requests: s.requests,
             tokens: s.promptTokens + s.completionTokens,
             revenue: s.cost,
-            accountCost: typeof s.accountCost === 'number' ? s.accountCost : null,
+            accountCost: typeof s.accountCost === 'number' && Number.isFinite(s.accountCost) ? s.accountCost : null,
             costUnit: s.costUnit,
           };
           cachePut(financeUsageCache, key, { at: nowMs, body });
@@ -731,11 +741,11 @@ export class SitesService {
         try {
           client = await this.client(site);
         } catch {
-          // 站点连不上：整段按 0 降级，不阻塞他站/走势
+          // 站点连不上：整段标记为未知，不阻塞他站/走势
           return {
             slug: site.slug,
             label: site.label,
-            daily: dates.map((date) => ({ date, revenue: 0, accountCost: null, requests: 0, tokens: 0 })),
+            daily: dates.map((date) => ({ date, ok: false, costUnit: 'USD', revenue: 0, accountCost: null, requests: 0, tokens: 0 })),
           };
         }
         const daily = await mapPool(dates, 5, async (date): Promise<FinanceSiteDailyPoint> => {
@@ -745,18 +755,19 @@ export class SitesService {
           const ttl = date >= bjToday ? FINANCE_DAILY_TODAY_TTL_MS : FINANCE_DAILY_HIST_TTL_MS;
           if (cached && nowMs - cached.at < ttl) return { date, ...cached.body };
           try {
-            const anchor = bjDateAnchor(date);
-            const s = await client.stats.usage(anchor, anchor);
+            const s = await financeCalendarUsage(client, date, date);
             const body = {
+              ok: true,
+              costUnit: s.costUnit,
               revenue: s.cost,
-              accountCost: typeof s.accountCost === 'number' ? s.accountCost : null,
+              accountCost: typeof s.accountCost === 'number' && Number.isFinite(s.accountCost) ? s.accountCost : null,
               requests: s.requests,
               tokens: s.promptTokens + s.completionTokens,
             };
             cachePut(financeDailyCache, key, { at: nowMs, body });
             return { date, ...body };
           } catch {
-            return { date, revenue: 0, accountCost: null, requests: 0, tokens: 0 };
+            return { date, ok: false, costUnit: 'USD', revenue: 0, accountCost: null, requests: 0, tokens: 0 };
           }
         });
         return { slug: site.slug, label: site.label, daily };
@@ -1073,18 +1084,22 @@ export class SitesService {
 
   /**
    * 充值(现金到账)跨站汇总：各站 payment/dashboard(days=从 from 到今天) → 今日充值 + 区间充值(按 daily 过滤 [from,to])。
-   * 口径=现金流入(RMB)，非营收/消费。单站失败静默跳过；全失败 ok=false（前端不展示）。5min 缓存。
+   * 按实际支付币种分列；日期沿用引擎返回日历，不能推断其时区。单站失败通过 coverage 披露；全失败 ok=false（前端不展示）。5min 缓存。
    */
   async financeRecharge(ctx: SessionCtx, fromDate: string, toDate: string): Promise<FinanceRecharge> {
     const visible = await this.visibleSites(ctx);
     const bjToday = beijingTodayStr();
     const days = enumerateBjDates(fromDate, bjToday).length; // 覆盖 from..今天，供 daily 过滤 [from,to]
     const periodAmount: CurrencyAmounts = {};
-    let anyOk = false;
+    let availableSites = 0;
     const byDate: Record<string, CurrencyAmounts> = {};
+    // 当前适配器最多查询 366 天窗口；不可将窗口外的未知充值显示为零。
+    if (days < 1 || days > 366 || toDate > bjToday) {
+      return { periodAmount, byDate, ok: false, coverage: { expectedSites: visible.length, availableSites } };
+    }
     await Promise.all(
       visible.map(async (site) => {
-        const key = `recharge:${site.slug}:${days}`;
+        const key = `recharge:${site.slug}:${bjToday}:${days}`;
         const cached = financeBreakdownCache.get(key);
         const nowMs = Date.now();
         let sum: RechargeSummary;
@@ -1100,7 +1115,7 @@ export class SitesService {
             return;
           }
         }
-        anyOk = true;
+        availableSites++;
         for (const p of sum.daily) {
           if (p.date >= fromDate && p.date <= toDate) {
             const day = (byDate[p.date] ??= {});
@@ -1113,7 +1128,7 @@ export class SitesService {
         }
       }),
     );
-    return { periodAmount, byDate, ok: anyOk };
+    return { periodAmount, byDate, ok: availableSites > 0, coverage: { expectedSites: visible.length, availableSites } };
   }
 
   /** 该站审计流水（写入时已过 redact，原样返回） */

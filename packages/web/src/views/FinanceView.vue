@@ -38,7 +38,7 @@ import type { BreakdownDim, FinanceBreakdownResponse, FinanceBreakdownRow } from
 
 /**
  * 经营概览：跨站营收/成本/毛利。
- *  - 营收（流水）= 各站用户消费（对客价），真实数据（GET /api/finance/summary）。
+ *  - 营收（流水）= 各站用户消费（对客价），引擎消费记账（GET /api/finance/summary），不是现金收入。
  *  - 成本 = 营收 × 每站成本率（root 在弹窗里配），未配置显示「—」，绝不用 0 冒充盈利。
  *  - 毛利 = 营收 − 成本。
  * 全部为运营方内部经营数据。
@@ -93,7 +93,7 @@ function applyPreset(p: Preset): void {
 
 // ---- 数据 ----
 function emptyTotals(): FinanceTotals {
-  return { requests: 0, tokens: 0, revenue: 0, cost: 0, profit: 0, recharge: null };
+  return { requests: 0, tokens: 0, revenue: 0, cost: 0, profit: 0, recharge: null, costedRevenue: 0, costUnit: 'USD', coverage: { expectedSites: 0, availableSites: 0, costedSites: 0, estimatedSites: 0 } };
 }
 const rows = ref<FinanceSummaryRow[]>([]);
 const totals = ref<FinanceTotals>(emptyTotals());
@@ -101,10 +101,17 @@ const trend = ref<FinanceTrendPoint[]>([]);
 const allCosted = ref(true);
 const loading = ref(true);
 const loadError = ref('');
+const rechargeCoverage = ref({ expectedSites: 0, availableSites: 0 });
+let loadId = 0;
+const usageAvailable = computed(() => totals.value.coverage.availableSites > 0);
+const costsAvailable = computed(() => totals.value.coverage.costedSites > 0);
+const coverageLabel = computed(() => t('finance.coverage', totals.value.coverage));
 
 async function load(): Promise<void> {
+  const id = ++loadId;
   if (from.value > to.value) {
     loadError.value = t('finance.rangeInvalid');
+    loading.value = false;
     return;
   }
   loading.value = true;
@@ -114,17 +121,20 @@ async function load(): Promise<void> {
       silent: true,
       query: { from: from.value, to: to.value },
     });
+    if (id !== loadId) return;
+    rechargeCoverage.value = res.rechargeCoverage;
     rows.value = Array.isArray(res?.rows) ? res.rows : [];
     totals.value = res?.totals ?? emptyTotals();
     trend.value = Array.isArray(res?.trend) ? res.trend : [];
     allCosted.value = res?.allCosted ?? true;
   } catch (err) {
+    if (id !== loadId) return;
     rows.value = [];
     totals.value = emptyTotals();
     trend.value = [];
     loadError.value = err instanceof Error ? err.message : t('finance.loadFailed');
   } finally {
-    loading.value = false;
+    if (id === loadId) loading.value = false;
   }
 }
 
@@ -202,8 +212,8 @@ onMounted(() => {
 });
 
 // ---- 格式化 ----
-function fmtInt(n: number): string {
-  return (n ?? 0).toLocaleString('en-US');
+function fmtInt(n: number | null): string {
+  return n === null ? '—' : n.toLocaleString('en-US');
 }
 /**
  * 金额：$ 前缀，自适应精度——≥1 用两位小数；<1 用 4~6 位，
@@ -216,7 +226,7 @@ function fmtMoney(n: number | null | undefined): string {
   let digits = 2;
   if (abs > 0 && abs < 1) digits = abs < 0.01 ? 6 : 4;
   const v = abs.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
-  return `${n < 0 ? '-' : ''}$${v}`;
+  return `${n < 0 ? '-' : ''}${totals.value.costUnit === 'USD' ? '$' : totals.value.costUnit + ' '}${v}`;
 }
 function marginPct(revenue: number, profit: number | null): string {
   if (profit === null || !(revenue > 0)) return '—';
@@ -230,10 +240,10 @@ function marginClass(n: number | null): string {
   return 'text-muted';
 }
 const totalMarginPct = computed(() =>
-  allCosted.value ? marginPct(totals.value.revenue, totals.value.profit) : '—',
+  costsAvailable.value ? marginPct(totals.value.costedRevenue, totals.value.profit) : '—',
 );
 const totalMarginTone = computed<'green' | 'red' | 'default'>(() => {
-  if (!allCosted.value) return 'default';
+  if (!costsAvailable.value) return 'default';
   if (totals.value.profit > 0) return 'green';
   if (totals.value.profit < 0) return 'red';
   return 'default';
@@ -242,6 +252,7 @@ const totalMarginTone = computed<'green' | 'red' | 'default'>(() => {
 // ---- 每日明细（充值/消耗/成本/毛利/请求/token 逐日）----
 const dailyColumns = computed<TableColumn[]>(() => [
   { key: 'date', label: t('finance.colDate'), mono: true },
+  { key: 'coverage', label: t('finance.colCoverage') },
   { key: 'recharge', label: t('finance.colRecharge'), align: 'right' },
   { key: 'revenue', label: t('finance.colConsume'), align: 'right' },
   { key: 'cost', label: t('finance.colCost'), align: 'right' },
@@ -276,7 +287,7 @@ function asRow(r: Record<string, unknown>): FinanceSummaryRow {
 }
 /** 成本口径列：成本率覆盖显示 x%，引擎真实成本显示译名，均无显示 — */
 function costSourceLabel(r: FinanceSummaryRow): string {
-  if (r.costSource === 'ratio' && r.costRatio !== null) return `${(r.costRatio * 100).toFixed(0)}%`;
+  if (r.costSource === 'ratio' && r.costRatio !== null) return t('finance.sourceRatio', { ratio: (r.costRatio * 100).toFixed(0) });
   if (r.costSource === 'engine') return t('finance.sourceEngine');
   return '—';
 }
@@ -366,7 +377,7 @@ const fieldCls =
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
       <StatCard
         :label="t('finance.statRevenue')"
-        :value="loading ? '' : loadError ? '—' : fmtMoney(totals.revenue)"
+        :value="loading ? '' : loadError || !usageAvailable ? '—' : fmtMoney(totals.revenue)"
         :loading="loading"
         :icon="Wallet"
         :hint="t('finance.statRevenueHint')"
@@ -376,18 +387,18 @@ const fieldCls =
         :value="loading ? '' : loadError || totals.recharge === null ? '—' : fmtCash(totals.recharge)"
         :loading="loading"
         :icon="Coins"
-        :hint="t('finance.statRechargeHint')"
+        :hint="t('finance.rechargeCoverage', rechargeCoverage)"
       />
       <StatCard
         :label="t('finance.statCost')"
-        :value="loading ? '' : loadError ? '—' : fmtMoney(totals.cost)"
+        :value="loading ? '' : loadError || !costsAvailable ? '—' : fmtMoney(totals.cost)"
         :loading="loading"
         :icon="CircleDollarSign"
         :hint="allCosted ? t('finance.statCostHint') : t('finance.statPartial')"
       />
       <StatCard
         :label="t('finance.statProfit')"
-        :value="loading ? '' : loadError ? '—' : fmtMoney(totals.profit)"
+        :value="loading ? '' : loadError || !costsAvailable ? '—' : fmtMoney(totals.profit)"
         :loading="loading"
         :tone="loadError ? 'default' : totalMarginTone"
         :icon="TrendingUp"
@@ -402,28 +413,32 @@ const fieldCls =
       />
       <StatCard
         :label="t('finance.statRequests')"
-        :value="loading ? '' : loadError ? '—' : fmtInt(totals.requests)"
+        :value="loading ? '' : loadError || !usageAvailable ? '—' : fmtInt(totals.requests)"
         :loading="loading"
         :icon="Activity"
       />
     </div>
 
+    <p v-if="!loading && !loadError" class="text-xs text-muted" role="status">{{ coverageLabel }}</p>
+
     <!-- 走势图 -->
-    <FinanceTrendChart v-if="!loadError" :points="trend" />
+    <FinanceTrendChart v-if="!loadError" :points="trend" :cost-unit="totals.costUnit" />
 
     <!-- 每日明细：逐日 充值 · 消耗 · 成本 · 毛利 · 请求 · token -->
     <div v-if="!loadError" class="rp-panel overflow-hidden">
-      <header class="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+      <header class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2.5">
         <p class="rp-microlabel">{{ t('finance.dailyTitle') }}</p>
-        <p class="tnum truncate text-xs text-muted">{{ t('finance.dailyNote') }}</p>
+        <p class="tnum text-xs text-muted">{{ t('finance.dailyNote') }}</p>
       </header>
       <Table
+        class="[&_table]:min-w-[1050px]"
         :columns="dailyColumns"
         :rows="dailyRows"
         row-key="date"
         :loading="loading"
         :empty="t('finance.tableEmpty')"
       >
+        <template #cell-coverage="{ row }"><span class="whitespace-nowrap text-xs text-muted">{{ t('finance.dailyCoverage', { ...asTrend(row).coverage }) }}</span></template>
         <template #cell-recharge="{ row }">
           <span class="tnum" :class="asTrend(row).recharge === null ? 'text-muted' : ''">{{
             asTrend(row).recharge === null ? '—' : fmtCash(asTrend(row).recharge)
@@ -436,7 +451,7 @@ const fieldCls =
         </template>
         <template #cell-marginPct="{ row }">
           <span class="tnum" :class="marginClass(asTrend(row).profit)">{{
-            marginPct(asTrend(row).revenue, asTrend(row).profit)
+            marginPct(asTrend(row).costedRevenue, asTrend(row).profit)
           }}</span>
         </template>
         <template #cell-requests="{ row }">{{ fmtInt(asTrend(row).requests) }}</template>
@@ -457,12 +472,12 @@ const fieldCls =
 
     <!-- 明细表 -->
     <div class="rp-panel overflow-hidden">
-      <header class="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+      <header class="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-2.5">
         <p class="rp-microlabel">
           {{ t('finance.detailTitle')
           }}{{ !loading && !loadError ? t('finance.detailCount', { n: rows.length }) : '' }}
         </p>
-        <p class="tnum truncate text-xs text-muted">{{ t('finance.revenueSource') }}</p>
+        <p class="tnum text-xs text-muted">{{ t('finance.revenueSource') }}</p>
       </header>
 
       <div v-if="loadError" class="p-8">
@@ -471,6 +486,7 @@ const fieldCls =
 
       <Table
         v-else
+        class="[&_table]:min-w-[820px]"
         :columns="columns"
         :rows="tableRows"
         row-key="slug"
@@ -505,7 +521,7 @@ const fieldCls =
             {{ marginPct(asRow(row).revenue, asRow(row).profit) }}
           </span>
         </template>
-        <template #cell-requests="{ row }">{{ fmtInt(asRow(row).requests) }}</template>
+        <template #cell-requests="{ row }">{{ asRow(row).ok ? fmtInt(asRow(row).requests) : '—' }}</template>
       </Table>
     </div>
 

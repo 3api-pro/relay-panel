@@ -343,6 +343,8 @@ export class NewapiAdminClient implements EngineAdminClient {
   stats = {
     // /api/data/ 按模型聚合 count/token_used/quota。new-api 不区分 prompt/completion，
     // 故 promptTokens=0，completionTokens=总 token（看板求和口径正确）。
+    usageCalendarDays: async (fromDate: string, toDate: string): Promise<UsageSummary> =>
+      this.stats.usage(new Date(`${fromDate}T00:00:00+08:00`), new Date(`${toDate}T23:59:59+08:00`)),
     usage: async (from: Date, to: Date): Promise<UsageSummary> => {
       const start = Math.floor(from.getTime() / 1000);
       const end = Math.floor(to.getTime() / 1000);
@@ -370,6 +372,7 @@ export class NewapiAdminClient implements EngineAdminClient {
         completionTokens: tokens,
         costUnit: 'USD',
         cost: quota / QUOTA_PER_USD,
+        billingSource: 'quota',
         byModel,
       };
     },

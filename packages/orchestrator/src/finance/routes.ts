@@ -8,7 +8,7 @@ import { writeAudit } from '../audit.js';
 import { SitesService, type SitesServiceDeps } from '../sites/service.js';
 import { sendMail, type SmtpSend } from '../alerts/smtp.js';
 import { ALERT_EMAIL_SETTINGS_KEY, EmailNotifier } from '../alerts/notify.js';
-import { COST_RATIOS_KEY, readCostRatios, resolveSummaryRows, summaryTotals } from './summary.js';
+import { COST_RATIOS_KEY, readCostRatios, resolveSummaryRows, summaryTotals, summaryTrend } from './summary.js';
 import {
   FINANCE_REPORT_SETTINGS_KEY,
   REPORT_SEND_HOUR,
@@ -24,9 +24,9 @@ export type { CostSource, FinanceSummaryRow } from './summary.js';
 /**
  * 经营概览路由：跨站营收/成本/毛利汇总。
  *
- * 口径（诚实标注，全部真实数据、非估算）：
+ * 口径（诚实标注，消费记账与现金到账分开；成本率为估算）：
  *  - 营收 revenue = 各站引擎记账的用户消费流水（对客价），真实（经 sub2api usage/stats）。
- *  - 成本 cost 默认 = 引擎记账的「上游账户实际成本」total_account_cost（真实 COGS，costSource='engine'）。
+ *  - 成本 cost 默认 = 引擎记账的「上游账户实际成本」total_account_cost（账面成本，costSource='engine'）。
  *  - 毛利 profit = revenue − cost；毛利率 = profit / revenue。
  *
  * 成本率覆盖（可选）：root 可在 app_settings['finance_cost_ratios'] 为某站配置成本率，
@@ -96,7 +96,7 @@ export interface FinanceBreakdownRow {
   profit: number;
   /** 毛利率；营收为 0 时 null */
   margin: number | null;
-  /** 亏本：营收 > 0 且成本 > 营收 */
+  /** 亏本：成本 > 营收（包含零营收有成本） */
   loss: boolean;
   requests: number;
   tokens: number;
@@ -120,7 +120,7 @@ function breakdownRow(
     cost,
     profit,
     margin: revenue > 0 ? profit / revenue : null,
-    loss: revenue > 0 && cost > revenue,
+    loss: cost > revenue,
     requests,
     tokens,
   };
@@ -175,48 +175,23 @@ export function registerFinanceRoutes(
     ]);
     const ratios = await readCostRatios(deps.db);
 
-    // 口径抽取（summary.ts 单一实现，routes 与报告 scheduler 共用，行为逐字节不变）
+    // 页面与报告使用同一汇总实现
     const rows = resolveSummaryRows(usage, ratios);
 
-    const costUnit = usage.find((u) => u.ok)?.costUnit ?? 'USD';
-    // 成本/毛利合计只累加「有成本口径」的站点；是否所有站都有成本一并返回给前端提示
-    const costed = rows.filter((r) => r.cost !== null);
-    const allCosted = rows.length > 0 && costed.length === rows.length;
-    // 充值(现金到账)区间合计；全站取不到时 null（不同口径，与营收并列展示）
-    const totals = summaryTotals(rows, recharge.ok ? recharge.periodAmount : null);
-
-    // 走势：跨站按日期汇总每日精确营收 + 每日精确成本（成本率覆盖优先，否则引擎当日账户成本）。
-    // 营收/成本/毛利/请求每日均为真实值（非分摊），区间合计与表格/卡片一致。
-    const dateAgg = new Map<string, { revenue: number; cost: number; requests: number; tokens: number }>();
-    for (const date of dates) dateAgg.set(date, { revenue: 0, cost: 0, requests: 0, tokens: 0 });
-    for (const site of perSiteDaily) {
-      const ratio = site.slug in ratios ? (ratios[site.slug] as number) : null;
-      for (const p of site.daily) {
-        const agg = dateAgg.get(p.date);
-        if (!agg) continue;
-        agg.revenue += p.revenue;
-        agg.requests += p.requests;
-        agg.tokens += p.tokens;
-        const c = ratio !== null ? p.revenue * ratio : p.accountCost;
-        if (c !== null) agg.cost += c;
-      }
+    try {
+      const totals = summaryTotals(rows, recharge.ok ? recharge.periodAmount : null);
+      const trend = summaryTrend(dates, perSiteDaily, ratios, recharge);
+      const units = new Set([
+        ...(totals.coverage.availableSites ? [totals.costUnit] : []),
+        ...trend.filter((p) => p.coverage.availableSites > 0).map((p) => p.costUnit),
+      ]);
+      if (units.size > 1) throw new Error('站点记账单位不同，无法直接合计；请按单位分别核对');
+      totals.costUnit = [...units][0] ?? totals.costUnit;
+      const allCosted = rows.length > 0 && totals.coverage.costedSites === rows.length;
+      return { from, to, costUnit: totals.costUnit, rows, totals, allCosted, trend, rechargeCoverage: recharge.coverage };
+    } catch (error) {
+      throw new ApiError(422, error instanceof Error ? error.message : '无法汇总财务数据');
     }
-    // 每日走势/明细：逐日 充值·消耗(营收)·成本·毛利·请求·token 全含（充值折进每日，不再单列今日充值）
-    const trend = dates.map((date) => {
-      const a = dateAgg.get(date) as { revenue: number; cost: number; requests: number; tokens: number };
-      const rc = recharge.ok ? recharge.byDate[date] ?? {} : null;
-      return {
-        date,
-        revenue: a.revenue,
-        requests: a.requests,
-        tokens: a.tokens,
-        cost: a.cost,
-        profit: a.revenue - a.cost,
-        recharge: rc,
-      };
-    });
-
-    return { from, to, costUnit, rows, totals, allCosted, trend };
   });
 
   // ---- 经营下钻（按模型/客户/上游渠道）----

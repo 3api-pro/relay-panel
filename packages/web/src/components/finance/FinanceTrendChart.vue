@@ -6,10 +6,10 @@ import type { FinanceTrendPoint } from '../../api/types';
 
 /**
  * 经营走势图（内联 SVG，无外部依赖，深色/浅色随主题）。
- * 两条序列：营收（accent，面积+线，精确）与毛利（green，线，分摊估算）。
+ * 两条序列：消费记账与已知成本部分的毛利；未知日期断开。
  * 悬停显示当日营收/成本/毛利。viewBox 固定，容器 w-full 等比缩放。
  */
-const props = defineProps<{ points: FinanceTrendPoint[] }>();
+const props = defineProps<{ points: FinanceTrendPoint[]; costUnit: string }>();
 const { t } = useI18n();
 
 // ---- 画布几何（viewBox 坐标系）----
@@ -23,11 +23,11 @@ const n = computed(() => props.points.length);
 
 // Y 轴上界：营收与毛利的最大值（毛利可能为负，下界取 min(0, 最小毛利)）
 const yMax = computed(() => {
-  const vals = props.points.flatMap((p) => [p.revenue, p.profit]);
+  const vals = props.points.flatMap((p) => [p.revenue ?? 0, p.profit ?? 0]);
   return Math.max(1e-9, ...vals);
 });
 const yMin = computed(() => {
-  const minProfit = Math.min(0, ...props.points.map((p) => p.profit));
+  const minProfit = Math.min(0, ...props.points.map((p) => p.profit ?? 0));
   return minProfit;
 });
 const ySpan = computed(() => yMax.value - yMin.value || 1);
@@ -41,14 +41,19 @@ function yAt(v: number): number {
 }
 
 function linePath(key: 'revenue' | 'profit'): string {
-  return props.points
-    .map((p, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(p[key]).toFixed(1)}`)
-    .join(' ');
+  let connected = false;
+  return props.points.map((point, i) => {
+    const value = point[key];
+    if (value === null) { connected = false; return ''; }
+    const command = `${connected ? 'L' : 'M'}${xAt(i).toFixed(1)},${yAt(value).toFixed(1)}`;
+    connected = true;
+    return command;
+  }).join(' ');
 }
 const revenueLine = computed(() => linePath('revenue'));
 const profitLine = computed(() => linePath('profit'));
 const revenueArea = computed(() => {
-  if (n.value === 0) return '';
+  if (n.value === 0 || props.points.some((p) => p.revenue === null)) return '';
   const base = yAt(Math.max(0, yMin.value));
   return `${revenueLine.value} L${xAt(n.value - 1).toFixed(1)},${base.toFixed(1)} L${xAt(0).toFixed(1)},${base.toFixed(1)} Z`;
 });
@@ -102,25 +107,28 @@ const hoverLeftPct = computed(() =>
 // ---- 格式化 ----
 function fmtCompact(v: number): string {
   const a = Math.abs(v);
+  if (props.costUnit !== 'USD') return v.toFixed(a >= 1 ? 0 : 2);
   if (a >= 1000) return `${v < 0 ? '-' : ''}$${(a / 1000).toFixed(a >= 10000 ? 0 : 1)}k`;
   if (a >= 1) return `$${v.toFixed(0)}`;
   if (a === 0) return '$0';
   return `$${v.toFixed(2)}`;
 }
-function fmtMoney(v: number): string {
+function fmtMoney(v: number | null): string {
+  if (v === null) return '—';
   const a = Math.abs(v);
   const digits = a > 0 && a < 1 ? 4 : 2;
-  return `${v < 0 ? '-' : ''}$${a.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+  return `${v < 0 ? '-' : ''}${props.costUnit === 'USD' ? '$' : props.costUnit + ' '}${a.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 }
-function fmtInt(v: number): string {
-  return (v ?? 0).toLocaleString('en-US');
+function fmtInt(v: number | null): string {
+  if (v === null) return '—';
+  return v.toLocaleString('en-US');
 }
 </script>
 
 <template>
   <div class="rp-panel p-4">
     <div class="mb-2 flex items-center justify-between gap-3">
-      <p class="rp-microlabel">{{ t('finance.trendTitle') }}</p>
+      <p class="rp-microlabel">{{ t('finance.trendTitle') }} · {{ costUnit }}</p>
       <div class="flex items-center gap-3 text-[11px] text-muted">
         <span class="inline-flex items-center gap-1.5">
           <span class="inline-block h-2 w-2 rounded-full" style="background: var(--color-accent)" />
@@ -217,7 +225,8 @@ function fmtInt(v: number): string {
             v-for="(p, i) in points"
             :key="'rd' + i"
             :cx="xAt(i)"
-            :cy="yAt(p.revenue)"
+            :cy="yAt(p.revenue ?? 0)"
+            :opacity="p.revenue === null ? 0 : 1"
             r="2.5"
             fill="var(--color-accent)"
           />
@@ -225,7 +234,8 @@ function fmtInt(v: number): string {
             v-for="(p, i) in points"
             :key="'pd' + i"
             :cx="xAt(i)"
-            :cy="yAt(p.profit)"
+            :cy="yAt(p.profit ?? 0)"
+            :opacity="p.profit === null ? 0 : 1"
             r="2.5"
             fill="var(--color-green)"
           />
@@ -243,8 +253,8 @@ function fmtInt(v: number): string {
             stroke-dasharray="3 3"
             opacity="0.6"
           />
-          <circle :cx="xAt(hoverIdx)" :cy="yAt((hover as FinanceTrendPoint).revenue)" r="3.5" fill="var(--color-accent)" />
-          <circle :cx="xAt(hoverIdx)" :cy="yAt((hover as FinanceTrendPoint).profit)" r="3.5" fill="var(--color-green)" />
+          <circle v-if="hover?.revenue != null" :cx="xAt(hoverIdx)" :cy="yAt(hover.revenue)" r="3.5" fill="var(--color-accent)" />
+          <circle v-if="hover?.profit != null" :cx="xAt(hoverIdx)" :cy="yAt(hover.profit)" r="3.5" fill="var(--color-green)" />
         </g>
       </svg>
 
@@ -255,6 +265,8 @@ function fmtInt(v: number): string {
         :style="{ left: `${hoverLeftPct}%` }"
       >
         <p class="mb-0.5 font-medium text-text">{{ hover.date }}</p>
+        <p class="text-muted">{{ t('finance.dailyCoverage', { ...hover.coverage }) }}</p>
+        <p class="text-muted">{{ t('finance.rechargeCoverage', hover.rechargeCoverage) }}</p>
         <p class="flex items-center justify-between gap-3 text-muted">
           <span>{{ t('finance.colRecharge') }}</span><span class="tnum text-text">{{ fmtCash(hover.recharge) }}</span>
         </p>

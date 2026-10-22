@@ -600,6 +600,7 @@ export class Sub2apiAdminClient implements EngineAdminClient {
         costUnit: 'USD',
         // 🔴 营收口径=实际扣费(actual_cost，客户真付)，非标准计费(total_cost，仅 1 倍标价参考)。
         cost: s.total_actual_cost ?? s.total_cost ?? 0,
+        billingSource: typeof s.total_actual_cost === 'number' && Number.isFinite(s.total_actual_cost) ? 'billed' : 'list_price',
         ...(typeof s.total_account_cost === 'number' ? { accountCost: s.total_account_cost } : {}),
       };
     },
