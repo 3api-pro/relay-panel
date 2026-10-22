@@ -38,6 +38,10 @@ relay-panel collapses that into one control plane:
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+## v2.6.0: Customer knowledge and model capability records
+
+Publish setup guides, FAQs, runbooks and model capability records from a site-scoped knowledge workspace. Drafts and immutable history remain private; owners preview and publish a separate snapshot, restore old versions as new drafts, or revoke public access. Model support requires dated human evidence, with untested capabilities shown as unknown; the panel sends no inference probes.
+
 ## v2.5.0: Case-scoped collaboration
 
 The collaboration workspace adds email-bound, single-use invitations for suppliers, resellers, operations, support and finance. Owners explicitly share a separate title and brief for eligible cases. Collaborators can reply and submit results for owner review; internal evidence, costs, credentials and workspace permissions are not inherited. Access expires within 90 days and can be revoked immediately. Invitees need an existing account with a verified email; invitation links are copied manually, not emailed automatically.
