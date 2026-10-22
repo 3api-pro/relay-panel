@@ -1,7 +1,8 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { makeTestServer, type TestServer } from './helpers.js';
 import { budgetPolicies, budgetEvents, observationRuns, observedRequests, operators, sites, notifications, organizations, organizationMembers } from '../src/db/schema.js';
+import * as notificationService from '../src/notifications/service.js';
 import { Budgets, budgetWindow, startBudgetWorker } from '../src/services/budgets.js';
 import { beijingDay } from '../src/services/observations.js';
 import { toPgTimestamp } from '../src/auth/sessions.js';
@@ -111,6 +112,16 @@ describe('budgets from existing evidence', () => {
     const monthly = (await call('POST', base, { ...input, siteId, name: 'Calendar month', period: 'month', notify: false })).json().item;
     const r = (await call('GET', `${base}/${monthly.id}/report`)).json().report;
     expect(r.window.from).toBe(today.slice(0, 8) + '01'); expect(r.missingDays).toBe(r.window.days.length - 1); expect(r.completeDays).toBe(0);
+  });
+  it('rolls back threshold evidence if the notification cannot be queued, then retries safely', async () => {
+    const p = (await call('POST', base, { ...input, siteId, name: 'Atomic notification check', amountUsd: 10 })).json().item;
+    const service = new Budgets(ts.db, ts.config), ctx = { role: 'operator' as const, operatorId: owner.operatorId, email: 'budget-owner@example.test' };
+    const failure = vi.spyOn(notificationService, 'queueNotification').mockRejectedValueOnce(new Error('Queue unavailable'));
+    try { await expect(service.evaluate(ctx, p.id)).rejects.toThrow('Queue unavailable'); } finally { failure.mockRestore(); }
+    expect(await ts.db.orm.select().from(budgetEvents).where(eq(budgetEvents.policyId, p.id))).toEqual([]);
+    expect((await service.evaluate(ctx, p.id)).eventCreated).toBe(true);
+    expect((await service.evaluate(ctx, p.id)).eventCreated).toBe(false);
+    expect(await ts.db.orm.select().from(budgetEvents).where(eq(budgetEvents.policyId, p.id))).toHaveLength(1);
   });
   it('denies cross-origin writes and bounds policy count', async () => {
     const r = await ts.app.inject({ method: 'POST', url: base, cookies: { rp_session: owner.cookie }, headers: { origin: 'https://untrusted.test' }, payload: { ...input, siteId } }); expect(r.statusCode).toBe(403);
