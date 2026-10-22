@@ -21,5 +21,6 @@
   "export": "Download audit CSV",
   "recovery": "Upgrades & recovery",
   "recoveryHint": "Back up before upgrading, check readiness before switching traffic, and preserve the current database when rolling back code to avoid losing recent payments.",
-  "onboarding": "Start managing your sites"
+  "onboarding": "Start managing your sites",
+  "excludedArchives": "Maintenance archives excluded from this backup"
 }

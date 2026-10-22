@@ -31,7 +31,8 @@ export async function performPanelBackup(db: Db, config: Config, actor = 'system
     const path = join(folder, file);
     if (db.kind === 'pg') {
       // Password goes through environment only; never argv, error payloads, or manifests.
-      await run(config.pgDumpCommand, ['--format=custom', '--no-owner', '--no-privileges', '--file', path], {
+      await run(config.pgDumpCommand, ['--format=custom', '--no-owner', '--no-privileges',
+        ...config.backupExcludeTables.map(table => `--exclude-table=${table}`), '--file', path], {
         env: { ...process.env, ...pgEnvFromUrl(config.dbUrl) }, timeout: 600_000, maxBuffer: 1024 * 1024,
       });
     } else {
@@ -45,7 +46,8 @@ export async function performPanelBackup(db: Db, config: Config, actor = 'system
     for await (const chunk of createReadStream(path)) hash.update(chunk);
     const sha256 = hash.digest('hex');
     const manifest = { format: 1, database: db.kind, startedAt, completedAt: new Date().toISOString(), file, bytes, sha256,
-      scope: 'panel-database', encryptionKeyIncluded: false, remoteEnginesIncluded: false };
+      scope: 'panel-database', encryptionKeyIncluded: false, remoteEnginesIncluded: false,
+      excludedTables: db.kind === 'pg' ? config.backupExcludeTables : [] };
     await writeFile(join(folder, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 });
     const result = { ...manifest, folder, status: 'success' };
     await db.orm.insert(appSettings).values({ key: BACKUP_STATE, value: result, updatedAt: toPgTimestamp(new Date()) })

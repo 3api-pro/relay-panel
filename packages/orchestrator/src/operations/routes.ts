@@ -41,6 +41,7 @@ export function registerOperationsRoutes(app: FastifyInstance, { db, config }: {
       accountEmailReady: accountMailReady(config), emailVerificationRequired: config.emailVerificationRequired,
       adminMfaRequired: config.adminMfaRequired, adminsWithoutMfa: missingMfa?.count ?? 0,
       backup: backup?.value ?? null, automaticBackupEnabled: config.backupIntervalMs > 0,
+      backupExcludedTables: config.backupExcludeTables,
       backupOverdue: !Number.isFinite(lastCompleted) || Date.now() - lastCompleted > Math.max(86_400_000, config.backupIntervalMs * 1.5),
       paidUnfulfilled: pending?.count ?? 0, failedNotifications: failedMail?.count ?? 0,
       migrations: (await db.orm.select({ name: schemaMigrations.name }).from(schemaMigrations)).map(x => x.name),

@@ -34,6 +34,7 @@ export interface Config {
   adminMfaRequired: boolean;
   localProvisionEnabled: boolean;
   backupDirectory: string;
+  backupExcludeTables: string[];
   backupIntervalMs: number;
   pgDumpCommand: string;
   /** 监听端口 */
@@ -126,6 +127,8 @@ export interface Config {
 }
 
 const envSchema = z.object({
+  RP_BACKUP_EXCLUDE_TABLES: z.string().default('').transform(v => [...new Set(v.split(',').map(x => x.trim()).filter(Boolean))])
+    .refine(names => names.every(n => /^public\.ops_backup_[a-z0-9_]+$/.test(n)), 'Only explicitly named maintenance archive tables may be excluded'),
   RP_BACKUP_DIRECTORY: z.string().default('./data/panel-backups'),
   RP_BACKUP_INTERVAL_MS: z.coerce.number().int().min(0).default(0),
   RP_PG_DUMP_COMMAND: z.string().default('pg_dump'),
@@ -232,6 +235,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 
   return {
     backupDirectory: e.RP_BACKUP_DIRECTORY,
+    backupExcludeTables: e.RP_BACKUP_EXCLUDE_TABLES,
     backupIntervalMs: e.RP_BACKUP_INTERVAL_MS,
     pgDumpCommand: e.RP_PG_DUMP_COMMAND,
     deploymentMode: e.RP_DEPLOYMENT_MODE,

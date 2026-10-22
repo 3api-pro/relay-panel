@@ -11,11 +11,18 @@ import { estimateCharge } from '../src/finance/reconciliation.js';
 import { notifications, operators } from '../src/db/schema.js';
 import { queueNotification, deliverNotifications } from '../src/notifications/service.js';
 import { toPgTimestamp } from '../src/auth/sessions.js';
+import { loadConfig } from '../src/config.js';
 import type { UsageRecord } from '@relay-panel/adapter-core';
 
 let ts: TestServer; let temp: string | undefined;
 afterEach(async () => { await ts?.close(); if (temp) await rm(temp, { recursive: true, force: true }); temp = undefined; });
 describe('recovery and financial evidence', () => {
+  it('allows explicit maintenance archive exclusions but never core tables, wildcards or command flags', () => {
+    expect(loadConfig({ RP_BACKUP_EXCLUDE_TABLES: 'public.ops_backup_old, public.ops_backup_old' }).backupExcludeTables).toEqual(['public.ops_backup_old']);
+    for (const name of ['public.operators', 'public.*', '--schema-only', 'ops_backup_old', 'public.ops_backup_*']) {
+      expect(() => loadConfig({ RP_BACKUP_EXCLUDE_TABLES: name })).toThrow();
+    }
+  });
   it('restores an online PGlite snapshot including new security and customer-operation tables', async () => {
     temp = await mkdtemp(join(tmpdir(), 'relay-recovery-'));
     ts = await makeTestServer({ config: { backupDirectory: temp } });

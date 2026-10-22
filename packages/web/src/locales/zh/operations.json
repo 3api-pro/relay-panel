@@ -21,5 +21,6 @@
   "export": "下载审计 CSV",
   "recovery": "升级与恢复",
   "recoveryHint": "升级前备份，先验证新版本就绪，再切换流量。回退程序时保留当前数据库，避免覆盖升级后产生的支付记录。",
-  "onboarding": "开始管理你的站点"
+  "onboarding": "开始管理你的站点",
+  "excludedArchives": "不纳入本次备份的历史维护归档表"
 }

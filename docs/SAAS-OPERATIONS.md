@@ -71,3 +71,7 @@ New API equivalent request-level evidence is not supported. Recharge totals pres
 | Support | `GET/POST /api/support/tickets`, `GET /api/support/tickets/:id`, `POST /api/support/tickets/:id/messages` |
 | Operations | `GET /api/onboarding`, `GET /api/admin/operations`, `POST /api/admin/operations/backup`, `GET /api/audit/export.csv` |
 | Reconciliation | Under `/api/admin/reconciliation`: `GET/POST /`, `GET /:id`, `POST /:id/scan`, `POST /:id/restart`, `GET /:id/export.csv`, `GET/POST /rates`, `POST /rates/:id/void` |
+
+## Restricted legacy maintenance archives
+
+If an installation retains maintenance archive tables that the application role intentionally cannot read, `RP_BACKUP_EXCLUDE_TABLES` can list their exact `public.ops_backup_<name>` names, separated by commas. It defaults empty. Wildcards, other schemas and core application tables are rejected. This does not grant the panel access to old archived credentials. Exclusions appear in the administrator operations page and backup manifest; retain those archives separately if needed.
