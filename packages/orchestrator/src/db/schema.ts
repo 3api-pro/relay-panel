@@ -569,6 +569,25 @@ export const serviceMessages = pgTable('service_messages', {
   status: text('status').notNull(), createdAt: timestamp('created_at', {mode:'string'}).notNull().defaultNow(),
 }, t => [index('service_messages_assignment').on(t.assignmentId,t.id)]);
 
+export const serviceKnowledgeSpaces = pgTable('service_knowledge_spaces', {
+  siteId: integer('site_id').primaryKey().references(() => sites.id), token: text('token').notNull().unique(),
+  title: text('title').notNull(), description: text('description').notNull().default(''), published: boolean('published').notNull().default(false),
+  version: integer('version').notNull().default(1), updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+});
+export const serviceDocuments = pgTable('service_documents', {
+  id: serial('id').primaryKey(), siteId: integer('site_id').notNull().references(() => sites.id), token: text('token').notNull().unique(),
+  draft: jsonb('draft').$type<import('../services/knowledge-content.js').DocumentContent>().notNull(),
+  published: jsonb('published').$type<import('../services/knowledge-content.js').DocumentContent>(), publishedRevision: integer('published_revision'),
+  version: integer('version').notNull().default(1), publishedAt: timestamp('published_at', { mode: 'string' }),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(), updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [index('service_documents_site_idx').on(t.siteId, t.id)]);
+export const serviceDocumentVersions = pgTable('service_document_versions', {
+  id: serial('id').primaryKey(), documentId: integer('document_id').notNull().references(() => serviceDocuments.id),
+  version: integer('version').notNull(), action: text('action').notNull(),
+  content: jsonb('content').$type<import('../services/knowledge-content.js').DocumentContent>().notNull(),
+  actorId: integer('actor_id').notNull().references(() => operators.id), createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [unique('service_document_version_uk').on(t.documentId, t.version)]);
+
 // 常用行类型（下游模块共享，避免各自重复推导）
 export type OperatorRow = typeof operators.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
