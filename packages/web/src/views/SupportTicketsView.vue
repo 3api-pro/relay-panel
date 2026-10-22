@@ -1,53 +1,62 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { get, post } from '../api/client';
+import { get, post, del } from '../api/client';
 import { session } from '../api/session';
 import { Button, Card, Field, Input, Select, EmptyState } from '../components/ui';
-const { t } = useI18n();
-interface Ticket { id: number; subject: string; status: string; version: number }
-const tickets = ref<Ticket[]>([]), selected = ref<Ticket | null>(null);
-const messages = ref<{ id: number; body: string; staff: boolean; createdAt: string }[]>([]);
-const subject = ref(''), body = ref(''), replyText = ref(''), error = ref(''), busy = ref(false);
-const status = ref<string | number | null>('open');
-async function load(): Promise<void> { try { tickets.value = (await get<{ tickets: Ticket[] }>('/api/support/tickets')).tickets; } catch (e) { error.value = String(e); } }
-onMounted(load);
-async function open(ticket: Ticket): Promise<void> {
-  try { const result = await get<{ ticket: Ticket; messages: typeof messages.value }>(`/api/support/tickets/${ticket.id}`); selected.value = result.ticket; messages.value = result.messages; status.value = session.isRoot.value ? 'waiting_customer' : 'open'; }
-  catch (e) { error.value = String(e); }
+const { t, locale } = useI18n(), l = (zh: string, en: string) => locale.value.startsWith('zh') ? zh : en;
+interface Ticket { id: number; subject: string; status: string; version: number; updatedAt: string }
+interface Message { id: number; body: string; staff?: boolean; createdAt: string }
+interface Permissions { staff: boolean; canReply: boolean; canResolve: boolean; canNotes: boolean; canAssign: boolean }
+interface Grant { id: number; email: string; canReply: boolean; canResolve: boolean; canNotes: boolean; expiresAt: string; revokedAt: string | null; version: number; days: string | number }
+const tickets = ref<Ticket[]>([]), selected = ref<Ticket | null>(null), messages = ref<Message[]>([]), notes = ref<Message[]>([]), grants = ref<Grant[]>([]), permissions = ref<Permissions | null>(null);
+const mode = ref('mine'), filter = ref<string | number | null>('all'), search = ref(''), nextCursor = ref<string | null>(null), moreMessages = ref(false), moreNotes = ref(false), moreGrants = ref(false), expiresAt = ref<string | null>(null);
+const newTicketOpen = ref(false);
+const subject = ref(''), body = ref(''), replyText = ref(''), noteText = ref(''), error = ref(''), notice = ref(''), busy = ref(false), status = ref<string | number | null>('open');
+const invite = ref({ email: '', canReply: false, canResolve: false, canNotes: false, days: 30 as string | number });
+const states = computed(() => permissions.value?.staff ? (permissions.value.canResolve ? ['waiting_customer', 'open', 'resolved'] : ['waiting_customer', 'open']) : ['open', 'resolved']);
+const canReply = computed(() => permissions.value?.canReply && !(permissions.value.staff && !permissions.value.canResolve && selected.value?.status === 'resolved'));
+const base = () => `/api/support/tickets/${selected.value!.id}`;
+function reset() { selected.value = null; permissions.value = null; messages.value = []; notes.value = []; grants.value = []; replyText.value = ''; noteText.value = ''; moreMessages.value = false; moreNotes.value = false; moreGrants.value = false; }
+async function action(fn: () => Promise<void>) { if (busy.value) return; busy.value = true; error.value = ''; notice.value = ''; try { await fn(); } catch (e) { error.value = e instanceof Error ? e.message : String(e); reset(); } finally { busy.value = false; } }
+async function load(append = false) { const r = await get<{ tickets: Ticket[]; nextCursor: string | null }>(mode.value === 'assigned' ? '/api/support/assigned' : '/api/support/tickets', { query: { status: filter.value === 'all' ? undefined : filter.value || undefined, q: search.value || undefined, cursor: append ? nextCursor.value ?? undefined : undefined } }); tickets.value = append ? [...tickets.value, ...r.tickets.filter(t => !tickets.value.some(p => p.id === t.id))] : r.tickets; nextCursor.value = r.nextCursor; }
+async function loadNotes(append = false) { const r = await get<{ items: Message[]; hasMore: boolean }>(base() + '/notes', { query: { beforeId: append ? notes.value.at(-1)?.id : undefined } }); notes.value = append ? [...notes.value, ...r.items] : r.items; moreNotes.value = r.hasMore; }
+async function loadGrants(append = false) { const r = await get<{ items: Grant[]; hasMore: boolean }>(base() + '/assignments', { query: { beforeId: append ? grants.value.at(-1)?.id : undefined } }); const rows = r.items.map(g => ({ ...g, days: 30 })); grants.value = append ? [...grants.value, ...rows] : rows; moreGrants.value = r.hasMore; }
+async function open(ticket: Ticket) {
+ reset(); const r = await get<{ ticket: Ticket; messages: Message[]; hasMore: boolean; permissions: Permissions; expiresAt: string | null }>(`/api/support/tickets/${ticket.id}`); selected.value = r.ticket; messages.value = r.messages; moreMessages.value = r.hasMore; permissions.value = r.permissions; expiresAt.value = r.expiresAt; status.value = r.permissions.staff ? 'waiting_customer' : 'open';
+ if (r.permissions.canNotes) await loadNotes(); if (r.permissions.canAssign) await loadGrants();
 }
-async function create(): Promise<void> {
-  busy.value = true; error.value = '';
-  try { const result = await post<{ ticket: Ticket }>('/api/support/tickets', { subject: subject.value, body: body.value }); subject.value = ''; body.value = ''; await load(); await open(result.ticket); }
-  catch (e) { error.value = String(e); } finally { busy.value = false; }
-}
-async function reply(): Promise<void> {
-  if (!selected.value) return; busy.value = true; error.value = '';
-  try { const result = await post<{ ticket: Ticket }>(`/api/support/tickets/${selected.value.id}/messages`, { version: selected.value.version, body: replyText.value, status: status.value }); replyText.value = ''; await load(); await open(result.ticket); }
-  catch (e) { error.value = String(e); } finally { busy.value = false; }
-}
+onMounted(() => action(() => load()));
+async function changeMode(value: string) { await action(async () => { mode.value = value; reset(); await load(); }); }
+async function create() { await action(async () => { const r = await post<{ ticket: Ticket }>('/api/support/tickets', { subject: subject.value, body: body.value }); subject.value = ''; body.value = ''; newTicketOpen.value = false; mode.value = 'mine'; filter.value = 'all'; search.value = ''; await load(); await open(r.ticket); }); }
+async function reply() { await action(async () => { const r = await post<{ ticket: Ticket }>(base() + '/messages', { version: selected.value!.version, body: replyText.value, status: status.value }); await load(); await open(r.ticket); notice.value = l('回复已发送，客户可以在工单中查看。', 'Reply sent. The customer can read it in the ticket.'); }); }
+async function olderMessages() { await action(async () => { const r = await get<{ messages: Message[]; hasMore: boolean; ticket: Ticket }>(base(), { query: { beforeId: messages.value[0]?.id } }); messages.value = [...r.messages, ...messages.value]; moreMessages.value = r.hasMore; /* Keep the rendered conversation version: new replies require an explicit refresh. */ }); }
+async function addNote() { await action(async () => { await post(base() + '/notes', { body: noteText.value }); noteText.value = ''; await loadNotes(); notice.value = l('内部备注已记录，不通知客户。', 'Internal note saved. The customer is not notified.'); }); }
+async function assign() { await action(async () => { await post(base() + '/assignments', { ...invite.value, days: Number(invite.value.days) }); invite.value.email = ''; await loadGrants(); notice.value = l('已授予此工单权限，客服可在“分配给我的”查看。', 'Ticket access granted. It appears under Assigned to me.'); }); }
+async function updateGrant(g: Grant) { await action(async () => { await post(base() + `/assignments/${g.id}`, { version: g.version, canReply: g.canReply, canResolve: g.canResolve, canNotes: g.canNotes, days: Number(g.days) }); await loadGrants(); }); }
+async function revoke(g: Grant) { await action(async () => { await del(base() + `/assignments/${g.id}`); await loadGrants(); }); }
+const isExpired = (g: Grant) => new Date(g.expiresAt + 'Z').getTime() <= Date.now();
 </script>
 <template>
-  <div class="rp-page space-y-5">
-    <h1 class="text-lg font-semibold">{{ t('ops.support') }}</h1><p v-if="error" role="alert" class="text-sm text-red">{{ error }}</p>
-    <Card><template #title>{{ t('ops.newTicket') }}</template><form class="space-y-3" @submit.prevent="create">
-      <Field :label="t('ops.subject')"><Input v-model="subject" required maxlength="120" /></Field>
-      <Field :label="t('ops.description')"><textarea v-model="body" required maxlength="5000" rows="4" class="w-full rounded border border-border bg-panel-2 p-3 text-sm" /></Field>
-      <p class="text-xs text-muted">{{ t('ops.noSecrets') }}</p><Button type="submit" :loading="busy">{{ t('ops.submit') }}</Button>
-    </form></Card>
-    <div class="grid gap-4 md:grid-cols-2">
-      <Card><template #title>{{ t('ops.ticketList') }}</template>
-        <EmptyState v-if="!tickets.length" :title="t('ops.noTickets')" />
-        <button v-for="ticket in tickets" :key="ticket.id" class="block w-full border-b border-border p-3 text-left text-sm hover:bg-panel-2" @click="open(ticket)">#{{ ticket.id }} {{ ticket.subject }} <span class="text-muted">· {{ t(`ops.${ticket.status}`) }}</span></button>
-      </Card>
-      <Card v-if="selected"><template #title>#{{ selected.id }} {{ selected.subject }}</template>
-        <div class="space-y-4"><div v-for="m in messages" :key="m.id" class="rounded bg-panel-2 p-3 text-sm"><p class="mb-2 text-xs text-muted">{{ m.staff ? t('ops.staff') : t('ops.customer') }} · {{ m.createdAt }} UTC</p><p class="whitespace-pre-wrap break-words">{{ m.body }}</p></div>
-          <form class="space-y-3" @submit.prevent="reply"><Field :label="t('ops.reply')"><textarea v-model="replyText" required rows="3" maxlength="5000" class="w-full rounded border border-border bg-panel-2 p-3 text-sm" /></Field>
-            <Select v-model="status" :options="(session.isRoot.value ? ['waiting_customer','open','resolved'] : ['open','resolved']).map(x => ({ value: x, label: t(`ops.${x}`) }))" />
-            <Button type="submit" :loading="busy">{{ t('ops.sendReply') }}</Button>
-          </form>
-        </div>
-      </Card>
-    </div>
+ <div class="rp-page space-y-5">
+  <div><h1 class="text-xl font-semibold">{{ session.isRoot.value ? l('工单与客服管理', 'Tickets and support staff') : t('ops.support') }}</h1><p class="mt-2 text-sm leading-6 text-muted">{{ l('客户对话、客服处理和内部协作集中在同一工单。客服权限按工单单独授予，可随时撤销。', 'Customer conversations, support replies and internal collaboration share one ticket. Staff access is granted per ticket and can be revoked.') }}</p></div>
+  <p v-if="error" role="alert" class="rounded border border-red/30 bg-red/10 p-3 text-sm text-red">{{ error }}</p><p v-if="notice" role="status" class="text-sm text-accent">{{ notice }}</p>
+  <div class="flex flex-wrap gap-2"><Button :variant="mode === 'mine' ? 'primary' : 'outline'" :disabled="busy" @click="changeMode('mine')">{{ session.isRoot.value ? l('全部工单', 'All tickets') : l('我的工单', 'My tickets') }}</Button><Button v-if="!session.isRoot.value" :variant="mode === 'assigned' ? 'primary' : 'outline'" :disabled="busy" @click="changeMode('assigned')">{{ l('分配给我的', 'Assigned to me') }}</Button><Button variant="outline" :disabled="busy" @click="action(async () => { await load(); if (selected) await open(selected); })">{{ l('刷新', 'Refresh') }}</Button></div>
+  <details v-if="mode === 'mine'" :open="newTicketOpen" @toggle="newTicketOpen = ($event.target as HTMLDetailsElement).open" class="rounded-xl border border-border bg-panel p-4"><summary class="cursor-pointer text-sm font-medium">{{ t('ops.newTicket') }}</summary><form class="mt-4 space-y-3" @submit.prevent="create"><fieldset :disabled="busy" class="space-y-3"><Field :label="t('ops.subject')"><Input v-model="subject" required minlength="3" maxlength="120" /></Field><Field :label="t('ops.description')"><textarea v-model="body" required minlength="5" maxlength="5000" rows="4" class="w-full rounded border border-border bg-panel-2 p-3 text-sm" /></Field><p class="text-xs text-muted">{{ t('ops.noSecrets') }}</p><Button type="submit" :loading="busy">{{ t('ops.submit') }}</Button></fieldset></form></details>
+  <form class="flex flex-wrap items-end gap-3" @submit.prevent="action(async () => { reset(); await load(); })"><Field :label="l('标题搜索', 'Search subject')" class="min-w-0 flex-1"><Input v-model="search" maxlength="120" :disabled="busy" /></Field><Field :label="l('工单状态', 'Ticket status')"><Select v-model="filter" :disabled="busy" :options="[{ value: 'all', label: l('全部状态', 'All statuses') }, ...['open','waiting_customer','resolved'].map(x => ({ value: x, label: t(`ops.${x}`) }))]" /></Field><Button type="submit" :disabled="busy">{{ l('筛选', 'Filter') }}</Button></form>
+  <div class="grid items-start gap-5 xl:grid-cols-[minmax(250px,1fr)_minmax(0,2fr)]">
+   <Card class="min-w-0 [&>div]:space-y-3"><h2 class="font-semibold">{{ t('ops.ticketList') }}</h2><p class="text-xs text-muted">{{ l('按最近更新时间排序，有新回复时可刷新。', 'Sorted by latest activity. Refresh for new replies.') }}</p><EmptyState v-if="!tickets.length && !busy" :title="t('ops.noTickets')" /><button v-for="ticket in tickets" :key="ticket.id" :disabled="busy" class="block w-full rounded-lg border border-border p-3 text-left text-sm hover:border-accent disabled:opacity-50" :class="selected?.id === ticket.id ? 'border-accent bg-accent/5' : ''" @click="action(() => open(ticket))"><span class="block break-words font-medium">#{{ ticket.id }} {{ ticket.subject }}</span><span class="mt-1 block text-xs text-muted">{{ t(`ops.${ticket.status}`) }} · {{ ticket.updatedAt }} UTC</span></button><Button v-if="nextCursor" variant="outline" :disabled="busy" @click="action(() => load(true))">{{ l('更多工单', 'More tickets') }}</Button></Card>
+   <div v-if="selected && permissions" class="min-w-0 space-y-4">
+    <Card class="[&>div]:space-y-4"><h2 class="break-words font-semibold">#{{ selected.id }} {{ selected.subject }}</h2><p class="text-xs text-muted">{{ t(`ops.${selected.status}`) }} · v{{ selected.version }}<span v-if="expiresAt"> · {{ l('客服授权到期', 'Staff access expires') }} {{ expiresAt }} UTC</span></p><Button v-if="moreMessages" variant="outline" size="sm" :disabled="busy" @click="olderMessages">{{ l('加载更早对话', 'Load earlier messages') }}</Button><article v-for="m in messages" :key="m.id" class="rounded-lg border border-border bg-panel-2 p-3 text-sm"><p class="mb-2 text-xs text-muted">{{ m.staff ? l('客服团队', 'Support team') : t('ops.customer') }} · {{ m.createdAt }} UTC</p><p class="whitespace-pre-wrap break-words">{{ m.body }}</p></article>
+     <form v-if="canReply" class="space-y-3 border-t border-border pt-4" @submit.prevent="reply"><Field :label="permissions.staff ? l('回复客户（客户可见）', 'Reply to customer (visible to customer)') : t('ops.reply')"><textarea v-model="replyText" required rows="3" maxlength="5000" :disabled="busy" class="w-full rounded border border-border bg-panel-2 p-3 text-sm" /></Field><Field :label="l('回复后状态', 'Status after reply')"><Select v-model="status" :disabled="busy" :options="states.map(x => ({ value: x, label: t(`ops.${x}`) }))" /></Field><Button type="submit" :loading="busy">{{ t('ops.sendReply') }}</Button></form><p v-else class="text-sm text-muted">{{ l('当前权限或工单状态不允许回复，请联系管理员。', 'Current permissions or ticket status do not allow replies. Contact an administrator.') }}</p>
+    </Card>
+    <Card v-if="permissions.canNotes" class="[&>div]:space-y-4"><h2 class="font-semibold">{{ l('内部备注', 'Internal notes') }}</h2><p class="text-xs leading-6 text-muted">{{ l('仅管理员及获准查看内部备注的客服可读。客户不可见，也不会因此收到通知。', 'Only administrators and staff with note access can read these. Customers cannot see them and receive no notification.') }}</p><form class="space-y-3" @submit.prevent="addNote"><Field :label="l('添加内部备注', 'Add internal note')"><textarea v-model="noteText" required maxlength="5000" rows="3" :disabled="busy" class="w-full rounded border border-border bg-panel-2 p-3 text-sm" /></Field><Button type="submit" variant="outline" :disabled="busy">{{ l('保存内部备注', 'Save internal note') }}</Button></form><p v-if="!notes.length" class="text-sm text-muted">{{ l('暂无内部备注。', 'No internal notes.') }}</p><article v-for="n in notes" :key="n.id" class="rounded border border-border p-3 text-sm"><p class="mb-2 text-xs text-muted">{{ n.createdAt }} UTC</p><p class="whitespace-pre-wrap break-words">{{ n.body }}</p></article><Button v-if="moreNotes" variant="outline" :disabled="busy" @click="action(() => loadNotes(true))">{{ l('更早备注', 'Earlier notes') }}</Button></Card>
+    <Card v-if="permissions.canAssign" class="[&>div]:space-y-4"><h2 class="font-semibold">{{ l('此工单的客服权限', 'Staff access to this ticket') }}</h2><p class="text-xs leading-6 text-muted">{{ l('授权对象必须是已有、邮箱已验证的普通账号。授权后可阅读本工单的完整客户对话；内部备注需另行勾选。不会创建账号或授予站点、账单权限。每个工单最多 10 个有效授权，最长 90 天。', 'Choose an existing regular account with a verified email. Access includes this ticket’s full customer conversation; internal notes require separate permission. No account, site or billing access is created. Up to 10 active grants per ticket, for at most 90 days.') }}</p>
+     <form class="space-y-3 rounded border border-border p-3" @submit.prevent="assign"><fieldset :disabled="busy" class="space-y-3"><div class="grid gap-3 sm:grid-cols-2"><Field :label="l('客服账号邮箱', 'Staff account email')"><Input v-model="invite.email" type="email" required maxlength="254" /></Field><Field :label="l('授权天数', 'Access duration (days)')"><Input v-model="invite.days" type="number" min="1" max="90" required /></Field></div><div class="flex flex-wrap gap-4 text-sm"><label class="flex gap-2"><input v-model="invite.canReply" type="checkbox" @change="!invite.canReply && (invite.canResolve = false)" />{{ l('回复客户', 'Reply to customers') }}</label><label class="flex gap-2"><input v-model="invite.canResolve" type="checkbox" :disabled="!invite.canReply" />{{ l('结单与重新打开', 'Resolve and reopen') }}</label><label class="flex gap-2"><input v-model="invite.canNotes" type="checkbox" />{{ l('阅读与添加内部备注', 'Read and add internal notes') }}</label></div><Button type="submit" :disabled="busy">{{ l('授予此工单权限', 'Grant access to this ticket') }}</Button></fieldset></form>
+     <article v-for="g in grants" :key="g.id" class="space-y-3 rounded border border-border p-3"><p class="break-all text-sm font-medium">{{ g.email }}</p><p class="text-xs text-muted">{{ g.revokedAt ? l('已撤销', 'Revoked') : isExpired(g) ? l('已到期', 'Expired') : l('授权有效', 'Active') }} · {{ g.expiresAt }} UTC · v{{ g.version }}</p><form v-if="!g.revokedAt" class="space-y-3" @submit.prevent="updateGrant(g)"><fieldset :disabled="busy" class="space-y-3"><div class="flex flex-wrap gap-4 text-sm"><label class="flex gap-2"><input v-model="g.canReply" type="checkbox" @change="!g.canReply && (g.canResolve = false)" />{{ l('回复客户', 'Reply to customers') }}</label><label class="flex gap-2"><input v-model="g.canResolve" type="checkbox" :disabled="!g.canReply" />{{ l('结单与重新打开', 'Resolve and reopen') }}</label><label class="flex gap-2"><input v-model="g.canNotes" type="checkbox" />{{ l('阅读与添加内部备注', 'Read and add internal notes') }}</label></div><Field :label="l('续期天数（从保存时起）', 'Renewal days (from saving)')"><Input v-model="g.days" type="number" min="1" max="90" required /></Field><div class="flex flex-wrap gap-2"><Button type="submit" variant="outline" size="sm">{{ l('保存权限并续期', 'Save permissions and renew') }}</Button><Button variant="outline" size="sm" @click="revoke(g)">{{ l('撤销授权', 'Revoke access') }}</Button></div></fieldset></form></article><Button v-if="moreGrants" variant="outline" :disabled="busy" @click="action(() => loadGrants(true))">{{ l('更早授权', 'Earlier grants') }}</Button>
+    </Card>
+   </div>
+   <EmptyState v-else :title="l('选择工单查看对话', 'Select a ticket to read the conversation')" />
   </div>
+ </div>
 </template>
