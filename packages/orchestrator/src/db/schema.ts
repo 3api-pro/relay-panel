@@ -409,7 +409,7 @@ export const supportTickets = pgTable('support_tickets', {
   version: integer('version').notNull().default(1),
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
-}, t => [index('support_tickets_owner_idx').on(t.operatorId, t.id)]);
+}, t => [index('support_tickets_owner_idx').on(t.operatorId, t.id), index('support_tickets_updated').on(t.updatedAt, t.id)]);
 
 export const supportMessages = pgTable('support_messages', {
   id: serial('id').primaryKey(),
@@ -418,7 +418,7 @@ export const supportMessages = pgTable('support_messages', {
   staff: boolean('staff').notNull().default(false),
   body: text('body').notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
-});
+}, t => [index('support_messages_ticket').on(t.ticketId, t.id)]);
 
 export const organizations = pgTable('organizations', {
   ownerId: integer('owner_id').primaryKey().references(() => operators.id),
@@ -633,3 +633,15 @@ export const financeSubmissions = pgTable('finance_submissions', {
   status: text('status').notNull().default('submitted'), decision: text('decision'), decidedAt: timestamp('decided_at', { mode: 'string' }),
   decidedBy: integer('decided_by').references(() => operators.id), version: integer('version').notNull().default(1), createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
 }, t => [index('finance_submissions_access').on(t.accessId, t.id), uniqueIndex('finance_submission_pending').on(t.accessId, t.scopeVersion).where(sql`${t.status}='submitted'`)]);
+
+export const supportAssignments = pgTable('support_assignments', {
+  id: serial('id').primaryKey(), ticketId: integer('ticket_id').notNull().references(() => supportTickets.id),
+  operatorId: integer('operator_id').notNull().references(() => operators.id), email: text('email').notNull(), assignedBy: integer('assigned_by').notNull().references(() => operators.id),
+  canReply: boolean('can_reply').notNull().default(false), canResolve: boolean('can_resolve').notNull().default(false), canNotes: boolean('can_notes').notNull().default(false),
+  expiresAt: timestamp('expires_at', { mode: 'string' }).notNull(), revokedAt: timestamp('revoked_at', { mode: 'string' }), version: integer('version').notNull().default(1),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(), updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [uniqueIndex('support_assignment_active').on(t.ticketId, t.operatorId).where(sql`${t.revokedAt} IS NULL`), index('support_assignment_operator').on(t.operatorId, t.ticketId)]);
+export const supportInternalNotes = pgTable('support_internal_notes', {
+  id: serial('id').primaryKey(), ticketId: integer('ticket_id').notNull().references(() => supportTickets.id), actorId: integer('actor_id').notNull().references(() => operators.id),
+  body: text('body').notNull(), createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [index('support_note_ticket').on(t.ticketId, t.id)]);

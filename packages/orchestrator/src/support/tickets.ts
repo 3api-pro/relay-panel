@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Config } from '../config.js';
@@ -9,18 +9,23 @@ import { toPgTimestamp } from '../auth/sessions.js';
 import { securityLimit } from '../auth/security.js';
 import { withBillingTransaction } from '../billing/transaction.js';
 import { writeAudit } from '../audit.js';
+import { activeAssignees, encodeCursor, supportParse, ticketContext, ticketDto, ticketId } from './access.js';
+import { registerSupportAssignmentRoutes, ticketListInput, ticketListConditions } from './assignments.js';
 import { queueNotification } from '../notifications/service.js';
 
 export function registerTicketRoutes(app: FastifyInstance, { db, config }: { db: Db; config: Config }): void {
+  registerSupportAssignmentRoutes(app, { db });
   app.get('/api/support/tickets', async req => {
     const ctx = req.ctx!;
     if (ctx.role === 'viewer') throw new ApiError(403, '只读角色无工单权限');
-    return { tickets: await db.orm.select().from(supportTickets).where(ctx.role === 'root' ? undefined : eq(supportTickets.operatorId, ctx.operatorId))
-      .orderBy(desc(supportTickets.updatedAt), desc(supportTickets.id)).limit(200) };
+    const q = supportParse(ticketListInput, req.query);
+    const rows = await db.orm.select().from(supportTickets).where(and(ctx.role === 'root' ? undefined : eq(supportTickets.operatorId, ctx.operatorId), ticketListConditions(q)))
+      .orderBy(desc(supportTickets.updatedAt), desc(supportTickets.id)).limit(51);
+    return { tickets: rows.slice(0, 50).map(ticketDto), nextCursor: rows.length > 50 ? encodeCursor(rows[49]!) : null };
   });
   app.post('/api/support/tickets', async (req, reply) => {
     const ctx = req.ctx!; requireWrite(ctx);
-    const body = z.object({ subject: z.string().trim().min(3).max(120), body: z.string().trim().min(5).max(5000) }).safeParse(req.body);
+    const body = z.object({ subject: z.string().trim().min(3).max(120), body: z.string().trim().min(5).max(5000) }).strict().safeParse(req.body);
     if (!body.success) throw new ApiError(400, '请填写标题和问题描述');
     await securityLimit(db, `tickets:${ctx.operatorId}`, 10, 3_600_000);
     const ticket = await withBillingTransaction(db, ctx.operatorId, async tx => {
@@ -35,37 +40,41 @@ export function registerTicketRoutes(app: FastifyInstance, { db, config }: { db:
     return reply.code(201).send({ ticket });
   });
   app.get<{ Params: { id: string } }>('/api/support/tickets/:id', async req => {
-    const ctx = req.ctx!;
-    const [ticket] = await db.orm.select().from(supportTickets).where(and(eq(supportTickets.id, Number(req.params.id)),
-      ctx.role === 'root' ? undefined : eq(supportTickets.operatorId, ctx.operatorId)));
-    if (!ticket || ctx.role === 'viewer') throw new ApiError(404, '工单不存在');
-    const messages = await db.orm.select({ id: supportMessages.id, body: supportMessages.body, staff: supportMessages.staff, createdAt: supportMessages.createdAt })
-      .from(supportMessages).where(eq(supportMessages.ticketId, ticket.id)).orderBy(asc(supportMessages.id)).limit(500);
-    return { ticket, messages };
+    const q = supportParse(z.object({ beforeId: ticketId.optional() }).strict(), req.query);
+    return db.orm.transaction(async orm => {
+      const c = await ticketContext(orm, req.ctx!, supportParse(ticketId, req.params.id));
+      const rows = await orm.select({ id: supportMessages.id, body: supportMessages.body, staff: supportMessages.staff, createdAt: supportMessages.createdAt })
+        .from(supportMessages).where(and(eq(supportMessages.ticketId, c.ticket.id), q.beforeId ? sql`${supportMessages.id}<${q.beforeId}` : undefined)).orderBy(desc(supportMessages.id)).limit(101);
+      return { ticket: ticketDto(c.ticket), messages: rows.slice(0, 100).reverse(), hasMore: rows.length > 100,
+        permissions: { staff: c.staff, canReply: c.canReply, canResolve: c.canResolve, canNotes: c.canNotes, canAssign: req.ctx!.role === 'root' }, expiresAt: c.assignment?.expiresAt ?? null };
+    });
   });
   app.post<{ Params: { id: string } }>('/api/support/tickets/:id/messages', async req => {
     const ctx = req.ctx!; requireWrite(ctx);
-    const parsed = z.object({ version: z.number().int().positive(), body: z.string().trim().min(1).max(5000),
-      status: z.enum(['open', 'waiting_customer', 'resolved']).optional() }).safeParse(req.body);
-    if (!parsed.success) throw new ApiError(400, '请填写回复内容');
-    const body = parsed.data;
-    if (body.status === 'waiting_customer' && ctx.role !== 'root') throw new ApiError(403, '仅管理员可设置等待客户回复');
-    const [ticket] = await db.orm.select().from(supportTickets).where(and(eq(supportTickets.id, Number(req.params.id)),
-      ctx.role === 'root' ? undefined : eq(supportTickets.operatorId, ctx.operatorId)));
-    if (!ticket) throw new ApiError(404, '工单不存在');
+    const body = supportParse(z.object({ version: z.number().int().positive(), body: z.string().trim().min(1).max(5000),
+      status: z.enum(['open', 'waiting_customer', 'resolved']).optional() }).strict(), req.body);
     await securityLimit(db, `ticket-reply:${ctx.operatorId}`, 60, 3_600_000);
-    return withBillingTransaction(db, ticket.operatorId, async tx => {
-      const [updated] = await tx.orm.update(supportTickets).set({ status: body.status ?? (ctx.role === 'root' ? 'waiting_customer' : 'open'),
-        version: body.version + 1, updatedAt: toPgTimestamp(new Date()),
-      }).where(and(eq(supportTickets.id, ticket.id), eq(supportTickets.version, body.version))).returning();
-      if (!updated) throw new ApiError(409, '工单已有新回复，请刷新后重试');
-      await tx.orm.insert(supportMessages).values({ ticketId: ticket.id, actorId: ctx.operatorId, staff: ctx.role === 'root', body: body.body });
-      await writeAudit(tx, { actor: ctx.email, action: 'support.reply', payload: { ticketId: ticket.id, status: updated.status }, ok: true });
-      const recipients = ctx.role === 'root' ? [{ id: ticket.operatorId }]
-        : await tx.orm.select({ id: operators.id }).from(operators).where(and(eq(operators.role, 'root'), eq(operators.status, 'active')));
-      for (const recipient of recipients) await queueNotification(tx, config, { operatorId: recipient.id, category: 'support',
-        key: `ticket:${ticket.id}:${updated.version}:${recipient.id}`, subject: '支持工单有新回复', body: `工单 #${ticket.id}：${ticket.subject}。请登录面板查看回复。` });
-      return { ticket: updated };
+    return db.orm.transaction(async orm => {
+      const c = await ticketContext(orm, ctx, supportParse(ticketId, req.params.id)), ticket = c.ticket, tx = { ...db, orm };
+      if (!c.canReply) throw new ApiError(403, '当前工单授权只允许阅读');
+      if (body.status === 'resolved' && !c.canResolve) throw new ApiError(403, '当前授权不允许结单');
+      if (body.status === 'waiting_customer' && !c.staff) throw new ApiError(403, '仅客服可设置等待客户回复');
+      // Reopening a resolved case is also a resolution action for delegated staff.
+      if (ticket.status === 'resolved' && c.staff && !c.canResolve) throw new ApiError(403, '当前授权不允许重新打开已结单工单');
+      if (ticket.version !== body.version) throw new ApiError(409, '工单已有新回复，请刷新后重试');
+      const [updated] = await orm.update(supportTickets).set({ status: body.status ?? (c.staff ? 'waiting_customer' : 'open'), version: body.version + 1, updatedAt: toPgTimestamp(new Date()) })
+        .where(eq(supportTickets.id, ticket.id)).returning();
+      await orm.insert(supportMessages).values({ ticketId: ticket.id, actorId: ctx.operatorId, staff: c.staff, body: body.body });
+      await writeAudit(tx, { actor: ctx.email, action: 'support.reply', payload: { ticketId: ticket.id, status: updated!.status, ...(c.assignment ? { assignmentId: c.assignment.id } : {}) }, ok: true });
+      const roots = await orm.select({ id: operators.id }).from(operators).where(and(eq(operators.role, 'root'), eq(operators.status, 'active')));
+      const recipients = new Map<number, string | undefined>();
+      if (c.staff) recipients.set(ticket.operatorId, undefined);
+      if (ctx.role !== 'root') for (const root of roots) recipients.set(root.id, undefined);
+      for (const a of await activeAssignees(orm, ticket.id)) recipients.set(a.id, a.expiresAt);
+      recipients.delete(ctx.operatorId);
+      for (const [recipient, expiresAt] of recipients) await queueNotification(tx, config, { operatorId: recipient, category: 'support', ...(expiresAt ? { expiresAt } : {}),
+        key: `ticket:${ticket.id}:${updated!.version}:${recipient}`, subject: '支持工单有新回复', body: `工单 #${ticket.id} 有新回复，请登录面板查看。` });
+      return { ticket: ticketDto(updated!) };
     });
   });
 }
