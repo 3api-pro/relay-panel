@@ -1,11 +1,12 @@
 import { defineConfig } from 'vitest/config';
+import vue from '@vitejs/plugin-vue';
 
 /**
- * web 纯逻辑单测配置（不加载 vue/tailwind 插件，node 环境）：
- * 只覆盖从 SFC 抽出的纯函数（如 billing-renew），不做组件挂载，零新依赖。
- * 组件渲染仍由 vue-tsc 类型检查 + vite build 保证。
+ * Node 环境覆盖纯逻辑及 SFC 初始渲染；复用现有 Vue 插件，不加载 Tailwind。
+ * 交互和布局另由管理员浏览器验收。
  */
 export default defineConfig({
+  plugins: [vue()],
   test: {
     environment: 'node',
     include: ['test/**/*.test.ts'],

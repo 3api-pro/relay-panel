@@ -38,6 +38,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', component: OverviewView, meta: { title: '总览' } },
       { path: 'finance', component: () => import('./views/FinanceView.vue'), meta: { title: '经营' } },
+      { path: 'settlements', component: () => import('./views/SettlementsView.vue'), meta: { title: '合作结算单' } },
       { path: 'finance-access', component: () => import('./views/FinanceAccessView.vue'), meta: { title: '财务协作' } },
       { path: 'budgets', component: () => import('./views/BudgetsView.vue'), meta: { title: '预算与阈值提醒' } },
       { path: 'knowledge', component: () => import('./views/KnowledgeView.vue'), meta: { title: '客户知识库' } },
