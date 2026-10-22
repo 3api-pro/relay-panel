@@ -38,6 +38,12 @@ relay-panel collapses that into one control plane:
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+## v2.11.0: Partner statements and partial receipt records
+
+Create site-scoped USD/CNY payable or receivable statements with six-decimal amounts, credit lines, billing periods and due dates. Accepted finance cost snapshots can seed drafts while preserving collection gaps. Issuing freezes the document; partial receipts, void corrections, outstanding recorded amounts and CSV exports retain history.
+
+Suppliers, resellers and finance collaborators receive only explicitly shared statements and can acknowledge or dispute them. A preview shows the public document and receipts; internal notes and raw cost evidence remain private. Receipt entries are operator-verified records, not confirmation by the panel of provider settlement. No payments, refunds or engine balance changes are executed.
+
 ## v2.10.0: Reviewable engine user quotas
 
 Administrators can configure Sub2API user/platform quotas directly from budgets or risk management. A write is bound to a ten-minute preview, recorded durably before execution, checked for drift and independently read back. Duplicate submissions never repeat a successful write. Uncertain results fence further writes for that user until reviewed; administrators can read back or document acceptance of the observed configuration. Missing fields are rejected instead of treated as unlimited.
