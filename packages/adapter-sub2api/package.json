@@ -1,6 +1,6 @@
 {
   "name": "@relay-panel/adapter-sub2api",
-  "version": "2.13.1",
+  "version": "2.13.2",
   "type": "module",
   "license": "MIT",
   "main": "dist/index.js",
