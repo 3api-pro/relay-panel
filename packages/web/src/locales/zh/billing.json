@@ -21,7 +21,7 @@
   "selectPlan": "选择套餐档位",
   "durationMonths": "时长（月）",
   "durationHint": "1 至 120 个月",
-  "grantNote": "若该操作员已有有效订阅，将在现有到期时间基础上顺延对应月数。",
+  "grantNote": "仅开通新订阅或续费同一套餐；有效期内换套餐请由用户确认变更报价。1 个月按 30 天计算。",
   "confirmGrant": "确认开通",
   "cancelTitle": "取消订阅",
   "cancelMessage": "将取消 {email} 的「{plan}」订阅，该操作员立即失去套餐权益。",
@@ -89,5 +89,33 @@
   "providerConfigInvalid": "配置必须是合法 JSON",
   "providerSaved": "渠道已保存",
   "providerDeleted": "渠道已删除",
-  "configuredKeys": "已配置键"
+  "configuredKeys": "已配置键",
+  "allOrders": "平台订单与对账（最近 200 笔）",
+  "reconcile": "重新核对",
+  "reconcileReasons": {
+    "legacy_paid_requires_review": "历史已付订单的开通记录需人工核实，系统不会重复补开。",
+    "provider_query_failed": "渠道查单暂时失败，等待重试。",
+    "fulfillment_retry_required": "付款已确认，订阅尚未开通，将自动重试。",
+    "subscription_changed_requires_review": "订阅在付款期间已变化，需核实付款和现有权益后处理。",
+    "payment_mismatch_requires_review": "渠道返回的交易信息未通过校验，需核实订单、金额和币种。"
+  },
+  "changePlan": "变更套餐",
+  "quoteLoading": "正在计算实际应付金额…",
+  "confirmChange": "确认到期变更",
+  "changeScheduled": "付款已确认，套餐将于当前周期结束后变更",
+  "pendingChange": "已安排在 {date} 到期后切换为「{plan}」，当前权益保留至到期。",
+  "cancelChange": "取消免费降级安排",
+  "changeKind": {
+    "purchase": "新购",
+    "renewal": "续费",
+    "upgrade": "升级补差价",
+    "downgrade": "到期降级"
+  },
+  "changeNote": {
+    "purchase": "支付后开通，1 个月按 30 天计算。",
+    "renewal": "同套餐续费按当前订阅单价计算，预计到期：{date}。",
+    "upgrade": "按当前剩余时间补差价，支付后立即升级，原到期日 {date} 不变。",
+    "downgrade": "当前权益保留至 {date}，届时切换到新套餐。付费套餐现在预付后续周期费用，已有站点不会被停止。"
+  },
+  "sameExpiry": "到期日不变"
 }

@@ -21,7 +21,7 @@
   "selectPlan": "Select a plan tier",
   "durationMonths": "Duration (months)",
   "durationHint": "1 to 120 months",
-  "grantNote": "If this operator already has an active subscription, the months are added on top of the current expiry date.",
+  "grantNote": "Grant a new subscription or renew the same plan. Active plan changes require a confirmed quote. Each month is 30 days.",
   "confirmGrant": "Confirm",
   "cancelTitle": "Cancel Subscription",
   "cancelMessage": "This cancels the \"{plan}\" subscription for {email}; the operator immediately loses plan access.",
@@ -89,5 +89,33 @@
   "providerConfigInvalid": "Config must be valid JSON",
   "providerSaved": "Provider saved",
   "providerDeleted": "Provider deleted",
-  "configuredKeys": "Configured keys"
+  "configuredKeys": "Configured keys",
+  "allOrders": "Platform orders & reconciliation (latest 200)",
+  "reconcile": "Reconcile",
+  "reconcileReasons": {
+    "legacy_paid_requires_review": "Legacy paid order requires review of prior fulfillment before any additional grant.",
+    "provider_query_failed": "Payment provider query failed. Retrying is safe.",
+    "fulfillment_retry_required": "Payment confirmed. Subscription activation will retry automatically.",
+    "subscription_changed_requires_review": "The subscription changed during payment. Payment and existing benefits need review.",
+    "payment_mismatch_requires_review": "Payment verification failed. Review the order, amount and currency."
+  },
+  "changePlan": "Change plan",
+  "quoteLoading": "Calculating your payment…",
+  "confirmChange": "Schedule change",
+  "changeScheduled": "Payment confirmed. The plan changes at the end of the current period.",
+  "pendingChange": "Scheduled to switch to {plan} on {date}. Your current benefits remain until then.",
+  "cancelChange": "Cancel free downgrade",
+  "changeKind": {
+    "purchase": "Purchase",
+    "renewal": "Renewal",
+    "upgrade": "Prorated upgrade",
+    "downgrade": "Scheduled downgrade"
+  },
+  "changeNote": {
+    "purchase": "Starts after payment. Each month is 30 days.",
+    "renewal": "Renews at your current subscription rate. Expected expiry: {date}.",
+    "upgrade": "Pay the difference for the remaining term. Starts after payment; expiry stays {date}.",
+    "downgrade": "Your current benefits remain until {date}. Paid plans charge the next period now. Existing sites keep running."
+  },
+  "sameExpiry": "Same expiry"
 }

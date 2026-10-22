@@ -3,6 +3,8 @@ import type { Db } from '../db/client.js';
 import { plans, sites, subscriptions, type PlanRow, type SubscriptionRow } from '../db/schema.js';
 import { ApiError } from '../auth/rbac.js';
 import { fromPgTimestamp, toPgTimestamp } from '../auth/sessions.js';
+import { withBillingTransaction } from './transaction.js';
+import { applyDueChanges, applyDueChangeLocked } from './changes.js';
 
 /**
  * 计费/配额服务（规格 §9）。
@@ -35,6 +37,7 @@ export async function activeSubscription(
   operatorId: number,
   graceDays = 0,
 ): Promise<SubscriptionRow | null> {
+  await applyDueChanges(db, operatorId);
   const cutoffPg = toPgTimestamp(new Date(Date.now() - Math.max(0, graceDays) * DAY_MS));
   const rows = await db.orm
     .select()
@@ -77,6 +80,7 @@ export async function subscriptionState(
   operatorId: number,
   graceDays = 0,
 ): Promise<SubscriptionState> {
+  await applyDueChanges(db, operatorId);
   const now = Date.now();
   const graceMs = Math.max(0, graceDays) * DAY_MS;
 
@@ -169,11 +173,20 @@ export interface SubscribeInput {
 }
 
 /**
- * 开通/顺延订阅：已有 status=active 订阅 → 从 max(now, currentPeriodEnd) 顺延并切换套餐
+ * 手工开通/同套餐顺延：从 max(now, currentPeriodEnd) 顺延；有效期内换套餐须使用变更报价
  * （到期前续费=在原到期日上叠加；过期后续费=从现在起算），并清空 reminders_sent（新周期重新计各档提醒）；
  * 否则新建一条。存在多条 active（异常态）时取最晚到期的一条顺延，其余收敛为 expired 保持每人至多一条 active。
  */
 export async function subscribeOperator(db: Db, input: SubscribeInput): Promise<SubscriptionRow> {
+  return withBillingTransaction(db, input.operatorId, tx => subscribeOperatorLocked(tx, input));
+}
+
+/** Caller must hold the operator lock for the entire entitlement/order transaction. */
+export async function subscribeOperatorLocked(db: Db, input: SubscribeInput): Promise<SubscriptionRow> {
+  await applyDueChangeLocked(db, input.operatorId);
+  const plan = await planByKey(db, input.planKey);
+  if (!plan?.active) throw new ApiError(404, '套餐不存在');
+  if (!Number.isInteger(input.months) || input.months < 1 || input.months > 120) throw new ApiError(400, '无效的月数');
   const now = new Date();
   const nowPg = toPgTimestamp(now);
   const extendMs = input.months * 30 * DAY_MS;
@@ -186,12 +199,17 @@ export async function subscribeOperator(db: Db, input: SubscribeInput): Promise<
   const chosen = activeRows[0];
 
   if (chosen) {
+    if (chosen.pendingChange) throw new ApiError(409, '已有到期变更安排，不能直接顺延');
+    if (chosen.planKey !== input.planKey && fromPgTimestamp(chosen.currentPeriodEnd).getTime() > now.getTime()) {
+      throw new ApiError(409, '有效期内换套餐须通过套餐变更报价，不能直接覆盖剩余权益');
+    }
     // 续费基准：max(now, 现到期)——过期未收敛(active 但已过期)的行从现在起算，未到期的顺延
     const base = Math.max(now.getTime(), fromPgTimestamp(chosen.currentPeriodEnd).getTime());
     const rows = await db.orm
       .update(subscriptions)
       .set({
         planKey: input.planKey,
+        monthlyPrice: chosen.planKey === input.planKey ? chosen.monthlyPrice ?? plan.priceMonthly : plan.priceMonthly,
         currentPeriodEnd: toPgTimestamp(new Date(base + extendMs)),
         remindersSent: {},
         updatedAt: nowPg,
@@ -219,6 +237,7 @@ export async function subscribeOperator(db: Db, input: SubscribeInput): Promise<
     .values({
       operatorId: input.operatorId,
       planKey: input.planKey,
+      monthlyPrice: plan.priceMonthly,
       currentPeriodEnd: toPgTimestamp(new Date(now.getTime() + extendMs)),
     })
     .returning();
@@ -227,14 +246,14 @@ export async function subscribeOperator(db: Db, input: SubscribeInput): Promise<
 
 /** 取消订阅（幂等：已取消的再取消不报错） */
 export async function cancelSubscription(db: Db, id: number): Promise<SubscriptionRow> {
-  const rows = await db.orm
-    .update(subscriptions)
-    .set({ status: 'cancelled', updatedAt: toPgTimestamp(new Date()) })
-    .where(eq(subscriptions.id, id))
-    .returning();
-  const row = rows[0];
-  if (!row) throw new ApiError(404, '订阅不存在');
-  return row;
+  const existing = (await db.orm.select().from(subscriptions).where(eq(subscriptions.id, id)))[0];
+  if (!existing) throw new ApiError(404, '订阅不存在');
+  return withBillingTransaction(db, existing.operatorId, async tx => {
+    const row = (await tx.orm.select().from(subscriptions).where(eq(subscriptions.id, id)))[0]!;
+    if (row.pendingChange?.orderNo) throw new ApiError(409, '有已付款的到期变更，须核实退款后再取消');
+    return (await tx.orm.update(subscriptions).set({ status: 'cancelled', pendingChange: null,
+      updatedAt: toPgTimestamp(new Date()) }).where(eq(subscriptions.id, id)).returning())[0]!;
+  });
 }
 
 export interface CheckoutOperator {

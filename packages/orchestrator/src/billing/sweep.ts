@@ -1,3 +1,4 @@
+import { applyDueChanges } from './changes.js';
 import { and, desc, eq } from 'drizzle-orm';
 import type { Config, SmtpSettings } from '../config.js';
 import type { Db } from '../db/client.js';
@@ -164,7 +165,7 @@ export function startBillingSweep(deps: BillingSweepDeps, intervalMs: number): B
     base: string | null,
     now: number,
   ): Promise<Record<string, string>> {
-    if (smtp === null) return {}; // 未配 SMTP：静默跳过（收敛仍照常）
+    if (smtp === null || sub.pendingChange) return {}; // 未配 SMTP：静默跳过（收敛仍照常）
     const due = dueReminders(sub, graceDays, now);
     if (due.length === 0) return {};
 
@@ -226,6 +227,7 @@ export function startBillingSweep(deps: BillingSweepDeps, intervalMs: number): B
     if (ticking) return;
     ticking = true;
     try {
+      await applyDueChanges(db);
       const now = Date.now();
       const base = await panelBaseUrl();
       // 计划标题查表缓存（一轮内复用）

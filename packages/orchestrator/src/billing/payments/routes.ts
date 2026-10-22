@@ -20,6 +20,7 @@ const checkoutBody = z.object({
   planKey: z.string().min(1),
   months: z.number().int().min(1).max(120),
   providerKey: z.string().min(1),
+  quoteId: z.string().uuid().optional(),
 });
 
 const providerUpsertBody = z.object({
@@ -71,6 +72,10 @@ export function registerPaymentRoutes(app: FastifyInstance, deps: PaymentRoutesD
   app.post<{ Params: { orderNo: string } }>('/api/billing/orders/:orderNo/cancel', async (req) => {
     const ctx = requireCtx(req);
     return { order: await service.cancelOrder(ctx, req.params.orderNo) };
+  });
+
+  app.post<{ Params: { orderNo: string } }>('/api/billing/orders/:orderNo/reconcile', async req => {
+    return { order: await service.retryOrder(requireCtx(req), req.params.orderNo) };
   });
 
   // 我的订单；root 加 ?all=1 看全量
@@ -126,7 +131,7 @@ export function registerPaymentWebhooks(app: FastifyInstance, deps: PaymentRoute
         return reply.type(ack.contentType).send(ack.body);
       } catch (err) {
         // 不回显细节（避免给探测者反馈面）；服务端日志走 fastify logger
-        req.log.warn({ err }, 'payment webhook rejected');
+        req.log.warn('payment webhook rejected');
         return reply.code(400).send({ error: 'webhook rejected' });
       }
     });

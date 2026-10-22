@@ -235,6 +235,10 @@ export const subscriptions = pgTable('subscriptions', {
   planKey: text('plan_key').notNull(),
   status: text('status').notNull().default('active'), // active|expired|cancelled
   currentPeriodEnd: timestamp('current_period_end', { mode: 'string' }).notNull(),
+  monthlyPrice: numeric('monthly_price', { precision: 10, scale: 2, mode: 'number' }),
+  pendingChange: jsonb('pending_change').$type<{
+    planKey: string; monthlyPrice: number; months: number; effectiveAt: string; orderNo: string | null;
+  }>(),
   // 到期提醒台账：各档（t7/t1/expiry/graceEnd）已发时间戳；续费顺延后清空重新计。
   // 幂等依据——扫描循环据此保证「同档绝不重发」。
   remindersSent: jsonb('reminders_sent').$type<Record<string, string>>().notNull().default({}),
@@ -267,6 +271,10 @@ export const paymentOrders = pgTable('payment_orders', {
   amount: numeric('amount', { precision: 10, scale: 2, mode: 'number' }).notNull(),
   providerKey: text('provider_key').notNull(),
   providerTradeNo: text('provider_trade_no'),
+  providerConfigRef: text('provider_config_ref'),
+  fulfillmentVersion: integer('fulfillment_version').notNull().default(0),
+  reconciliationError: text('reconciliation_error'),
+  lastCheckedAt: timestamp('last_checked_at', { mode: 'string' }),
   status: text('status').notNull().default('pending'),
   payUrl: text('pay_url'),
   qrCode: text('qr_code'),
@@ -274,8 +282,17 @@ export const paymentOrders = pgTable('payment_orders', {
   paidAt: timestamp('paid_at', { mode: 'string' }),
   completedAt: timestamp('completed_at', { mode: 'string' }),
   detail: jsonb('detail').$type<Record<string, unknown>>(),
+  billingQuote: jsonb('billing_quote').$type<import('../billing/changes.js').BillingQuote>(),
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+});
+
+export const billingQuotes = pgTable('billing_quotes', {
+  id: text('id').primaryKey(),
+  operatorId: integer('operator_id').notNull().references(() => operators.id),
+  quote: jsonb('quote').$type<import('../billing/changes.js').BillingQuote>().notNull(),
+  expiresAt: timestamp('expires_at', { mode: 'string' }).notNull(),
+  usedAt: timestamp('used_at', { mode: 'string' }),
 });
 
 /** 全局键值设置。已知 key: 'credential_db'(registry 导入的 credentialDb 原样 JSON)、'alert_webhook_url'({url:string})、'support_contact'({email?,url?,docsUrl?}) */

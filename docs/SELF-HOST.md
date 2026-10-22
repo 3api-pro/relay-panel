@@ -66,6 +66,7 @@ docker compose up -d
 | `RP_SMTP_FROM` | 无 | 告警邮件发件地址（须为合法邮箱） |
 | `RP_SMTP_ALLOW_INSECURE` | `0` | 🔴 默认拒绝在未加密连接上发送 AUTH 凭据（防 STARTTLS-stripping：上游未通告/被中间人剥掉 STARTTLS 时直接报错而非明文发口令）。仅本机/内网调试可设 `1` 放行 |
 | `RP_BILLING_GRACE_DAYS` | 3 | 订阅到期后仍按原计划生效的宽限天数；0=到期即回落 free。宽限只影响新建站配额，绝不停站 |
+| `RP_PAYMENT_RECONCILE_INTERVAL_MS` | 60000 | 支付核对周期：重试已付未开通单，并核对最近 7 天未完成订单；每轮至多 25 单，0=关闭后台核对 |
 | `RP_BILLING_SWEEP_INTERVAL_MS` | 3600000 | 计费扫描周期：收敛过期订阅 + 发到期提醒邮件；0=关闭该循环 |
 | `RP_REPORT_SWEEP_INTERVAL_MS` | `0`（关） | 日报/周报自动发送 + 毛利/成本阈值评估的循环周期。**默认关**，避免刚上线就对薄利站发噪音；页面内"发送测试报告"不受此开关限制 |
 | `RP_REPORT_DAILY` / `RP_REPORT_WEEKLY` | `1` | 上面循环开启后，分别控制日报/周报是否发送 |

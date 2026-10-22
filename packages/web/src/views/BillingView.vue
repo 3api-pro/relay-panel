@@ -40,6 +40,8 @@ interface BillingPlan {
 interface PlansResponse {
   plans: BillingPlan[];
 }
+interface BillingQuote { id: string; kind: 'purchase' | 'renewal' | 'upgrade' | 'downgrade'; amount: number; effectiveAt: string; periodEnd: string; expiresAt: string }
+interface PendingChange { planKey: string; effectiveAt: string; orderNo: string | null }
 type SubscriptionPhase = 'active' | 'grace' | 'expired' | 'none';
 interface SubscriptionSummary {
   plan: { key: string; title: string; priceMonthly: number; siteQuota: number | null } | null;
@@ -51,6 +53,7 @@ interface SubscriptionSummary {
   currentPeriodEnd?: string | null;
   graceEndsAt?: string | null;
   daysRemaining?: number | null;
+  pendingChange?: PendingChange | null;
 }
 interface SubscriptionRow {
   id: number;
@@ -61,6 +64,7 @@ interface SubscriptionRow {
   currentPeriodEnd: string | null;
   createdAt: string;
   updatedAt: string;
+  pendingChange?: PendingChange | null;
 }
 interface SubscriptionsResponse {
   subscriptions: SubscriptionRow[];
@@ -83,6 +87,9 @@ interface OrderView {
   paidAt: string | null;
   createdAt: string;
   operatorEmail?: string;
+  reconciliationError?: string | null;
+  lastCheckedAt?: string | null;
+  change?: BillingQuote | null;
 }
 interface ProviderView {
   key: string;
@@ -274,6 +281,11 @@ async function submitGrant(): Promise<void> {
 // ---- 自助购买（operator）----
 const methods = ref<PaymentMethod[]>([]);
 const myOrders = ref<OrderView[]>([]);
+const ordersError = ref('');
+const quote = ref<BillingQuote | null>(null);
+const quoteLoading = ref(false);
+const quoteError = ref('');
+let quoteRequest = 0;
 const showBuy = ref(false);
 const buyPlan = ref<BillingPlan | null>(null);
 const buyMonths = ref<number | string>(1);
@@ -287,11 +299,28 @@ const buyMonthsNum = computed(() => Number(buyMonths.value));
 const buyMonthsValid = computed(
   () => Number.isInteger(buyMonthsNum.value) && buyMonthsNum.value >= 1 && buyMonthsNum.value <= 120,
 );
-const buyTotal = computed(() => {
-  if (!buyPlan.value || !buyMonthsValid.value) return null;
-  return Math.round(buyPlan.value.priceMonthly * buyMonthsNum.value * 100) / 100;
-});
-const canSubmitBuy = computed(() => buyPlan.value !== null && buyMethod.value !== '' && buyMonthsValid.value);
+const buyTotal = computed(() => quote.value?.amount ?? null);
+const canSubmitBuy = computed(() => buyPlan.value !== null && quote.value !== null && !quoteLoading.value &&
+  (quote.value.amount === 0 || buyMethod.value !== '') && buyMonthsValid.value);
+const changingUp = computed(() => phase.value === 'active' && !!buyPlan.value &&
+  buyPlan.value.key !== sub.value?.plan?.key && buyPlan.value.priceMonthly > (sub.value?.plan?.priceMonthly ?? 0));
+async function loadQuote(): Promise<void> {
+  const request = ++quoteRequest;
+  quote.value = null; quoteError.value = '';
+  if (!showBuy.value || !buyPlan.value || !buyMonthsValid.value) { quoteLoading.value = false; return; }
+  quoteLoading.value = true;
+  try {
+    const r = await post<{ quote: BillingQuote }>('/api/billing/quote', { planKey: buyPlan.value.key, months: buyMonthsNum.value }, { silent: true });
+    if (request === quoteRequest) quote.value = r.quote;
+  } catch (error) {
+    if (request === quoteRequest) quoteError.value = error instanceof Error ? error.message : t('billing.loadFailed');
+  } finally { if (request === quoteRequest) quoteLoading.value = false; }
+}
+watch([showBuy, buyPlan, buyMonths], () => void loadQuote());
+async function cancelScheduledChange(): Promise<void> {
+  await del('/api/billing/changes');
+  await loadCore();
+}
 const methodOptions = computed<SelectOption[]>(() => methods.value.map((m) => ({ value: m.key, label: m.name })));
 /** 自助购买入口：operator（root/viewer 不限额，无购买语义） */
 const selfServe = computed(() => canWrite?.value === true && !isRoot.value);
@@ -368,11 +397,12 @@ async function loadMethods(): Promise<void> {
 }
 
 async function loadMyOrders(): Promise<void> {
+  ordersError.value = '';
   try {
-    const r = await get<{ orders: OrderView[] }>('/api/billing/orders', { silent: true });
+    const r = await get<{ orders: OrderView[] }>(isRoot.value ? '/api/billing/orders?all=1' : '/api/billing/orders', { silent: true });
     myOrders.value = Array.isArray(r?.orders) ? r.orders : [];
-  } catch {
-    myOrders.value = [];
+  } catch (error) {
+    ordersError.value = error instanceof Error ? error.message : t('billing.loadFailed');
   }
 }
 
@@ -384,13 +414,19 @@ function openBuy(p: BillingPlan): void {
 }
 
 async function submitBuy(): Promise<void> {
-  if (!canSubmitBuy.value || !buyPlan.value) return;
+  if (!canSubmitBuy.value || !buyPlan.value || !quote.value) return;
+  if (toMs(quote.value.expiresAt) <= Date.now()) { await loadQuote(); return; }
   buySubmitting.value = true;
   try {
+    if (quote.value.amount === 0) {
+      await post('/api/billing/changes', { quoteId: quote.value.id });
+      showBuy.value = false; await loadCore(); return;
+    }
     const r = await post<{ order: OrderView }>('/api/billing/checkout', {
       planKey: buyPlan.value.key,
       months: buyMonthsNum.value,
       providerKey: buyMethod.value,
+      quoteId: quote.value.id,
     });
     showBuy.value = false;
     activeOrder.value = r.order;
@@ -413,7 +449,7 @@ watch(activeOrder, async (order) => {
       qrDataUrl.value = '';
     }
   }
-  if (order.status === 'pending') startPolling(order.orderNo);
+  if (order.status === 'pending' || order.status === 'paid') startPolling(order.orderNo);
 });
 
 function startPolling(orderNo: string): void {
@@ -432,10 +468,10 @@ async function pollOrder(orderNo: string): Promise<void> {
     if (activeOrder.value?.orderNo !== orderNo) return;
     const prevQr = activeOrder.value.qrCode;
     activeOrder.value = { ...r.order, qrCode: prevQr ?? r.order.qrCode };
-    if (r.order.status !== 'pending') {
+    if (r.order.status !== 'pending' && r.order.status !== 'paid') {
       stopPolling();
       if (r.order.status === 'completed') {
-        toast.success(t('billing.paySuccess'));
+        toast.success(t(r.order.change?.kind === 'downgrade' ? 'billing.changeScheduled' : 'billing.paySuccess'));
         await Promise.all([loadCore(), loadMyOrders()]);
       }
     }
@@ -463,6 +499,14 @@ function closePayModal(): void {
 
 onBeforeUnmount(stopPolling);
 
+const reconciling = ref<string | null>(null);
+async function reconcileOrder(order: OrderView): Promise<void> {
+  reconciling.value = order.orderNo;
+  try {
+    await post(`/api/billing/orders/${order.orderNo}/reconcile`);
+    await Promise.all([loadMyOrders(), loadCore(), ...(isRoot.value ? [loadSubscriptions()] : [])]);
+  } catch { /* API client displays the error. */ } finally { reconciling.value = null; }
+}
 const orderColumns = computed<TableColumn[]>(() => [
   { key: 'orderNo', label: t('billing.colOrderNo'), mono: true },
   { key: 'planKey', label: t('billing.plan') },
@@ -663,6 +707,10 @@ async function doCancel(): Promise<void> {
       </div>
     </section>
 
+    <div v-if="selfServe && sub?.pendingChange" class="rounded-xl border border-accent/30 bg-accent/10 p-4 text-sm">
+      <p>{{ t('billing.pendingChange', { plan: planTitle(sub.pendingChange.planKey), date: fmtDate(sub.pendingChange.effectiveAt) }) }}</p>
+      <Button v-if="!sub.pendingChange.orderNo" variant="ghost" size="sm" class="mt-2" @click="cancelScheduledChange">{{ t('billing.cancelChange') }}</Button>
+    </div>
     <!-- 套餐档位 -->
     <section ref="plansSection">
       <p class="rp-microlabel mb-3">{{ t('billing.plansSection') }}</p>
@@ -708,17 +756,17 @@ async function doCancel(): Promise<void> {
             </li>
           </ul>
 
-          <div v-if="selfServe && p.priceMonthly > 0" class="mt-auto pt-4">
+          <div v-if="selfServe && (p.priceMonthly > 0 || (phase === 'active' && !isCurrentPlan(p.key)))" class="mt-auto pt-4">
             <Button
               block
               :variant="isCurrentPlan(p.key) ? 'outline' : 'primary'"
-              :disabled="methods.length === 0"
+              :disabled="!!sub?.pendingChange || (p.priceMonthly > 0 && methods.length === 0)"
               @click="openBuy(p)"
             >
               <Wallet :size="14" />
-              {{ isCurrentPlan(p.key) ? t('billing.renew') : t('billing.buy') }}
+              {{ isCurrentPlan(p.key) ? t('billing.renew') : t(phase === 'active' ? 'billing.changePlan' : 'billing.buy') }}
             </Button>
-            <p v-if="methods.length === 0" class="mt-1.5 text-center text-[11px] text-muted/80">
+            <p v-if="p.priceMonthly > 0 && methods.length === 0" class="mt-1.5 text-center text-[11px] text-muted/80">
               {{ t('billing.noPayMethods') }}
             </p>
           </div>
@@ -727,10 +775,14 @@ async function doCancel(): Promise<void> {
     </section>
 
     <!-- 我的订单 -->
-    <Card v-if="selfServe && myOrders.length > 0" :padded="false">
-      <template #title>{{ t('billing.myOrders') }}</template>
-      <Table :columns="orderColumns" :rows="orderRows" row-key="orderNo" :empty="t('billing.noOrders')">
-        <template #cell-planKey="{ row }">{{ planTitle(String(row.planKey)) }}</template>
+    <Card v-if="selfServe || isRoot" :padded="false">
+      <template #title><h2 class="text-[13px] font-semibold">{{ t(isRoot ? 'billing.allOrders' : 'billing.myOrders') }}</h2></template>
+      <template #actions><Button size="sm" variant="ghost" @click="loadMyOrders">{{ t('common.refresh') }}</Button></template>
+      <p v-if="ordersError" class="p-4 text-sm text-red" role="alert">{{ ordersError }}</p>
+      <Table v-else :columns="orderColumns" :rows="orderRows" row-key="orderNo" :empty="t('billing.noOrders')">
+        <template #cell-orderNo="{ row }"><span class="font-mono">{{ row.orderNo }}</span><p v-if="isRoot" class="mt-1 text-xs text-muted">{{ row.operatorEmail }}</p></template>
+        <template #cell-planKey="{ row }">{{ planTitle(String(row.planKey)) }}<p v-if="asOrder(row).change" class="mt-1 text-xs text-muted">{{ t(`billing.changeKind.${asOrder(row).change?.kind}`) }}</p></template>
+        <template #cell-months="{ row }">{{ asOrder(row).change?.kind === 'upgrade' ? t('billing.sameExpiry') : row.months }}</template>
         <template #cell-amount="{ row }">
           <span class="tnum">¥{{ asOrder(row).amount.toFixed(2) }}</span>
         </template>
@@ -748,6 +800,9 @@ async function doCancel(): Promise<void> {
           >
             {{ orderStatusText(asOrder(row).status) }}
           </Badge>
+          <p v-if="asOrder(row).reconciliationError" class="mt-1 max-w-64 text-xs text-amber">{{ t(`billing.reconcileReasons.${asOrder(row).reconciliationError}`) }}</p>
+          <Button v-if="asOrder(row).status !== 'completed'" size="sm" variant="ghost" class="mt-1"
+            :loading="reconciling === asOrder(row).orderNo" :disabled="reconciling !== null" @click="reconcileOrder(asOrder(row))">{{ t('billing.reconcile') }}</Button>
         </template>
         <template #cell-createdAt="{ row }">{{ fmtDate(asOrder(row).createdAt) }}</template>
       </Table>
@@ -812,6 +867,9 @@ async function doCancel(): Promise<void> {
       >
         <template #cell-planKey="{ row }">
           {{ planTitle(String(row.planKey)) }}
+          <p v-if="asRow(row).pendingChange" class="mt-1 max-w-64 text-xs text-muted">
+            {{ t('billing.pendingChange', { plan: planTitle(asRow(row).pendingChange!.planKey), date: fmtDate(asRow(row).pendingChange!.effectiveAt) }) }}
+          </p>
         </template>
         <template #cell-status="{ row }">
           <StatusDot :status="String(row.status)" />
@@ -862,12 +920,15 @@ async function doCancel(): Promise<void> {
     <!-- 购买 Modal -->
     <Modal v-model:open="showBuy" :title="t('billing.buyModalTitle', { plan: buyPlan?.title ?? '' })" width="460px">
       <div class="space-y-4">
-        <Field :label="t('billing.durationMonths')" required :hint="t('billing.durationHint')">
+        <Field v-if="!changingUp && buyPlan?.priceMonthly" :label="t('billing.durationMonths')" required :hint="t('billing.durationHint')">
           <Input v-model="buyMonths" type="number" placeholder="1" autofocus />
         </Field>
-        <Field :label="t('billing.payMethod')" required>
+        <Field v-if="buyTotal !== 0" :label="t('billing.payMethod')" required>
           <Select v-model="buyMethod" :options="methodOptions" :placeholder="t('billing.selectPayMethod')" />
         </Field>
+        <p v-if="quoteLoading" class="text-sm text-muted">{{ t('billing.quoteLoading') }}</p>
+        <p v-if="quoteError" role="alert" class="text-sm text-red">{{ quoteError }}</p>
+        <p v-if="quote" class="text-sm text-muted">{{ t(`billing.changeNote.${quote.kind}`, { date: fmtDate(quote.kind === 'downgrade' ? quote.effectiveAt : quote.periodEnd) }) }}</p>
         <div class="flex items-baseline justify-between rounded-lg border border-border bg-panel-2/50 px-3 py-2.5">
           <span class="text-xs text-muted">{{ t('billing.totalAmount') }}</span>
           <span class="tnum text-lg font-semibold">{{ buyTotal !== null ? `¥${buyTotal.toFixed(2)}` : '—' }}</span>
@@ -876,7 +937,7 @@ async function doCancel(): Promise<void> {
       <template #footer>
         <Button variant="ghost" :disabled="buySubmitting" @click="showBuy = false">{{ t('common.cancel') }}</Button>
         <Button variant="primary" :disabled="!canSubmitBuy" :loading="buySubmitting" @click="submitBuy">
-          {{ t('billing.createOrder') }}
+          {{ t(buyTotal === 0 ? 'billing.confirmChange' : 'billing.createOrder') }}
         </Button>
       </template>
     </Modal>
@@ -891,10 +952,11 @@ async function doCancel(): Promise<void> {
       <div v-if="activeOrder" class="space-y-4 text-center">
         <p class="text-xs text-muted">
           <span class="font-mono">{{ activeOrder.orderNo }}</span>
-          · {{ planTitle(activeOrder.planKey) }} × {{ activeOrder.months }}
+          · {{ planTitle(activeOrder.planKey) }} <span v-if="activeOrder.months">× {{ activeOrder.months }}</span>
         </p>
         <p class="tnum text-2xl font-semibold">¥{{ activeOrder.amount.toFixed(2) }}</p>
 
+        <p v-if="activeOrder.reconciliationError" class="text-sm text-amber">{{ t(`billing.reconcileReasons.${activeOrder.reconciliationError}`) }}</p>
         <template v-if="activeOrder.status === 'pending'">
           <div v-if="qrDataUrl" class="flex flex-col items-center gap-2">
             <img :src="qrDataUrl" alt="QR" class="rounded-xl border border-border bg-white p-2" width="220" height="220" />
@@ -915,7 +977,7 @@ async function doCancel(): Promise<void> {
 
         <div v-else-if="activeOrder.status === 'completed'" class="py-3">
           <p class="flex items-center justify-center gap-1.5 text-sm font-medium text-green">
-            <Check :size="16" /> {{ t('billing.paySuccess') }}
+            <Check :size="16" /> {{ t(activeOrder.change?.kind === 'downgrade' ? 'billing.changeScheduled' : 'billing.paySuccess') }}
           </p>
         </div>
 

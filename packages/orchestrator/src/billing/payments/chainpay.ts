@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   headerValue,
+  paymentCents, PaymentVerificationError, type GatewayExpectedPayment,
   type GatewayCreateInput,
   type GatewayCreateResult,
   type GatewayOrderStatus,
@@ -78,19 +79,26 @@ export class ChainpayGateway implements PaymentGateway {
     const order = (await resp.json()) as { orderId?: string; checkoutUrl?: string; error?: string };
     if (!resp.ok) throw new Error(`ChainPay 建单失败: ${order.error ?? `HTTP ${resp.status}`}`);
     if (!order.orderId || !order.checkoutUrl) throw new Error('ChainPay 建单响应不完整');
-    return { payUrl: order.checkoutUrl, tradeNo: order.orderId };
+    return { payUrl: order.checkoutUrl, tradeNo: order.orderId,
+      settlement: { amount: usdt, currency: 'USDT', chain: this.config.chain?.trim() || 'erc20' } };
   }
 
-  async query(_orderNo: string, tradeNo?: string | null): Promise<GatewayOrderStatus> {
+  async query(orderNo: string, tradeNo?: string | null, expected?: GatewayExpectedPayment): Promise<GatewayOrderStatus> {
     if (!tradeNo) return 'pending';
     const resp = await this.fetchFn(`${this.baseUrl()}/api/v1/orders/${encodeURIComponent(tradeNo)}`, {
       headers: { authorization: `Bearer ${this.config.apiKey}` },
       signal: AbortSignal.timeout(10_000),
     });
     if (!resp.ok) throw new Error(`ChainPay 查单失败: HTTP ${resp.status}`);
-    const data = (await resp.json()) as { status?: string };
+    const data = (await resp.json()) as { status?: string; orderId?: string; externalId?: string; amount?: string;
+      currency?: string; chain?: string; environment?: string };
     switch (data.status) {
       case 'completed':
+        if (!expected?.settlement || data.orderId !== tradeNo || data.externalId !== orderNo ||
+          data.currency !== 'USDT' || data.environment !== 'live' || data.chain !== expected.settlement.chain ||
+          paymentCents(data.amount) !== paymentCents(expected.settlement.amount)) {
+          throw new PaymentVerificationError('ChainPay 订单、币种或冻结金额不匹配');
+        }
         return 'paid';
       case 'expired':
         return 'expired';

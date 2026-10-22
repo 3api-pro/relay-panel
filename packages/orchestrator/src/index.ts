@@ -10,6 +10,7 @@ import { JobEngine } from './jobs/engine.js';
 import { lifecycleStepSink, makeStoreCredential } from './sites/service.js';
 import { startMonitor } from './alerts/engine.js';
 import { EmailNotifier, FanoutNotifier, WebhookNotifier } from './alerts/notify.js';
+import { startPaymentReconciliation } from './billing/payments/reconcile.js';
 import { startBillingSweep } from './billing/sweep.js';
 import { startFinanceReports } from './finance/scheduler.js';
 import { startRiskScan } from './risk/service.js';
@@ -149,7 +150,11 @@ const customerSnapshot =
     ? startCustomerSnapshot({ config, db, adapters, notifier }, config.crmSnapshotIntervalMs)
     : null;
 
+const paymentReconciliation = !config.demo
+  ? startPaymentReconciliation({ config, db }, config.paymentReconcileIntervalMs) : null;
+
 async function shutdown(): Promise<void> {
+  paymentReconciliation?.stop();
   stopLedgerPull?.();
   customerSnapshot?.stop();
   riskScan?.stop();

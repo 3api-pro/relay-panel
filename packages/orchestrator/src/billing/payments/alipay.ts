@@ -1,6 +1,7 @@
 import { createSign, createVerify } from 'node:crypto';
 import {
   formatPem,
+  paymentCents, PaymentVerificationError, type GatewayExpectedPayment,
   type GatewayCreateInput,
   type GatewayCreateResult,
   type GatewayOrderStatus,
@@ -104,10 +105,11 @@ export class AlipayGateway implements PaymentGateway {
     if (!node) throw new Error(`支付宝响应缺少 ${nodeKey}`);
     // 响应验签：对原文中该节点的精确子串验签（网关对 JSON 原样签名，不能重序列化）
     const sign = typeof parsed.sign === 'string' ? parsed.sign : '';
+    if (node.code === '10000' && !sign) throw new PaymentVerificationError('支付宝响应缺少签名');
     if (sign && parsed[nodeKey] !== undefined) {
       const raw = extractResponseNode(text, nodeKey);
       if (raw === null || !this.verify(raw, sign)) {
-        throw new Error('支付宝响应验签失败');
+        throw new PaymentVerificationError('支付宝响应验签失败');
       }
     }
     return node;
@@ -146,7 +148,7 @@ export class AlipayGateway implements PaymentGateway {
     return `${ALIPAY_GATEWAY}?${new URLSearchParams(params).toString()}`;
   }
 
-  async query(orderNo: string): Promise<GatewayOrderStatus> {
+  async query(orderNo: string, _tradeNo?: string | null, expected?: GatewayExpectedPayment): Promise<GatewayOrderStatus> {
     const node = await this.call('alipay.trade.query', { out_trade_no: orderNo });
     if (node.code !== '10000') {
       if (node.sub_code === TRADE_NOT_EXIST) return 'pending'; // 用户尚未扫码，交易未落
@@ -155,6 +157,11 @@ export class AlipayGateway implements PaymentGateway {
     switch (node.trade_status) {
       case 'TRADE_SUCCESS':
       case 'TRADE_FINISHED':
+        if (!expected || node.out_trade_no !== orderNo || typeof node.trade_no !== 'string' || !node.trade_no ||
+          paymentCents(node.total_amount) !== paymentCents(expected.amountCny) ||
+          (this.config.sellerId && node.seller_id !== this.config.sellerId)) {
+          throw new PaymentVerificationError('支付宝交易与订单金额或收款方不匹配');
+        }
         return 'paid';
       case 'TRADE_CLOSED':
         return 'failed';

@@ -66,6 +66,7 @@ export interface Config {
   billingGraceDays: number;
   /** 计费扫描循环周期（收敛过期状态 + 到期提醒邮件）；0=关闭该后台循环 */
   billingSweepIntervalMs: number;
+  paymentReconcileIntervalMs: number;
   /** 经营日报开关（master default，与 app_settings['finance_report'].daily 逻辑与） */
   reportDaily: boolean;
   /** 经营周报开关（master default，与 app_settings['finance_report'].weekly 逻辑与） */
@@ -138,6 +139,7 @@ const envSchema = z.object({
   RP_MONITOR_INTERVAL_MS: z.coerce.number().int().min(0).default(60_000),
   RP_BALANCE_THRESHOLD: z.coerce.number().min(0).default(0),
   RP_CHANNEL_BALANCE_THRESHOLD: z.coerce.number().min(0).default(0),
+  RP_PAYMENT_RECONCILE_INTERVAL_MS: z.coerce.number().int().min(0).default(60_000),
   RP_BILLING_GRACE_DAYS: z.coerce.number().int().min(0).max(365).default(3),
   RP_BILLING_SWEEP_INTERVAL_MS: z.coerce.number().int().min(0).default(3_600_000),
   RP_REPORT_DAILY: z.enum(['0', '1']).default('1'),
@@ -231,6 +233,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     monitorIntervalMs: e.RP_MONITOR_INTERVAL_MS,
     balanceThreshold: e.RP_BALANCE_THRESHOLD,
     channelBalanceThreshold: e.RP_CHANNEL_BALANCE_THRESHOLD,
+    paymentReconcileIntervalMs: e.RP_PAYMENT_RECONCILE_INTERVAL_MS,
     billingGraceDays: e.RP_BILLING_GRACE_DAYS,
     billingSweepIntervalMs: e.RP_BILLING_SWEEP_INTERVAL_MS,
     reportDaily: e.RP_REPORT_DAILY === '1',

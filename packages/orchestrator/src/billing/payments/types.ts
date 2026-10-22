@@ -26,6 +26,24 @@ export interface GatewayCreateResult {
   qrCode?: string;
   /** 渠道侧订单号（查单用；alipay/wxpay 用我们的 orderNo 查，可不回） */
   tradeNo?: string;
+  settlement?: GatewaySettlement;
+}
+
+export interface GatewaySettlement {
+  amount: number;
+  currency: 'CNY' | 'USDT';
+  chain?: string;
+}
+export interface GatewayExpectedPayment {
+  amountCny: number;
+  settlement?: GatewaySettlement;
+}
+export class PaymentVerificationError extends Error {}
+/** Reject NaN, exponents, negative values and extra precision rather than rounding a mismatch away. */
+export function paymentCents(value: unknown): number {
+  if ((typeof value !== 'string' && typeof value !== 'number') || !/^\d+(\.\d{1,2})?$/.test(String(value))) return NaN;
+  const cents = Math.round(Number(value) * 100);
+  return Number.isSafeInteger(cents) ? cents : NaN;
 }
 
 export type GatewayOrderStatus = 'pending' | 'paid' | 'expired' | 'failed';
@@ -45,7 +63,7 @@ export interface PaymentGateway {
   readonly key: string;
   create(input: GatewayCreateInput): Promise<GatewayCreateResult>;
   /** 主动查单 —— 入账唯一依据 */
-  query(orderNo: string, tradeNo?: string | null): Promise<GatewayOrderStatus>;
+  query(orderNo: string, tradeNo?: string | null, expected?: GatewayExpectedPayment): Promise<GatewayOrderStatus>;
   /** 验签并解析 webhook；验签失败必须抛错（外层回 4xx，渠道会重试） */
   parseWebhook(rawBody: Buffer, headers: WebhookHeaders): Promise<WebhookResult>;
 }

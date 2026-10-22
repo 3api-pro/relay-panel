@@ -2,6 +2,7 @@ import { createDecipheriv, createSign, createVerify, randomBytes, X509Certificat
 import {
   formatPem,
   headerValue,
+  paymentCents, PaymentVerificationError, type GatewayExpectedPayment,
   type GatewayCreateInput,
   type GatewayCreateResult,
   type GatewayOrderStatus,
@@ -73,6 +74,8 @@ export class WxpayGateway implements PaymentGateway {
       }
       throw new Error(`微信支付接口错误: ${code}`);
     }
+    // Certificate bootstrap is authenticated by apiV3Key AEAD; other successful responses require RSA verification.
+    if (path !== '/v3/certificates') await this.verifyResponse(Buffer.from(text), Object.fromEntries(resp.headers.entries()));
     return (text ? JSON.parse(text) : {}) as T;
   }
 
@@ -89,10 +92,12 @@ export class WxpayGateway implements PaymentGateway {
     return { qrCode: resp.code_url, tradeNo: input.orderNo };
   }
 
-  async query(orderNo: string): Promise<GatewayOrderStatus> {
-    let resp: { trade_state?: string };
+  async query(orderNo: string, _tradeNo?: string | null, expected?: GatewayExpectedPayment): Promise<GatewayOrderStatus> {
+    type Transaction = { trade_state?: string; out_trade_no?: string; appid?: string; mchid?: string;
+      transaction_id?: string; amount?: { total?: number; currency?: string } };
+    let resp: Transaction;
     try {
-      resp = await this.call<{ trade_state?: string }>(
+      resp = await this.call<Transaction>(
         'GET',
         `/v3/pay/transactions/out-trade-no/${encodeURIComponent(orderNo)}?mchid=${encodeURIComponent(this.config.mchId ?? '')}`,
       );
@@ -103,6 +108,9 @@ export class WxpayGateway implements PaymentGateway {
     }
     switch (resp.trade_state) {
       case 'SUCCESS':
+        if (!expected || resp.out_trade_no !== orderNo || resp.appid !== this.config.appId || resp.mchid !== this.config.mchId ||
+          !resp.transaction_id || resp.amount?.currency !== 'CNY' || !Number.isSafeInteger(resp.amount.total) ||
+          resp.amount.total !== paymentCents(expected.amountCny)) throw new PaymentVerificationError('微信交易与订单金额或商户不匹配');
         return 'paid';
       case 'CLOSED':
       case 'REVOKED':
@@ -146,20 +154,25 @@ export class WxpayGateway implements PaymentGateway {
     return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
   }
 
-  async parseWebhook(rawBody: Buffer, headers: WebhookHeaders): Promise<WebhookResult> {
+  private async verifyResponse(rawBody: Buffer, headers: WebhookHeaders): Promise<void> {
     const timestamp = headerValue(headers, 'wechatpay-timestamp');
     const nonce = headerValue(headers, 'wechatpay-nonce');
     const signature = headerValue(headers, 'wechatpay-signature');
     const serial = headerValue(headers, 'wechatpay-serial');
-    if (!timestamp || !nonce || !signature || !serial) throw new Error('微信支付通知缺少签名头');
-    if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) throw new Error('微信支付通知时间戳超窗');
+    if (!timestamp || !nonce || !signature || !serial) throw new PaymentVerificationError('微信支付响应缺少签名头');
+    if (!/^\d+$/.test(timestamp) || Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) throw new PaymentVerificationError('微信支付响应时间戳超窗');
 
     await this.ensurePlatformKeys();
+    if (!this.platformKeys.has(serial) && !this.config.publicKeyId) { this.platformKeysAt = 0; await this.ensurePlatformKeys(); }
     const keyPem = this.platformKeys.get(serial);
-    if (keyPem === undefined) throw new Error('微信支付通知证书序列号未知');
+    if (keyPem === undefined) throw new PaymentVerificationError('微信支付响应证书序列号未知');
     const message = `${timestamp}\n${nonce}\n${rawBody.toString('utf8')}\n`;
     const ok = createVerify('RSA-SHA256').update(message, 'utf8').verify(keyPem, signature, 'base64');
-    if (!ok) throw new Error('微信支付通知验签失败');
+    if (!ok) throw new PaymentVerificationError('微信支付响应验签失败');
+  }
+
+  async parseWebhook(rawBody: Buffer, headers: WebhookHeaders): Promise<WebhookResult> {
+    await this.verifyResponse(rawBody, headers);
 
     const body = JSON.parse(rawBody.toString('utf8')) as {
       resource?: { ciphertext: string; nonce: string; associated_data?: string };

@@ -1,3 +1,4 @@
+import { applyDueChanges, quoteChange, scheduleFreeDowngrade, cancelFreeDowngrade } from './changes.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { asc, desc, eq } from 'drizzle-orm';
@@ -75,6 +76,8 @@ function toApiSubscription(row: SubscriptionRow, operatorEmail?: string): Record
     planKey: row.planKey,
     status: row.status,
     currentPeriodEnd: row.currentPeriodEnd,
+    monthlyPrice: row.monthlyPrice,
+    pendingChange: row.pendingChange,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -120,7 +123,7 @@ export function registerBillingRoutes(app: FastifyInstance, deps: BillingRoutesD
     const plan = await planByKey(db, state.sub ? state.sub.planKey : FREE_PLAN_KEY);
     return {
       plan: plan
-        ? { key: plan.key, title: plan.title, priceMonthly: plan.priceMonthly, siteQuota: plan.siteQuota }
+        ? { key: plan.key, title: plan.title, priceMonthly: state.sub?.monthlyPrice ?? plan.priceMonthly, siteQuota: plan.siteQuota }
         : null,
       // periodEnd 保持既有语义：仅当有计配额的有效订阅时给出（前端「到期」展示）
       periodEnd: state.sub ? state.sub.currentPeriodEnd : null,
@@ -130,13 +133,35 @@ export function registerBillingRoutes(app: FastifyInstance, deps: BillingRoutesD
       currentPeriodEnd: state.currentPeriodEnd,
       graceEndsAt: state.graceEndsAt,
       daysRemaining: state.daysRemaining,
+      pendingChange: state.sub?.pendingChange ?? null,
     };
+  });
+
+  app.post('/api/billing/quote', async req => {
+    const ctx = requireCtx(req);
+    if (ctx.role !== 'operator') throw new ApiError(403, '仅站长账户可变更套餐');
+    const body = parseBody(z.object({ planKey: z.string().min(1), months: z.number().int().min(1).max(120) }), req.body);
+    return { quote: await quoteChange(db, ctx.operatorId, body.planKey, body.months) };
+  });
+  app.post('/api/billing/changes', async req => {
+    const ctx = requireCtx(req);
+    if (ctx.role !== 'operator') throw new ApiError(403, '仅站长账户可变更套餐');
+    const body = parseBody(z.object({ quoteId: z.string().uuid() }), req.body);
+    await scheduleFreeDowngrade(db, ctx.operatorId, body.quoteId);
+    return { ok: true };
+  });
+  app.delete('/api/billing/changes', async req => {
+    const ctx = requireCtx(req);
+    if (ctx.role !== 'operator') throw new ApiError(403, '仅站长账户可变更套餐');
+    await cancelFreeDowngrade(db, ctx.operatorId);
+    return { ok: true };
   });
 
   // ---- root: 全部订阅 ----
   app.get('/api/billing/subscriptions', async (req) => {
     const ctx = requireCtx(req);
     requireRoot(ctx);
+    await applyDueChanges(db);
     const rows = await db.orm
       .select({ sub: subscriptions, operatorEmail: operators.email })
       .from(subscriptions)

@@ -27,10 +27,10 @@ const aliRsa = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const aliPrivPem = aliRsa.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
 const aliPubPem = aliRsa.publicKey.export({ type: 'spki', format: 'pem' }).toString();
 
-function mockFetch(handler: (url: string, init?: RequestInit) => { status?: number; body: unknown }): typeof fetch {
+function mockFetch(handler: (url: string, init?: RequestInit) => { status?: number; body: unknown; headers?: Record<string, string> }): typeof fetch {
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const { status = 200, body } = handler(String(input), init);
-    return new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
+    const { status = 200, body, headers } = handler(String(input), init);
+    return new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers });
   }) as typeof fetch;
 }
 
@@ -99,12 +99,22 @@ describe('AlipayGateway', () => {
         body: signedGatewayResponse('alipay_trade_query_response', {
           code: '10000',
           trade_status: s,
-          total_amount: '29.00',
+          total_amount: '29.00', out_trade_no: 'RP1', trade_no: 'ali-tx-1',
         }),
       }));
-    expect(await new AlipayGateway(config, '', byStatus('TRADE_SUCCESS')).query('RP1')).toBe('paid');
+    expect(await new AlipayGateway(config, '', byStatus('TRADE_SUCCESS')).query('RP1', null, { amountCny: 29 })).toBe('paid');
     expect(await new AlipayGateway(config, '', byStatus('WAIT_BUYER_PAY')).query('RP1')).toBe('pending');
     expect(await new AlipayGateway(config, '', byStatus('TRADE_CLOSED')).query('RP1')).toBe('failed');
+  });
+
+  it('paid responses require a signature, exact order and amount', async () => {
+    const paid = { code: '10000', trade_status: 'TRADE_SUCCESS', out_trade_no: 'RP1', trade_no: 'ali-1', total_amount: '29.00' };
+    const unsigned = new AlipayGateway(config, '', mockFetch(() => ({ body: { alipay_trade_query_response: paid } })));
+    await expect(unsigned.query('RP1', null, { amountCny: 29 })).rejects.toThrow('签名');
+    for (const mutation of [{ total_amount: '0.01' }, { out_trade_no: 'other' }, { trade_no: '' }]) {
+      const gateway = new AlipayGateway(config, '', mockFetch(() => ({ body: signedGatewayResponse('alipay_trade_query_response', { ...paid, ...mutation }) })));
+      await expect(gateway.query('RP1', null, { amountCny: 29 })).rejects.toThrow('不匹配');
+    }
   });
 
   it('webhook 验签回路：正签通过、篡改拒绝、app_id 不符拒绝', async () => {
@@ -163,6 +173,11 @@ describe('WxpayGateway', () => {
     publicKeyId: 'PUB_KEY_ID_1',
   };
 
+  function wxResponse(body: unknown) {
+    const text = JSON.stringify(body); const timestamp = Math.floor(Date.now() / 1000).toString(); const nonce = 'fixture-response';
+    return { body: text, headers: { 'wechatpay-timestamp': timestamp, 'wechatpay-nonce': nonce, 'wechatpay-serial': 'PUB_KEY_ID_1',
+      'wechatpay-signature': createSign('RSA-SHA256').update(`${timestamp}\n${nonce}\n${text}\n`).sign(merchantPrivPem, 'base64') } };
+  }
   it('native 建单：带 APIv3 签名头，返回 code_url', async () => {
     let authHeader = '';
     const fetchFn = mockFetch((url, init) => {
@@ -170,7 +185,7 @@ describe('WxpayGateway', () => {
       authHeader = String((init?.headers as Record<string, string>).authorization);
       const body = JSON.parse(String(init?.body)) as { amount: { total: number }; out_trade_no: string };
       expect(body.amount.total).toBe(2900); // 分
-      return { body: { code_url: 'weixin://wxpay/bizpayurl?pr=abc' } };
+      return wxResponse({ code_url: 'weixin://wxpay/bizpayurl?pr=abc' });
     });
     const gw = new WxpayGateway(config, fetchFn);
     const out = await gw.create({ orderNo: 'RPW1', amountCny: 29, subject: 'pro x1' });
@@ -180,12 +195,20 @@ describe('WxpayGateway', () => {
   });
 
   it('查单状态映射 + ORDER_NOT_EXIST 视为 pending', async () => {
-    const byState = (s: string): typeof fetch => mockFetch(() => ({ body: { trade_state: s } }));
-    expect(await new WxpayGateway(config, byState('SUCCESS')).query('RPW1')).toBe('paid');
+    const byState = (s: string): typeof fetch => mockFetch(() => wxResponse({ trade_state: s, out_trade_no: 'RPW1', appid: 'wxappid', mchid: '190000', transaction_id: 'wx-tx-1', amount: { total: 2900, currency: 'CNY' } }));
+    expect(await new WxpayGateway(config, byState('SUCCESS')).query('RPW1', null, { amountCny: 29 })).toBe('paid');
     expect(await new WxpayGateway(config, byState('NOTPAY')).query('RPW1')).toBe('pending');
     expect(await new WxpayGateway(config, byState('CLOSED')).query('RPW1')).toBe('failed');
     const notExist = mockFetch(() => ({ status: 404, body: { code: 'ORDER_NOT_EXIST' } }));
     expect(await new WxpayGateway(config, notExist).query('RPW1')).toBe('pending');
+  });
+
+  it('paid responses require signed bytes and exact merchant, order, currency and amount', async () => {
+    const paid = { trade_state: 'SUCCESS', out_trade_no: 'RPW1', appid: 'wxappid', mchid: '190000', transaction_id: 'wx-tx-1', amount: { total: 2900, currency: 'CNY' } };
+    await expect(new WxpayGateway(config, mockFetch(() => ({ body: paid }))).query('RPW1', null, { amountCny: 29 })).rejects.toThrow('签名');
+    for (const mutation of [{ appid: 'other' }, { mchid: 'other' }, { out_trade_no: 'other' }, { amount: { total: 1, currency: 'CNY' } }, { amount: { total: 2900, currency: 'USD' } }]) {
+      await expect(new WxpayGateway(config, mockFetch(() => wxResponse({ ...paid, ...mutation }))).query('RPW1', null, { amountCny: 29 })).rejects.toThrow('不匹配');
+    }
   });
 
   it('webhook：AES-256-GCM 解密 + 平台签名验证回路；坏签名拒绝', async () => {
@@ -236,10 +259,19 @@ describe('ChainpayGateway', () => {
     expect(created!.externalId).toBe('RPC1');
   });
 
+  it('completed orders must match the frozen settlement and live environment', async () => {
+    const paid = { status: 'completed', orderId: 'cp-1', externalId: 'RPC1', amount: '4.42', currency: 'USDT', chain: 'erc20', environment: 'live' };
+    const expected = { amountCny: 29, settlement: { amount: 4.42, currency: 'USDT' as const, chain: 'erc20' } };
+    for (const mutation of [{ externalId: 'other' }, { orderId: 'other' }, { amount: '0.01' }, { currency: 'USD' }, { chain: 'trc20' }, { environment: 'test' }]) {
+      await expect(new ChainpayGateway(config, mockFetch(() => ({ body: { ...paid, ...mutation } }))).query('RPC1', 'cp-1', expected)).rejects.toThrow('不匹配');
+    }
+    await expect(new ChainpayGateway(config, mockFetch(() => ({ body: paid }))).query('RPC1', 'cp-1', { amountCny: 29 })).rejects.toThrow('不匹配');
+  });
+
   it('查单映射 + webhook HMAC 回路', async () => {
-    const fetchFn = mockFetch(() => ({ body: { status: 'completed' } }));
+    const fetchFn = mockFetch(() => ({ body: { status: 'completed', orderId: 'cp-1', externalId: 'RPC1', amount: '4.42', currency: 'USDT', chain: 'erc20', environment: 'live' } }));
     const gw = new ChainpayGateway(config, fetchFn);
-    expect(await gw.query('RPC1', 'cp-1')).toBe('paid');
+    expect(await gw.query('RPC1', 'cp-1', { amountCny: 29, settlement: { amount: 4.42, currency: 'USDT', chain: 'erc20' } })).toBe('paid');
     expect(await gw.query('RPC1', null)).toBe('pending'); // 无渠道单号
 
     const payload = Buffer.from(JSON.stringify({ event: 'completed', externalId: 'RPC1' }), 'utf8');
@@ -264,6 +296,7 @@ describe('payments E2E（routes + webhook + 入账幂等）', () => {
   let mockBaseUrl: string;
   /** mock ChainPay 的单状态机：orderId -> status */
   const cpOrders = new Map<string, string>();
+  const cpDetails = new Map<string, Record<string, unknown>>();
 
   beforeAll(async () => {
     mockServer = createServer((req, res) => {
@@ -271,9 +304,10 @@ describe('payments E2E（routes + webhook + 入账幂等）', () => {
       req.on('data', (c: Buffer) => chunks.push(c));
       req.on('end', () => {
         if (req.method === 'POST' && req.url === '/api/v1/orders') {
-          const body = JSON.parse(Buffer.concat(chunks).toString()) as { externalId: string };
+          const body = JSON.parse(Buffer.concat(chunks).toString()) as { externalId: string; amount: number; currency: string; chain: string };
           const orderId = `cp-${body.externalId}`;
           if (!cpOrders.has(orderId)) cpOrders.set(orderId, 'pending');
+          cpDetails.set(orderId, { ...body, amount: body.amount.toFixed(2), orderId, environment: 'live' });
           res.setHeader('content-type', 'application/json');
           res.end(
             JSON.stringify({ orderId, checkoutUrl: `${mockBaseUrl}/checkout/${orderId}`, status: 'pending' }),
@@ -283,7 +317,7 @@ describe('payments E2E（routes + webhook + 入账幂等）', () => {
         const m = req.url?.match(/^\/api\/v1\/orders\/(.+)$/);
         if (req.method === 'GET' && m) {
           res.setHeader('content-type', 'application/json');
-          res.end(JSON.stringify({ status: cpOrders.get(decodeURIComponent(m[1]!)) ?? 'pending' }));
+          res.end(JSON.stringify({ ...cpDetails.get(decodeURIComponent(m[1]!)), status: cpOrders.get(decodeURIComponent(m[1]!)) ?? 'pending' }));
           return;
         }
         res.statusCode = 404;
@@ -491,4 +525,23 @@ describe('payments E2E（routes + webhook + 入账幂等）', () => {
     });
     expect((cancelDone.json() as { order: { status: string } }).order.status).toBe('completed');
   });
+  it('late cancelled/expired payments reconcile while a disabled provider rejects new checkout and preserves history', async () => {
+    for (const state of ['cancelled', 'expired']) {
+      const created = await ts.app.inject({ method: 'POST', url: '/api/billing/checkout', cookies: { rp_session: opCookie }, payload: { planKey: 'pro', months: 1, providerKey: 'usdt' } });
+      expect(created.statusCode).toBe(201);
+      const no = created.json().order.orderNo as string;
+      await ts.db.orm.update(paymentOrders).set({ status: state }).where(eq(paymentOrders.orderNo, no));
+      cpOrders.set(`cp-${no}`, 'completed');
+      if (state === 'expired') {
+        const disabled = await ts.app.inject({ method: 'POST', url: '/api/billing/providers', cookies: { rp_session: rootCookie }, payload: { key: 'usdt', name: 'USDT', enabled: false } });
+        expect(disabled.statusCode).toBe(200);
+      }
+      const recovered = await ts.app.inject({ method: 'POST', url: `/api/billing/orders/${no}/reconcile`, cookies: { rp_session: opCookie } });
+      expect(recovered.statusCode).toBe(200);
+      expect(recovered.json().order.status).toBe('completed');
+    }
+    expect((await ts.app.inject({ method: 'POST', url: '/api/billing/checkout', cookies: { rp_session: opCookie }, payload: { planKey: 'pro', months: 1, providerKey: 'usdt' } })).statusCode).toBe(400);
+    expect((await ts.app.inject({ method: 'DELETE', url: '/api/billing/providers/usdt', cookies: { rp_session: rootCookie } })).statusCode).toBe(409);
+  });
+
 });

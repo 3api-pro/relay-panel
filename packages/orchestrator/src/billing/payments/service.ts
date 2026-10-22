@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Config } from '../../config.js';
 import type { Db } from '../../db/client.js';
 import {
@@ -14,17 +14,18 @@ import { ApiError, requireRoot, type SessionCtx } from '../../auth/rbac.js';
 import { fromPgTimestamp, toPgTimestamp } from '../../auth/sessions.js';
 import { writeAudit } from '../../audit.js';
 import { decryptSecret, encryptSecret } from '../../secrets.js';
-import { planByKey, subscribeOperator } from '../service.js';
+import { quoteChange, consumeQuoteLocked, fulfillQuoteLocked, type BillingQuote } from '../changes.js';
+import { planByKey, subscribeOperatorLocked } from '../service.js';
+import { withBillingTransaction } from '../transaction.js';
 import { AlipayGateway } from './alipay.js';
 import { WxpayGateway } from './wxpay.js';
 import { ChainpayGateway } from './chainpay.js';
-import { KNOWN_PROVIDER_KEYS, PROVIDER_REQUIRED_KEYS, type PaymentGateway, type WebhookHeaders } from './types.js';
+import { KNOWN_PROVIDER_KEYS, PROVIDER_REQUIRED_KEYS, PaymentVerificationError, type GatewaySettlement, type PaymentGateway, type WebhookHeaders } from './types.js';
 
 /**
  * 收款服务（P4 支付接入）。
- * 订单状态机：pending -> paid -> completed；终态 expired|failed|cancelled。
- * 入账唯一路径 confirmOrder：主动向渠道查单，条件 UPDATE(status='pending') 抢占后才开通订阅
- * —— webhook 与前端轮询都只是它的触发器，天然幂等，重复通知/并发轮询不会双开。
+ * 渠道已付记录与权益入账分离；权益、完成状态、审计在同一个数据库事务内提交。
+ * 本地取消或超时仍需查单；旧 paid 单保持人工核实，新订单可安全重试。
  * 纪律：渠道 config 只以密文存 credentials 表；任何出口（API 响应/审计/日志）不带 config 值。
  */
 
@@ -44,6 +45,7 @@ export interface CheckoutInput {
   planKey: string;
   months: number;
   providerKey: string;
+  quoteId?: string | undefined;
 }
 
 /** 对外订单形状（operator 可见自己的；root 全量） */
@@ -59,6 +61,9 @@ export interface OrderView {
   expiresAt: string | null;
   paidAt: string | null;
   createdAt: string;
+  reconciliationError: string | null;
+  lastCheckedAt: string | null;
+  change: BillingQuote | null;
 }
 
 function toOrderView(row: PaymentOrderRow): OrderView {
@@ -74,6 +79,9 @@ function toOrderView(row: PaymentOrderRow): OrderView {
     expiresAt: row.expiresAt,
     paidAt: row.paidAt,
     createdAt: row.createdAt,
+    reconciliationError: row.reconciliationError,
+    lastCheckedAt: row.lastCheckedAt,
+    change: row.billingQuote,
   };
 }
 
@@ -169,10 +177,14 @@ export class PaymentsService {
   async deleteProvider(ctx: SessionCtx, key: string): Promise<void> {
     requireRoot(ctx);
     const { db } = this.deps;
-    const row = (await db.orm.select().from(paymentProviders).where(eq(paymentProviders.key, key)).limit(1))[0];
-    if (!row) throw new ApiError(404, '渠道不存在');
-    await db.orm.delete(paymentProviders).where(eq(paymentProviders.id, row.id));
-    await db.orm.delete(credentials).where(eq(credentials.ref, row.configRef));
+    await db.orm.transaction(async tx => {
+      const row = (await tx.select().from(paymentProviders).where(eq(paymentProviders.key, key)).for('update'))[0];
+      if (!row) throw new ApiError(404, '渠道不存在');
+      const order = (await tx.select({ id: paymentOrders.id }).from(paymentOrders).where(eq(paymentOrders.providerKey, key)).limit(1))[0];
+      if (order) throw new ApiError(409, '此渠道已有订单，请停用并保留对账配置');
+      await tx.delete(paymentProviders).where(eq(paymentProviders.id, row.id));
+      await tx.delete(credentials).where(eq(credentials.ref, row.configRef));
+    });
     await writeAudit(db, { actor: ctx.email, action: 'payment.provider.delete', payload: { provider: key }, ok: true });
   }
 
@@ -188,7 +200,7 @@ export class PaymentsService {
 
   // ---- 网关装配 ----
 
-  private async loadProviderConfig(row: PaymentProviderRow): Promise<Record<string, string>> {
+  private async loadProviderConfig(row: Pick<PaymentProviderRow, 'configRef'>): Promise<Record<string, string>> {
     const { db, config } = this.deps;
     if (config.secretKey === undefined) throw new ApiError(400, 'RP_SECRET_KEY 未配置');
     const cred = (await db.orm.select().from(credentials).where(eq(credentials.ref, row.configRef)).limit(1))[0];
@@ -196,12 +208,12 @@ export class PaymentsService {
     return JSON.parse(decryptSecret(cred.ciphertext, config.secretKey)) as Record<string, string>;
   }
 
-  private async gatewayFor(providerKey: string): Promise<{ gateway: PaymentGateway; row: PaymentProviderRow }> {
+  private async gatewayFor(providerKey: string, forCheckout = false, configRef?: string | null): Promise<{ gateway: PaymentGateway; row: PaymentProviderRow }> {
     const row = (
       await this.deps.db.orm.select().from(paymentProviders).where(eq(paymentProviders.key, providerKey)).limit(1)
     )[0];
-    if (!row || !row.enabled) throw new ApiError(400, '收款渠道未启用');
-    const cfg = await this.loadProviderConfig(row);
+    if (!row || (forCheckout && !row.enabled)) throw new ApiError(400, '收款渠道未启用');
+    const cfg = await this.loadProviderConfig({ configRef: configRef ?? row.configRef });
     switch (providerKey) {
       case 'alipay':
         return { gateway: new AlipayGateway(cfg, row.paymentMode), row };
@@ -218,38 +230,40 @@ export class PaymentsService {
 
   async createCheckout(ctx: SessionCtx, input: CheckoutInput): Promise<OrderView> {
     const { db } = this.deps;
-    if (ctx.role === 'viewer') throw new ApiError(403, '当前角色为只读，无写权限');
+    if (ctx.role !== 'operator') throw new ApiError(403, '仅站长账户可购买套餐');
     const plan = await planByKey(db, input.planKey);
     if (!plan || !plan.active) throw new ApiError(404, '套餐不存在');
     if (plan.priceMonthly <= 0) throw new ApiError(400, '免费套餐无需购买');
 
-    // 防挂单堆积：同人 pending 上限（顺手把过期单收敛掉）
-    await this.expireStale(ctx.operatorId);
-    const pendingRows = await db.orm
-      .select({ id: paymentOrders.id })
-      .from(paymentOrders)
-      .where(and(eq(paymentOrders.operatorId, ctx.operatorId), eq(paymentOrders.status, 'pending')));
-    if (pendingRows.length >= MAX_PENDING_PER_OPERATOR) {
-      throw new ApiError(429, '待支付订单过多，请先完成或取消现有订单');
+    await this.gatewayFor(input.providerKey, true);
+    // Compatibility for existing clients is limited to new purchases / same-plan renewals.
+    const preview = input.quoteId ? null : await quoteChange(db, ctx.operatorId, input.planKey, input.months);
+    if (preview && (preview.kind === 'upgrade' || preview.kind === 'downgrade')) {
+      throw new ApiError(409, '请刷新页面并确认套餐变更报价');
     }
-
-    const { gateway } = await this.gatewayFor(input.providerKey);
-    const amount = Math.round(plan.priceMonthly * input.months * 100) / 100;
     const orderNo = newOrderNo();
-    const expiresAt = toPgTimestamp(new Date(Date.now() + ORDER_TTL_MS));
-
-    await db.orm.insert(paymentOrders).values({
-      orderNo,
-      operatorId: ctx.operatorId,
-      planKey: plan.key,
-      months: input.months,
-      amount,
-      providerKey: input.providerKey,
-      status: 'pending',
-      expiresAt,
+    const quote = await withBillingTransaction(db, ctx.operatorId, async tx => {
+      const quote = await consumeQuoteLocked(tx, ctx.operatorId, input.quoteId ?? preview!.id);
+      if (quote.planKey !== input.planKey || (quote.months !== 0 && quote.months !== input.months)) throw new ApiError(400, '报价与订单不匹配');
+      const provider = (await tx.orm.select().from(paymentProviders).where(eq(paymentProviders.key, input.providerKey)).for('update'))[0];
+      if (!provider?.enabled) throw new ApiError(409, '收款渠道已停用，请重新选择');
+      const credential = (await tx.orm.select().from(credentials).where(eq(credentials.ref, provider.configRef)))[0];
+      if (!credential) throw new ApiError(409, '收款渠道凭据缺失');
+      await tx.orm.insert(credentials).values({ ref: `enc:payment-order:${orderNo}`, kind: 'payment', ciphertext: credential.ciphertext });
+      await tx.orm.update(paymentOrders).set({ status: 'expired', updatedAt: nowPg() }).where(and(
+        eq(paymentOrders.operatorId, ctx.operatorId), eq(paymentOrders.status, 'pending'), sql`${paymentOrders.expiresAt} < timezone('UTC', now())`));
+      const pending = await tx.orm.select({ id: paymentOrders.id }).from(paymentOrders).where(and(eq(paymentOrders.operatorId, ctx.operatorId), eq(paymentOrders.status, 'pending')));
+      if (pending.length >= MAX_PENDING_PER_OPERATOR) throw new ApiError(429, '待支付订单过多，请先完成或取消现有订单');
+      await tx.orm.insert(paymentOrders).values({ orderNo, operatorId: ctx.operatorId, planKey: quote.planKey,
+        months: quote.months, amount: quote.amount, providerKey: input.providerKey, status: 'pending', fulfillmentVersion: 1,
+        billingQuote: quote, providerConfigRef: `enc:payment-order:${orderNo}`, expiresAt: toPgTimestamp(new Date(Date.now() + ORDER_TTL_MS)),
+      });
+      return quote;
     });
+    const amount = quote.amount;
 
     try {
+      const { gateway } = await this.gatewayFor(input.providerKey, false, `enc:payment-order:${orderNo}`);
       const created = await gateway.create({ orderNo, amountCny: amount, subject: `relay-panel ${plan.title} x${input.months}` });
       await db.orm
         .update(paymentOrders)
@@ -257,20 +271,21 @@ export class PaymentsService {
           payUrl: created.payUrl ?? null,
           qrCode: created.qrCode ?? null,
           providerTradeNo: created.tradeNo ?? null,
+          detail: created.settlement ? { settlement: created.settlement } : {},
           updatedAt: nowPg(),
         })
         .where(eq(paymentOrders.orderNo, orderNo));
     } catch (err) {
       await db.orm
         .update(paymentOrders)
-        .set({ status: 'failed', detail: { error: err instanceof Error ? err.message : String(err) }, updatedAt: nowPg() })
+        .set({ status: 'failed', detail: { error: 'provider_create_failed' }, updatedAt: nowPg() })
         .where(eq(paymentOrders.orderNo, orderNo));
       await writeAudit(db, {
         actor: ctx.email,
         action: 'payment.checkout',
         payload: { orderNo, plan: plan.key, months: input.months, provider: input.providerKey, amount },
         ok: false,
-        error: err instanceof Error ? err.message : String(err),
+        error: 'provider_create_failed',
       });
       throw new ApiError(502, '渠道建单失败，请稍后重试或换一种支付方式');
     }
@@ -291,7 +306,9 @@ export class PaymentsService {
   async getOrder(ctx: SessionCtx, orderNo: string): Promise<OrderView> {
     const row = await this.orderByNo(orderNo);
     if (!row || (ctx.role !== 'root' && row.operatorId !== ctx.operatorId)) throw new ApiError(404, '订单不存在');
-    if (row.status === 'pending') {
+    if (row.status !== 'completed') {
+      // Bound the in-memory throttle; correctness comes from DB locks, not this cache.
+      if (confirmGate.size > 10_000) confirmGate.clear();
       const last = confirmGate.get(orderNo) ?? 0;
       if (Date.now() - last >= CONFIRM_MIN_INTERVAL_MS) {
         confirmGate.set(orderNo, Date.now());
@@ -302,6 +319,7 @@ export class PaymentsService {
   }
 
   async cancelOrder(ctx: SessionCtx, orderNo: string): Promise<OrderView> {
+    if (ctx.role === 'viewer') throw new ApiError(403, '当前角色为只读，无写权限');
     const { db } = this.deps;
     const row = await this.orderByNo(orderNo);
     if (!row || (ctx.role !== 'root' && row.operatorId !== ctx.operatorId)) throw new ApiError(404, '订单不存在');
@@ -335,74 +353,90 @@ export class PaymentsService {
   }
 
   /**
-   * 入账唯一路径：渠道查单确认已付 → 条件 UPDATE 抢占 pending → 开通订阅 → completed。
-   * 抢占失败（并发已处理）直接返回，幂等。开通订阅失败时单停在 paid，人工可见可补。
+   * 查单校验后记录 paid；在数据库锁内同时提交权益、completed 状态和审计。
+   * 开通失败全部回滚，paid 保留可重试；旧 paid 和订阅冲突保留待核实。
    */
   async confirmOrder(orderNo: string): Promise<void> {
     const { db } = this.deps;
     const row = await this.orderByNo(orderNo);
-    if (!row || row.status !== 'pending') return;
-
-    const { gateway } = await this.gatewayFor(row.providerKey);
-    const status = await gateway.query(row.orderNo, row.providerTradeNo);
-
-    if (status === 'paid') {
-      const claimed = await db.orm
-        .update(paymentOrders)
-        .set({ status: 'paid', paidAt: nowPg(), updatedAt: nowPg() })
-        .where(and(eq(paymentOrders.orderNo, orderNo), eq(paymentOrders.status, 'pending')))
-        .returning({ id: paymentOrders.id });
-      if (claimed.length === 0) return; // 并发已被处理
-
-      const op = (await db.orm.select().from(operators).where(eq(operators.id, row.operatorId)).limit(1))[0];
+    if (!row || row.status === 'completed') return;
+    await db.orm.update(paymentOrders).set({ lastCheckedAt: nowPg() })
+      .where(and(eq(paymentOrders.id, row.id), sql`${paymentOrders.status} <> 'completed'`));
+    // A pre-v1 paid order has an ambiguous crash boundary. Never guess and double-grant it.
+    if (row.status === 'paid' && row.fulfillmentVersion === 0) {
+      await db.orm.update(paymentOrders).set({ reconciliationError: 'legacy_paid_requires_review', lastCheckedAt: nowPg() })
+        .where(and(eq(paymentOrders.id, row.id), eq(paymentOrders.status, 'paid')));
+      return;
+    }
+    if (row.status !== 'paid') {
+      let status;
       try {
-        const sub = await subscribeOperator(db, { operatorId: row.operatorId, planKey: row.planKey, months: row.months });
-        await db.orm
-          .update(paymentOrders)
-          .set({ status: 'completed', completedAt: nowPg(), updatedAt: nowPg() })
-          .where(eq(paymentOrders.orderNo, orderNo));
-        await writeAudit(db, {
-          actor: 'system',
-          action: 'payment.completed',
-          payload: {
-            orderNo,
-            operatorEmail: op?.email ?? String(row.operatorId),
-            plan: row.planKey,
-            months: row.months,
-            amount: row.amount,
-            provider: row.providerKey,
-            periodEnd: sub.currentPeriodEnd,
-          },
-          ok: true,
-        });
-      } catch (err) {
-        // 已收款但开通失败：停在 paid，root 订单列表可见，人工重试/补开
-        await writeAudit(db, {
-          actor: 'system',
-          action: 'payment.completed',
-          payload: { orderNo, plan: row.planKey, provider: row.providerKey },
-          ok: false,
-          error: err instanceof Error ? err.message : String(err),
-        });
+        const { gateway } = await this.gatewayFor(row.providerKey, false, row.providerConfigRef);
+        const settlement = row.detail?.settlement as GatewaySettlement | undefined;
+        status = await gateway.query(row.orderNo, row.providerTradeNo, { amountCny: row.amount, ...(settlement ? { settlement } : {}) });
+      } catch (error) {
+        await db.orm.update(paymentOrders).set({ reconciliationError: error instanceof PaymentVerificationError ? 'payment_mismatch_requires_review' : 'provider_query_failed', lastCheckedAt: nowPg() })
+          .where(and(eq(paymentOrders.id, row.id), sql`${paymentOrders.status} <> 'completed'`));
+        throw new ApiError(502, '支付渠道查单失败，请稍后重试');
       }
-      return;
+      if (status !== 'paid') {
+        const expired = row.expiresAt !== null && fromPgTimestamp(row.expiresAt).getTime() < Date.now();
+        await db.orm.update(paymentOrders).set({
+          lastCheckedAt: nowPg(), reconciliationError: null,
+          ...(row.status === 'pending' && (status === 'expired' || status === 'failed' || expired)
+            ? { status: status === 'pending' ? 'expired' : status, updatedAt: nowPg() } : {}),
+        }).where(and(eq(paymentOrders.id, row.id), eq(paymentOrders.status, row.status)));
+        return;
+      }
+      // A local cancel/expiry does not cancel a provider transaction. Late payments still reconcile.
+      await db.orm.update(paymentOrders).set({ status: 'paid', fulfillmentVersion: 1,
+        paidAt: nowPg(), updatedAt: nowPg(), lastCheckedAt: nowPg(), reconciliationError: null,
+      }).where(and(eq(paymentOrders.id, row.id), inArray(paymentOrders.status, ['pending', 'cancelled', 'expired', 'failed'])));
     }
+    try {
+      await withBillingTransaction(db, row.operatorId, async tx => {
+        const current = (await tx.orm.select().from(paymentOrders).where(eq(paymentOrders.id, row.id)).for('update'))[0];
+        if (!current || current.status !== 'paid' || current.fulfillmentVersion !== 1) return;
+        const sub = current.billingQuote
+          ? await fulfillQuoteLocked(tx, current.operatorId, current.billingQuote, current.orderNo)
+          : await subscribeOperatorLocked(tx, { operatorId: current.operatorId, planKey: current.planKey, months: current.months });
+        await tx.orm.update(paymentOrders).set({ status: 'completed', completedAt: nowPg(), updatedAt: nowPg(), reconciliationError: null })
+          .where(eq(paymentOrders.id, current.id));
+        await writeAudit(tx, { actor: 'system', action: 'payment.completed', ok: true,
+          payload: { orderNo, operatorId: current.operatorId, plan: current.planKey, months: current.months,
+            amount: current.amount, provider: current.providerKey, subscriptionId: sub.id, periodEnd: sub.currentPeriodEnd },
+        });
+      });
+    } catch (error) {
+      // All entitlement, completion and audit writes rolled back together. A retry is safe.
+      await db.orm.update(paymentOrders).set({ reconciliationError: error instanceof ApiError && error.statusCode === 409 ? 'subscription_changed_requires_review' : 'fulfillment_retry_required', updatedAt: nowPg() })
+        .where(and(eq(paymentOrders.id, row.id), eq(paymentOrders.status, 'paid')));
+      throw new ApiError(503, '付款已确认，订阅开通待重试');
+    }
+  }
 
-    if (status === 'expired' || status === 'failed') {
-      await db.orm
-        .update(paymentOrders)
-        .set({ status, updatedAt: nowPg() })
-        .where(and(eq(paymentOrders.orderNo, orderNo), eq(paymentOrders.status, 'pending')));
-      return;
+  /** Fair bounded reconciliation independent of the browser or webhook delivery. */
+  async reconcile(limit = 25): Promise<{ checked: number; failed: number }> {
+    const rows = await this.deps.db.orm.select({ orderNo: paymentOrders.orderNo }).from(paymentOrders)
+      .where(sql`${paymentOrders.status} <> 'completed' AND (${paymentOrders.status} = 'paid' OR ${paymentOrders.createdAt} > timezone('UTC', now()) - interval '7 days')`)
+      .orderBy(sql`${paymentOrders.lastCheckedAt} ASC NULLS FIRST`, asc(paymentOrders.id)).limit(limit);
+    let failed = 0;
+    for (const row of rows) {
+      try { await this.confirmOrder(row.orderNo); } catch { failed++; }
     }
+    return { checked: rows.length, failed };
+  }
 
-    // pending：本地超时标 expired（渠道侧订单自然过期，无须去关单）
-    if (row.expiresAt !== null && fromPgTimestamp(row.expiresAt).getTime() < Date.now()) {
-      await db.orm
-        .update(paymentOrders)
-        .set({ status: 'expired', updatedAt: nowPg() })
-        .where(and(eq(paymentOrders.orderNo, orderNo), eq(paymentOrders.status, 'pending')));
-    }
+  async retryOrder(ctx: SessionCtx, orderNo: string): Promise<OrderView> {
+    const row = await this.orderByNo(orderNo);
+    if (!row || (ctx.role !== 'root' && row.operatorId !== ctx.operatorId)) throw new ApiError(404, '订单不存在');
+    if (ctx.role === 'viewer') throw new ApiError(403, '当前角色为只读，无写权限');
+    const last = confirmGate.get(orderNo) ?? 0;
+    if (Date.now() - last < CONFIRM_MIN_INTERVAL_MS) throw new ApiError(429, '请稍后重新核对');
+    if (confirmGate.size > 10_000) confirmGate.clear();
+    confirmGate.set(orderNo, Date.now());
+    await this.confirmOrder(orderNo);
+    return toOrderView((await this.orderByNo(orderNo))!);
   }
 
   /** webhook 入口：验签定位订单 → confirmOrder（入账仍以查单为准）。返回渠道要求的应答 */
@@ -413,6 +447,8 @@ export class PaymentsService {
   ): Promise<{ contentType: string; body: string }> {
     const { gateway } = await this.gatewayFor(providerKey);
     const parsed = await gateway.parseWebhook(rawBody, headers);
+    const order = await this.orderByNo(parsed.orderNo);
+    if (!order || order.providerKey !== providerKey) throw new ApiError(400, '支付通知与订单不匹配');
     await this.confirmOrder(parsed.orderNo);
     return parsed.ack ?? { contentType: 'application/json', body: JSON.stringify({ ok: true }) };
   }
@@ -425,21 +461,4 @@ export class PaymentsService {
     )[0];
   }
 
-  /** 该 operator 的超时 pending 单批量标 expired（下单前顺手清理） */
-  private async expireStale(operatorId: number): Promise<void> {
-    const { db } = this.deps;
-    const rows = await db.orm
-      .select({ id: paymentOrders.id, expiresAt: paymentOrders.expiresAt })
-      .from(paymentOrders)
-      .where(and(eq(paymentOrders.operatorId, operatorId), eq(paymentOrders.status, 'pending')));
-    const staleIds = rows
-      .filter((r) => r.expiresAt !== null && fromPgTimestamp(r.expiresAt).getTime() < Date.now())
-      .map((r) => r.id);
-    if (staleIds.length > 0) {
-      await db.orm
-        .update(paymentOrders)
-        .set({ status: 'expired', updatedAt: nowPg() })
-        .where(and(inArray(paymentOrders.id, staleIds), eq(paymentOrders.status, 'pending')));
-    }
-  }
 }
