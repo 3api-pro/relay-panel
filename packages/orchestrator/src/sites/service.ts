@@ -35,7 +35,7 @@ import {
   type JobRow,
   type SiteRow,
 } from '../db/schema.js';
-import { ApiError, canAccessSite, requireWrite, type SessionCtx } from '../auth/rbac.js';
+import { ApiError, canAccessSite, requireWrite, requireRoot, type SessionCtx } from '../auth/rbac.js';
 import { toPgTimestamp } from '../auth/sessions.js';
 import { redact, redactRootOnlyAuditPayload, writeAudit } from '../audit.js';
 import { redactText, type JobEngine, type JobKind, type OnStep } from '../jobs/engine.js';
@@ -723,6 +723,21 @@ export class SitesService {
         }
       }),
     );
+  }
+
+  async financeUsageRecords(ctx: SessionCtx, slug: string, query: import('@relay-panel/adapter-core').UsageRecordQuery) {
+    requireRoot(ctx);
+    const site = await this.requireSite(ctx, slug);
+    if (site.engine !== 'sub2api') throw new ApiError(501, '此引擎暂不支持请求级财务复核');
+    try {
+      const client = await this.client(site);
+      if (!client.stats.usageRecords) throw new ApiError(501, '此引擎暂不支持请求级财务复核');
+      return { siteId: site.id, page: await client.stats.usageRecords(query) };
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 501) throw error;
+      // Raw engine errors can contain private DTO fragments. Keep them out of this API and case history.
+      throw new ApiError(502, '无法读取请求证据，请检查站点连接、凭据和引擎版本');
+    }
   }
 
   /**

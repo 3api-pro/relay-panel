@@ -338,6 +338,32 @@ export const schemaMigrations = pgTable('schema_migrations', {
   appliedAt: timestamp('applied_at', { mode: 'string' }).notNull().defaultNow(),
 });
 
+export const financeReviewCases = pgTable('finance_review_cases', {
+  id: serial('id').primaryKey(),
+  siteId: integer('site_id').notNull().references(() => sites.id),
+  sourceId: text('source_id').notNull(),
+  state: text('state').notNull().default('pending'),
+  version: integer('version').notNull().default(1),
+  evidence: jsonb('evidence').$type<import('@relay-panel/adapter-core').UsageRecord>().notNull(),
+  fingerprint: text('fingerprint').notNull(),
+  reasons: jsonb('reasons').$type<string[]>().notNull(),
+  verification: text('verification').notNull().default('flagged'),
+  checkedAt: timestamp('checked_at', { mode: 'string' }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [unique('finance_review_cases_site_id_source_id_key').on(t.siteId, t.sourceId), index('finance_review_cases_state_id_idx').on(t.state, t.id)]);
+
+export const financeReviewEvents = pgTable('finance_review_events', {
+  id: serial('id').primaryKey(),
+  caseId: integer('case_id').notNull().references(() => financeReviewCases.id),
+  actor: text('actor').notNull(),
+  kind: text('kind').notNull(),
+  state: text('state').notNull(),
+  note: text('note').notNull(),
+  evidence: jsonb('evidence').$type<import('@relay-panel/adapter-core').UsageRecord>().notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [index('finance_review_events_case_id_idx').on(t.caseId, t.id)]);
+
 // 常用行类型（下游模块共享，避免各自重复推导）
 export type OperatorRow = typeof operators.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;

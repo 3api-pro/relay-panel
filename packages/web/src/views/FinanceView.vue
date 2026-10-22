@@ -344,6 +344,7 @@ const fieldCls =
         <p class="mt-1 text-xs text-muted">{{ t('finance.subtitle') }}</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
+        <RouterLink v-if="isRoot" to="/admin/finance-review" class="text-xs text-accent hover:underline">{{ t('nav.financeReview') }}</RouterLink>
         <!-- 预设 -->
         <div class="inline-flex overflow-hidden rounded-lg border border-border">
           <button

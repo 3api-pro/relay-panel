@@ -18,6 +18,7 @@ import { registerBatchRoutes } from './batch/routes.js';
 import { registerEngineVersionRoutes } from './engines/versions.js';
 import { registerMarketplaceRoutes } from './marketplace/routes.js';
 import { registerFinanceRoutes } from './finance/routes.js';
+import { registerFinanceReviewRoutes } from './finance/review-routes.js';
 import { registerUpstreamRoutes } from './upstream/routes.js';
 import { registerCustomersRoutes } from './customers/routes.js';
 import { registerAlertsRoutes } from './alerts/routes.js';
@@ -182,6 +183,7 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
   registerEngineVersionRoutes(app);
   registerMarketplaceRoutes(app, deps);
   registerFinanceRoutes(app, deps);
+  registerFinanceReviewRoutes(app, deps);
   registerUpstreamRoutes(app, deps);
   registerCustomersRoutes(app, deps);
   registerAlertsRoutes(app, deps);

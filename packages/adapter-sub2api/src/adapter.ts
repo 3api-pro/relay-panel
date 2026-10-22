@@ -32,6 +32,7 @@ import type {
 } from '@relay-panel/adapter-core';
 import { Sub2apiHttp, type PaginatedData } from './http.js';
 import { ensureCompliance, loginAdmin } from './auth.js';
+import { usageRecords } from './usage-records.js';
 
 /**
  * 概念映射（sub2api 语义与 adapter-core 抽象的对应）：
@@ -575,6 +576,7 @@ export class Sub2apiAdminClient implements EngineAdminClient {
   };
 
   stats = {
+    usageRecords: (query: import('@relay-panel/adapter-core').UsageRecordQuery) => usageRecords(this.http, query),
     usage: async (from: Date, to: Date): Promise<UsageSummary> => {
       const fmt = (d: Date) => d.toISOString().slice(0, 10);
       const s = await this.http.get<{

@@ -5,7 +5,7 @@ describe('workspace access', () => {
   it('keeps platform administration out of operator and observer workspaces, including direct links', () => {
     for (const role of ['operator', 'viewer'] as const) {
       const links = navigationFor(role).flatMap(g => g.items.map(i => i.to));
-      for (const path of ['/admin/settings', '/admin/billing', '/admin/marketplace', '/operators', '/upstream', '/risk', '/customers']) {
+      for (const path of ['/admin/finance-review', '/admin/settings', '/admin/billing', '/admin/marketplace', '/operators', '/upstream', '/risk', '/customers']) {
         expect(links).not.toContain(path);
         expect(canVisit(role, path)).toBe(false);
         expect(canVisit(role, `${path}/detail`)).toBe(false);

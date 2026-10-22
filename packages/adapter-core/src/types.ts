@@ -394,3 +394,36 @@ export interface EngineCapabilities {
   /** 站内订阅/套餐计费 */
   subscriptionBilling: boolean;
 }
+/** Allowlisted request evidence; costs are engine accounting, never proof of wallet settlement. */
+export interface UsageRecord {
+  id: string;
+  requestId: string | null;
+  createdAt: string;
+  model: string | null;
+  userId: string | null;
+  accountId: string | null;
+  subscriptionId: string | null;
+  billingType: 'balance' | 'subscription' | 'unknown';
+  activity: number | null;
+  actualCost: number | null;
+  totalCost: number | null;
+  rateMultiplier: number | null;
+  accountRateMultiplier: number | null;
+  accountStatsCost: number | null;
+  accountCost: number | null;
+  costUnit: 'USD';
+  settlementProof: 'unavailable';
+}
+export interface UsageRecordQuery {
+  from: string;
+  to: string;
+  page: number;
+  requestId?: string;
+}
+export interface UsageRecordPage {
+  items: UsageRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pages: number;
+}

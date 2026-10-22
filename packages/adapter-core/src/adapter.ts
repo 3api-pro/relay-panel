@@ -14,6 +14,8 @@ import type {
   SiteUserRecord,
   SiteCustomerRecord,
   UsageSummary,
+  UsageRecordQuery,
+  UsageRecordPage,
   ModelUsageStat,
   CustomerUsageStat,
   CustomerRanking,
@@ -103,6 +105,8 @@ export interface EngineAdminClient {
   };
 
   stats: {
+    /** Bounded, allowlisted request evidence from the engine's public admin API. */
+    usageRecords?(query: UsageRecordQuery): Promise<UsageRecordPage>;
     usage(from: Date, to: Date): Promise<UsageSummary>;
     /** 北京日历日闭区间；时间戳型引擎可覆盖默认的日期锚点适配。 */
     usageCalendarDays?(fromDate: string, toDate: string): Promise<UsageSummary>;

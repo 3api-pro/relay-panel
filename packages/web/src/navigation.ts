@@ -31,6 +31,7 @@ export function navigationFor(role: OperatorRole): NavigationGroup[] {
     { key: root ? 'groupOperations' : 'groupFinance', items: [
       item('/finance', 'finance', 'finance'),
       ...(root ? [
+        item('/admin/finance-review', 'financeReview', 'finance'),
         item('/customers', 'customerInsights', 'customers'),
         item('/upstream', 'upstream', 'upstream'),
         item('/risk', 'risk', 'risk'),
