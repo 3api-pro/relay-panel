@@ -38,6 +38,12 @@ relay-panel collapses that into one control plane:
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+## v2.13.1: Independent workspaces in browser tabs
+
+Each browser tab retains its selected workspace. Switching teams in another tab no longer changes the tenant used by an already-open form or export. JSON and download requests share the same page context and session error handling. Selections are bound to the signed-in account and cleared on login/logout; blocked browser storage prevents switching instead of silently falling back.
+
+After upgrading, the first page load opens the personal workspace; select a team again in each tab. No database migration is added.
+
 ## v2.13.0: Backup history and file verification
 
 The operations page retains every new panel backup attempt and its verification history. A later failure no longer hides the last successful backup. Administrators can filter and page records, inspect checksums and check the archive plus manifest for missing, changed or unreadable files. Database leases serialize creation across processes, long backups renew their reservation, and late results cannot replace an interrupted record.

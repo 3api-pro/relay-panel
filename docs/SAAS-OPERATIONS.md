@@ -25,6 +25,8 @@ Verification/reset tokens are hashed, expire after 30 minutes and are consumed a
 
 Platform root/operator/viewer roles remain separate from team membership. Viewer is platform-wide read-only. A workspace selected through `X-Workspace-Id` grants reader/editor access to its owner's sites and quotas, never root authority. Readers cannot write; billing remains owner-only. Security, notifications and support stay personal. Invitations bind a random token to an email, expire after seven days and can be revoked. Owners copy the one-time invite link. Membership is checked on each request; revocation affects subsequent requests, not already-running operations.
 
+From v2.13.1, browser selection is stored per tab and bound to the signed-in account. Requests and file exports use the current page's context, so a different tab cannot silently change the target of an open form. Switching requires a new page load; failed browser storage prevents switching. The old shared selection is ignored on upgrade, so select the desired team again in each tab. Authentication cookies remain shared by the browser; this change does not create separate logins per tab.
+
 References: [RFC 6238](https://www.rfc-editor.org/info/rfc6238/) and [OWASP recovery guidance](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html). This is not an independent security certification.
 
 ## Refunds, statements and support
