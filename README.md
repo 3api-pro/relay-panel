@@ -38,6 +38,10 @@ relay-panel collapses that into one control plane:
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+## v2.5.0: Case-scoped collaboration
+
+The collaboration workspace adds email-bound, single-use invitations for suppliers, resellers, operations, support and finance. Owners explicitly share a separate title and brief for eligible cases. Collaborators can reply and submit results for owner review; internal evidence, costs, credentials and workspace permissions are not inherited. Access expires within 90 days and can be revoked immediately. Invitees need an existing account with a verified email; invitation links are copied manually, not emailed automatically.
+
 ## v2.4.0: Site service center
 
 Read existing Sub2API and New API logs to connect channel/model observations, cost signals, incidents, support tickets, partners and operational delivery. No synthetic inference calls or channel heartbeat probes are generated. Coverage, sample limits and freshness are explicit; absent traffic and missing fields remain unknown.
