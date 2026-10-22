@@ -41,39 +41,40 @@ function permits(role: string, kind: string): boolean {
   return Object.hasOwn(collaborationRoles, role) && (collaborationRoles[role as Role] as readonly string[]).includes(kind);
 }
 
+export async function ownedSite(orm: Orm, ctx: SessionCtx, id: number, lock = false) {
+  requireWrite(ctx);
+  if (ctx.teamRole || ctx.tenantOwnerId) throw new ApiError(403, '仅站点所有者或平台管理员可管理协作授权');
+  const q = orm.select().from(sites).where(and(eq(sites.id, id), sql`${sites.status}<>'destroyed'`));
+  const [site] = await (lock ? q.for('update') : q);
+  if (!site || (ctx.role !== 'root' && site.operatorId !== ctx.operatorId)) throw new ApiError(404, '站点不存在');
+  return site;
+}
+export async function accessContext(orm: Orm, ctx: SessionCtx, id: number, staff: boolean, lock = false, allowInactive = false) {
+  const q = orm.select().from(serviceAccess).where(eq(serviceAccess.id, id));
+  const [access] = await (lock ? q.for('update') : q);
+  if (!access) throw new ApiError(404, '协作授权不存在');
+  if (staff) await ownedSite(orm, ctx, access.siteId);
+  else if (ctx.role !== 'operator' || access.operatorId !== ctx.operatorId || !access.acceptedAt || access.email !== normalizeEmail(ctx.email)) {
+    throw new ApiError(404, '协作授权不存在');
+  }
+  const [site] = await orm.select().from(sites).where(eq(sites.id, access.siteId));
+  const [owner] = await orm.select({ status: operators.status }).from(operators).where(eq(operators.id, access.ownerId));
+  let partnerActive = true;
+  if (access.partnerId) {
+    const [partner] = await orm.select().from(servicePartners).where(eq(servicePartners.id, access.partnerId));
+    partnerActive = !!partner && partner.siteId === access.siteId && partner.status === 'active';
+  }
+  const active = !access.revokedAt && access.expiresAt > now() && site?.status !== 'destroyed'
+    && site?.operatorId === access.ownerId && owner?.status === 'active' && partnerActive;
+  if (!active && !allowInactive) throw new ApiError(staff ? 409 : 404, '协作授权已撤销、到期或关联站点/伙伴已停用');
+  return { access, site: site!, active };
+}
+
 export function registerCollaborationRoutes(app: FastifyInstance, { db }: { db: Db }): void {
   const ownerBase = '/api/services/collaboration', memberBase = '/api/collaboration';
   const audit = (orm: Orm, ctx: SessionCtx, action: string, payload: Record<string, unknown>) =>
     writeAudit({ ...db, orm }, { actor: ctx.email, action: `collaboration.${action}`, payload, ok: true });
 
-  async function ownedSite(orm: Orm, ctx: SessionCtx, id: number, lock = false) {
-    requireWrite(ctx);
-    if (ctx.teamRole || ctx.tenantOwnerId) throw new ApiError(403, '仅站点所有者或平台管理员可管理协作授权');
-    const q = orm.select().from(sites).where(and(eq(sites.id, id), sql`${sites.status}<>'destroyed'`));
-    const [site] = await (lock ? q.for('update') : q);
-    if (!site || (ctx.role !== 'root' && site.operatorId !== ctx.operatorId)) throw new ApiError(404, '站点不存在');
-    return site;
-  }
-  async function accessContext(orm: Orm, ctx: SessionCtx, id: number, staff: boolean, lock = false, allowInactive = false) {
-    const q = orm.select().from(serviceAccess).where(eq(serviceAccess.id, id));
-    const [access] = await (lock ? q.for('update') : q);
-    if (!access) throw new ApiError(404, '协作授权不存在');
-    if (staff) await ownedSite(orm, ctx, access.siteId);
-    else if (ctx.role !== 'operator' || access.operatorId !== ctx.operatorId || !access.acceptedAt || access.email !== normalizeEmail(ctx.email)) {
-      throw new ApiError(404, '协作授权不存在');
-    }
-    const [site] = await orm.select().from(sites).where(eq(sites.id, access.siteId));
-    const [owner] = await orm.select({ status: operators.status }).from(operators).where(eq(operators.id, access.ownerId));
-    let partnerActive = true;
-    if (access.partnerId) {
-      const [partner] = await orm.select().from(servicePartners).where(eq(servicePartners.id, access.partnerId));
-      partnerActive = !!partner && partner.siteId === access.siteId && partner.status === 'active';
-    }
-    const active = !access.revokedAt && access.expiresAt > now() && site?.status !== 'destroyed'
-      && site?.operatorId === access.ownerId && owner?.status === 'active' && partnerActive;
-    if (!active && !allowInactive) throw new ApiError(staff ? 409 : 404, '协作授权已撤销、到期或关联站点/伙伴已停用');
-    return { access, site: site!, active };
-  }
   async function assignmentContext(orm: Orm, ctx: SessionCtx, id: number, staff: boolean, lock = false) {
     const [first] = await orm.select({ accessId: serviceAssignments.accessId }).from(serviceAssignments).where(eq(serviceAssignments.id, id));
     if (!first) throw new ApiError(404, '协作事项不存在');

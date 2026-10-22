@@ -14,6 +14,7 @@ import type { SmtpSend } from './alerts/smtp.js';
 import { registerReconciliationRoutes } from './finance/reconciliation.js';
 import { registerServiceRoutes } from './services/routes.js';
 import { registerKnowledgeRoutes } from './services/knowledge.js';
+import { registerFinanceAccessRoutes } from './services/finance-access.js';
 import { registerBudgetRoutes } from './services/budget-routes.js';
 import { registerCollaborationRoutes } from './services/collaboration.js';
 import { registerOperationsRoutes } from './operations/routes.js';
@@ -212,6 +213,7 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
   registerServiceRoutes(app, deps);
   registerKnowledgeRoutes(app, deps);
   registerBudgetRoutes(app, deps);
+  registerFinanceAccessRoutes(app, deps);
   registerCollaborationRoutes(app, deps);
   registerTicketRoutes(app, deps);
   registerNotificationRoutes(app, deps);

@@ -619,3 +619,17 @@ export type SubscriptionRow = typeof subscriptions.$inferSelect;
 export type PaymentProviderRow = typeof paymentProviders.$inferSelect;
 export type PaymentOrderRow = typeof paymentOrders.$inferSelect;
 export type CustomerSnapshotRow = typeof customerSnapshots.$inferSelect;
+
+export const financeScopes = pgTable('finance_scopes', {
+  accessId: integer('access_id').primaryKey().references(() => serviceAccess.id), label: text('label').notNull(),
+  fromDay: text('from_day').notNull(), toDay: text('to_day').notNull(), channelId: text('channel_id'), model: text('model'),
+  costs: boolean('costs').notNull().default(false), details: boolean('details').notNull().default(false),
+  export: boolean('export').notNull().default(false), review: boolean('review').notNull().default(false), enabled: boolean('enabled').notNull().default(true),
+  version: integer('version').notNull().default(1), updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+});
+export const financeSubmissions = pgTable('finance_submissions', {
+  id: serial('id').primaryKey(), accessId: integer('access_id').notNull().references(() => financeScopes.accessId), scopeVersion: integer('scope_version').notNull(),
+  report: jsonb('report').$type<import('../services/finance-access.js').SharedFinanceReport>().notNull(), note: text('note').notNull(),
+  status: text('status').notNull().default('submitted'), decision: text('decision'), decidedAt: timestamp('decided_at', { mode: 'string' }),
+  decidedBy: integer('decided_by').references(() => operators.id), version: integer('version').notNull().default(1), createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [index('finance_submissions_access').on(t.accessId, t.id), uniqueIndex('finance_submission_pending').on(t.accessId, t.scopeVersion).where(sql`${t.status}='submitted'`)]);
