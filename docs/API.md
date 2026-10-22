@@ -71,11 +71,11 @@ relay-panel 编排器（orchestrator）的 HTTP API 全表。默认监听 `http:
 
 ```json
 {
-  "current": "2.1.0",
-  "latest": "2.1.0",
+  "current": "2.2.0",
+  "latest": "2.2.0",
   "hasUpdate": false,
-  "url": "https://github.com/3api-pro/relay-panel/releases/tag/v2.1.0",
-  "name": "v2.1.0 — ...",
+  "url": "https://github.com/3api-pro/relay-panel/releases/tag/v2.2.0",
+  "name": "v2.2.0 — ...",
   "publishedAt": "2026-08-12T00:00:00Z",
   "prerelease": false,
   "error": null,

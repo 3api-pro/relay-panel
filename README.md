@@ -44,13 +44,24 @@ relay-panel collapses that into one control plane:
 - **Web admin backend** — Vue 3 SPA: fleet overview, per-site drill-down (channels / users / usage / domains / audit), job timelines. Liquid-glass UI with light/dark themes and **10-language i18n** (English / 中文 / 日本語 / 한국어 / Français / Deutsch / Español / Português / Italiano / Bahasa Indonesia).
 - **Multi-engine, zero modification** — sub2api and new-api behind one adapter interface; engines always run official releases.
 - **Channel marketplace** — upstream channel templates, one-click injection into any site (bring-your-own upstream, or managed keys issued by a metering gateway), with a usage/settlement ledger.
-- **Alerting** — site down / job failed / channel disabled / low balance, with webhook notifications.
-- **Multi-tenant RBAC** — root / operator / viewer roles, invite-based signup, session auth, full audit trail on every write.
-- **Billing & quotas** — plans and subscriptions gate how many sites an operator can run (manual provisioning built in; payment gateways are an extension point).
+- **Alerting** — site down / job failed / channel disabled / low balance, plus low-margin and cost-spike signals, delivered by email or webhook when configured.
+- **Multi-tenant RBAC** — site ownership per operator, open/invite signup, session auth, and write auditing. Root manages the platform; viewer is a platform-wide read-only role, not an organization member.
+- **Billing & quotas** — self-serve Alipay / WeChat Pay / USDT checkout, recoverable payment fulfillment, prorated upgrades, and downgrades at the current term boundary.
 - **Domain automation** — bind a domain in the panel, routes are pushed to Caddy's admin API, TLS is automatic.
 - **Observability** — Prometheus `/metrics`, health probes, structured audit log.
 - **Backup / restore** — one command dumps orchestrator state plus every site's database.
 - **One-command deploy** — `docker compose up -d` from `deploy/`.
+
+## v2.2.0 highlights
+
+[Release notes](docs/releases/v2.2.0.md)
+
+- Separate operator workspaces and grouped administrator tools, with mobile navigation.
+- Connect existing sites with an automatically assigned internal ID and an editable nickname.
+- Payment recovery and frozen plan-change quotes; finance totals disclose missing data and separate consumption charges, supplier costs, and cash top-ups.
+- Administrator request-level financial review with evidence, deduplication, decision notes, and rechecks. See [billing](docs/BILLING.md) and [financial review](docs/FINANCE-REVIEW.md).
+
+**An anonymized operational example:** a low-margin warning email prompted an investigation that confirmed repeated exploitation of a settlement flaw in an older Sub2API deployment: upstream usage incurred costs while customer charges were not committed. The alert helped identify the issue and drive an engine upgrade; the [upstream fix](https://github.com/Wei-Shaw/sub2api/commit/c2d5bbd93edfb3a14f7da28d2e62c9216f0bbc86) addresses the defect. Sites, accounts, amounts, and private logs are omitted. relay-panel provides monitoring and review; engine fixes are deployed separately.
 
 ## Screenshots
 
@@ -138,9 +149,9 @@ This is a v2 rewrite; it is **not** compatible with the original relay-panel (a 
 - [x] **P1 — Fleet manager:** orchestrator + sub2api adapter + site lifecycle + read-only unified dashboard
 - [x] **P2 — More engines + channel marketplace:** new-api adapter; channel templates, grants, metering/settlement ledger
 - [x] **P3 — Admin backend:** operator accounts + RBAC, full write UI, alerting, one-command Docker deployment
-- [ ] **P4 — Hosted SaaS:** multi-tenant RBAC, invite signup, quota/billing core, and domain automation are done; payment integration and hosted operations are extension points in progress
+- [ ] **P4 — Hosted SaaS acceptance:** the seven core capabilities are implemented, including payments and site adoption. End-to-end delivery and operational acceptance remain open; see the [current readiness assessment](docs/P4-READINESS.md).
 
-Full milestone plan through v1.0: [ROADMAP.md](ROADMAP.md).
+Milestone scope and acceptance criteria: [ROADMAP.md](ROADMAP.md).
 
 ## Sponsors
 

@@ -1,6 +1,6 @@
-# Roadmap — to v1.0
+# Roadmap — v2 capabilities and release acceptance
 
-This is the full plan from the current state to the first stable release. Milestones ship in order; each is independently useful. Checkboxes track granular tasks. Acceptance criteria define "done".
+Feature checkboxes track implementation. Release acceptance is tracked separately: a shipped feature does not by itself prove every hosted deployment path. The v2.2.0 assessment is in [docs/P4-READINESS.md](docs/P4-READINESS.md).
 
 Legend: ✅ done · 🚧 in progress · ⬜ planned
 
@@ -68,23 +68,25 @@ Turn the read-only dashboard into a real control panel.
 
 ---
 
-## ✅ P4 — Hosted SaaS · shipped
+## 🚧 P4 — Hosted SaaS · core implemented, acceptance in progress
 
 The managed offering. Same codebase, orchestrator runs on our infra.
 
 - [x] Multi-operator tenancy: RBAC + per-operator site ownership on top of per-site container/data isolation
 - [x] Sign-up (open / invite modes) → operators provision their own sites from the panel within quota
-- [x] Billing core: plans, subscriptions, per-operator site quotas (manual provisioning by root; `PaymentProvider` interface as the extension point)
+- [x] Billing core: plans, subscriptions, per-operator site quotas, self-serve payment recovery, prorated upgrades and term-end downgrades
 - [x] Custom domain automation (add domain → routes pushed to Caddy admin API → auto TLS, see [docs/CADDY.md](docs/CADDY.md))
 - [x] Payment integration: Alipay / WeChat Pay / USDT self-serve checkout with zero-trust webhooks (crediting only via channel re-query; see [docs/PAYMENTS.md](docs/PAYMENTS.md))
 - [x] Self-serve **connect existing site** (`POST /api/sites/adopt` + wizard): credential verified live, encrypted at rest, per-site read-only fuse; counts toward quota
 - [x] Operator-facing onboarding (Help page + empty-state dual-path), docs ([docs/HOSTED.md](docs/HOSTED.md)), support surface (configurable contact via `app_settings`)
 
-**Acceptance:** ✅ a new user signs up, subscribes self-serve, and has a relay station live (new or connected) without ever touching a server.
+**Acceptance target:** a new user signs up, subscribes self-serve, and has a relay station live (new or connected) without ever touching a server.
+
+**Current evidence:** core flows have automated coverage; payment concurrency/recovery has isolated PostgreSQL checks, and administrator workflows have production browser checks. This release has not revalidated the complete fresh-operator journey with real payments, both site-delivery paths, domain/TLS, and failure recovery. The full cross-tenant resource matrix and both hosted/self-hosted upgrade drills also remain acceptance work. See [the remaining gates](docs/P4-READINESS.md).
 
 ---
 
-## 🚧 v1.0 — General Availability
+## 🚧 Production readiness — continuing verification
 
 Hardening across everything above.
 

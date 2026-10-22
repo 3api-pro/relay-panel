@@ -7,9 +7,9 @@ How to run relay-panel as a hosted, multi-tenant SaaS — and what the operator 
 An operator (your customer) signs up, then can:
 
 1. **Launch new sites** — one-click provisioning of a relay site (sub2api or new-api), with an isolated database, pinned engine version, and admin account. No server access needed.
-2. **Connect existing sites** — bring sites they already run under unified management by entering the site URL and an admin credential (API key, or admin email + password). The panel verifies the credential against the live site before accepting it. Nothing is migrated or modified.
+2. **Connect existing sites** — bring sites they already run under unified management by entering the site URL and an admin credential (API key, or admin email + password). The panel verifies the credential against the live site before accepting it. The internal ID is automatic; an optional nickname defaults to the domain and remains editable in site settings. Connecting does not migrate data or write to the engine.
 3. **See everything in one place** — health, upstream status, usage and cost aggregated across all their sites.
-4. **Subscribe self-serve** — pick a plan, pay (Alipay / WeChat Pay / USDT), and the site quota applies immediately.
+4. **Subscribe self-serve** — pick a plan, pay (Alipay / WeChat Pay / USDT), and new purchases apply after verified payment. Upgrades charge the prorated difference and keep the expiry; downgrades start at the current term boundary. See [BILLING.md](BILLING.md).
 5. **Custom domains** — add a domain and get automatic TLS (requires [Caddy integration](CADDY.md)).
 
 ### Connected (external) sites: the safety model
@@ -30,7 +30,7 @@ Plans are seeded (`free` / `pro` / `scale`) and editable in the `plans` table. Q
 
 ### Payments (self-serve subscriptions)
 
-Configure at least one payment provider as root: **Billing → Payment providers → Add provider**, or via `POST /api/billing/providers`. See [PAYMENTS.md](PAYMENTS.md) for provider config shapes, webhook URLs, and the settlement model. With no provider configured, the panel falls back to manual granting (root opens subscriptions by hand) — nothing breaks.
+Configure at least one payment provider as root: **Platform management → Subscriptions & payments → Payment providers → Add provider**, or via `POST /api/billing/providers`. See [PAYMENTS.md](PAYMENTS.md) for provider config shapes, webhook URLs, and the settlement model. With no provider configured, the panel falls back to manual granting (root opens subscriptions by hand) — nothing breaks.
 
 ### Support surface
 
@@ -44,7 +44,7 @@ Set your support email / ticket portal / docs link as root under **Help & Suppor
 
 ## Root operations
 
-- `GET /api/billing/orders?all=1` — all payment orders (an order stuck in `paid` means money arrived but activation failed; re-check with the order number, then grant manually if needed).
+- `GET /api/billing/orders?all=1` — all payment orders with reconciliation state. Paid/unfulfilled orders are retried atomically by the recovery worker; ambiguous legacy orders require review. Recheck the order before taking any manual action to avoid duplicate entitlement.
 - Manual grant / cancel — Billing → Subscriptions (unchanged from before payments existed).
 - Audit trail records every checkout, payment completion, provider config change, site adoption, and read-only toggle.
 
@@ -53,4 +53,8 @@ Set your support email / ticket portal / docs link as root under **Help & Suppor
 1. Connect each production site with **read-only ON**.
 2. Watch aggregation/alerting for a few days; validate usage and settlement numbers against the engines' own dashboards.
 3. Lift read-only one non-critical site at a time when you want panel-side management.
-4. Keep the orchestrator itself off the public internet or behind your access layer until the security review (ROADMAP v1.0) is complete — it holds admin credentials for every connected site.
+4. Keep the orchestrator itself off the public internet or behind your access layer until the deployment security review ([readiness gates](P4-READINESS.md)) is complete — it holds admin credentials for every connected site.
+
+## P4 readiness
+
+The seven core SaaS capabilities are implemented. Complete fresh-operator delivery, cross-tenant acceptance, and hosted/self-hosted recovery drills are tracked separately in [P4-READINESS.md](P4-READINESS.md). Organization membership, automatic refunds, and full financial reconciliation are additional product work, not capabilities implied by the current roles.
