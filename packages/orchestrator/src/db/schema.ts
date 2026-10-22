@@ -588,6 +588,20 @@ export const serviceDocumentVersions = pgTable('service_document_versions', {
   actorId: integer('actor_id').notNull().references(() => operators.id), createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
 }, t => [unique('service_document_version_uk').on(t.documentId, t.version)]);
 
+export const budgetPolicies = pgTable('budget_policies', {
+  id: serial('id').primaryKey(), siteId: integer('site_id').notNull().references(() => sites.id), name: text('name').notNull(),
+  period: text('period').notNull(), basis: text('basis').notNull(), amountUsd: numeric('amount_usd', { precision: 20, scale: 6 }).notNull(),
+  warningPercent: integer('warning_percent').notNull().default(80), channelId: text('channel_id'), model: text('model'),
+  enabled: boolean('enabled').notNull().default(true), notify: boolean('notify').notNull().default(false), version: integer('version').notNull().default(1),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(), updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [index('budget_policies_site_idx').on(t.siteId, t.id)]);
+export const budgetEvents = pgTable('budget_events', {
+  id: serial('id').primaryKey(), policyId: integer('policy_id').notNull().references(() => budgetPolicies.id), policyVersion: integer('policy_version').notNull(),
+  periodStart: text('period_start').notNull(), level: integer('level').notNull(), evidence: jsonb('evidence').$type<import('../services/budgets.js').BudgetReport>().notNull(),
+  acknowledgedAt: timestamp('acknowledged_at', { mode: 'string' }), acknowledgedBy: integer('acknowledged_by').references(() => operators.id), acknowledgement: text('acknowledgement'),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, t => [unique('budget_event_threshold_uk').on(t.policyId, t.policyVersion, t.periodStart, t.level)]);
+
 // 常用行类型（下游模块共享，避免各自重复推导）
 export type OperatorRow = typeof operators.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;

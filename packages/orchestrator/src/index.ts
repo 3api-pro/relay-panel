@@ -1,5 +1,6 @@
 import { startBackupWorker } from './operations/backup.js';
 import { startObservationWorker } from './services/observations.js';
+import { startBudgetWorker } from './services/budgets.js';
 import { startNotificationWorker, TenantNotifier } from './notifications/worker.js';
 import { Sub2apiAdapter } from '@relay-panel/adapter-sub2api';
 import { NewapiAdapter } from '@relay-panel/adapter-newapi';
@@ -161,7 +162,10 @@ const backupWorker = !config.demo ? startBackupWorker(db, config) : null;
 const notificationWorker = !config.demo ? startNotificationWorker(db, config) : null;
 const observationWorker = !config.demo ? startObservationWorker({config,db,adapters,lifecycles,jobs},config.observationIntervalMs) : null;
 
+const budgetWorker = !config.demo ? startBudgetWorker(db, config, config.observationIntervalMs) : null;
+
 async function shutdown(): Promise<void> {
+  await budgetWorker?.stop();
   await observationWorker?.stop();
   await notificationWorker?.stop();
   await backupWorker?.stop();
