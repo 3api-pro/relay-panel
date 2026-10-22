@@ -35,10 +35,13 @@ describe('recovery and financial evidence', () => {
       const rows = await restored.query<{ email: string }>('SELECT email FROM operators WHERE id=$1', [account.operatorId]);
       expect(rows.rows[0]!.email).toBe('recovery@tests.example');
       const tables = await restored.query<{ name: string }>('SELECT name FROM schema_migrations ORDER BY name');
-      expect(tables.rows.at(-1)!.name).toBe('013_service_center.sql');
+      expect(tables.rows.at(-1)!.name).toBe('014_service_collaboration.sql');
       expect((await restored.query('SELECT * FROM refund_requests')).rows).toEqual([]);
       expect((await restored.query('SELECT * FROM service_work')).rows).toEqual([]);
       expect((await restored.query('SELECT * FROM observation_source_rows')).rows).toEqual([]);
+      expect((await restored.query('SELECT * FROM service_access')).rows).toEqual([]);
+      expect((await restored.query('SELECT * FROM service_assignments')).rows).toEqual([]);
+      expect((await restored.query('SELECT * FROM service_messages')).rows).toEqual([]);
     } finally { await restored.close(); }
     const ops = await ts.app.inject({ url: '/api/admin/operations', cookies: { rp_session: account.cookie } });
     expect(ops.json().backupOverdue).toBe(false);
@@ -49,6 +52,8 @@ describe('recovery and financial evidence', () => {
     await ts.app.inject({ method: 'PUT', url: '/api/notifications/preferences', cookies: { rp_session: account.cookie }, payload: { alerts: false, billing: false, support: false } });
     for (const category of ['alerts', 'security'] as const) await queueNotification(ts.db, ts.config, { operatorId: account.operatorId,
       category, key: category, subject: 'Test subject', body: 'Public inbox record', ...(category === 'security' ? { privateMail: 'private-link-material' } : {}) });
+    // Make the messages due explicitly; inserts and delivery can share the same millisecond.
+    await ts.db.orm.update(notifications).set({ nextAttemptAt: toPgTimestamp(new Date(Date.now() - 1000)) });
     await deliverNotifications(ts.db, ts.config, async () => { throw new Error('unavailable'); });
     const rows = await ts.db.orm.select().from(notifications);
     expect(rows.find(x => x.category === 'alerts')!.status).toBe('skipped');

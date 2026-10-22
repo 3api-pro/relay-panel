@@ -549,6 +549,26 @@ export const servicePublications = pgTable('service_publications', {
   version: integer('version').notNull().default(1), updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
 });
 
+export const serviceAccess = pgTable('service_access', {
+  id: serial('id').primaryKey(), siteId: integer('site_id').notNull().references(() => sites.id),
+  ownerId: integer('owner_id').notNull().references(() => operators.id), email: text('email').notNull(), role: text('role').notNull(),
+  partnerId: integer('partner_id').references(() => servicePartners.id), operatorId: integer('operator_id').references(() => operators.id),
+  inviteTokenHash: text('invite_token_hash').notNull().unique(), inviteExpiresAt: timestamp('invite_expires_at', {mode:'string'}).notNull(),
+  expiresAt: timestamp('expires_at', {mode:'string'}).notNull(), acceptedAt: timestamp('accepted_at', {mode:'string'}),
+  revokedAt: timestamp('revoked_at', {mode:'string'}), createdAt: timestamp('created_at', {mode:'string'}).notNull().defaultNow(),
+}, t => [uniqueIndex('service_access_active_email').on(t.siteId,t.email).where(sql`${t.revokedAt} IS NULL`), index('service_access_operator').on(t.operatorId,t.id)]);
+export const serviceAssignments = pgTable('service_assignments', {
+  id: serial('id').primaryKey(), accessId: integer('access_id').notNull().references(() => serviceAccess.id),
+  workId: integer('work_id').notNull().references(() => serviceWork.id), title: text('title').notNull(), brief: text('brief').notNull(),
+  status: text('status').notNull().default('open'), version: integer('version').notNull().default(1), revokedAt: timestamp('revoked_at', {mode:'string'}),
+  createdAt: timestamp('created_at', {mode:'string'}).notNull().defaultNow(), updatedAt: timestamp('updated_at', {mode:'string'}).notNull().defaultNow(),
+}, t => [unique('service_assignment_uk').on(t.accessId,t.workId)]);
+export const serviceMessages = pgTable('service_messages', {
+  id: serial('id').primaryKey(), assignmentId: integer('assignment_id').notNull().references(() => serviceAssignments.id),
+  actorId: integer('actor_id').notNull().references(() => operators.id), staff: boolean('staff').notNull(), body: text('body').notNull(),
+  status: text('status').notNull(), createdAt: timestamp('created_at', {mode:'string'}).notNull().defaultNow(),
+}, t => [index('service_messages_assignment').on(t.assignmentId,t.id)]);
+
 // 常用行类型（下游模块共享，避免各自重复推导）
 export type OperatorRow = typeof operators.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;

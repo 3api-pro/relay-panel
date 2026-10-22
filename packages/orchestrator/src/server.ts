@@ -13,6 +13,7 @@ import { JobEngine } from './jobs/engine.js';
 import type { SmtpSend } from './alerts/smtp.js';
 import { registerReconciliationRoutes } from './finance/reconciliation.js';
 import { registerServiceRoutes } from './services/routes.js';
+import { registerCollaborationRoutes } from './services/collaboration.js';
 import { registerOperationsRoutes } from './operations/routes.js';
 import { registerTeamRoutes, resolveWorkspace } from './team/routes.js';
 import { registerAftercareRoutes } from './billing/aftercare.js';
@@ -181,7 +182,7 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
     }
     if (!isApi) return;
     if (!auth) return reply.code(401).send({ error: '未登录或会话已过期' });
-    const personalPath = ['/api/auth/', '/api/team', '/api/notifications', '/api/support'].some(prefix => path.startsWith(prefix));
+    const personalPath = ['/api/auth/', '/api/team', '/api/notifications', '/api/support', '/api/collaboration/'].some(prefix => path.startsWith(prefix));
     if (!personalPath) {
       req.ctx = await resolveWorkspace(db, auth.ctx, req.headers['x-workspace-id']);
       if (req.ctx.teamRole && path.startsWith('/api/billing')) return reply.code(403).send({ error: 'Billing is managed by the workspace owner' });
@@ -207,6 +208,7 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
   registerOperationsRoutes(app, deps);
   registerReconciliationRoutes(app, deps);
   registerServiceRoutes(app, deps);
+  registerCollaborationRoutes(app, deps);
   registerTicketRoutes(app, deps);
   registerNotificationRoutes(app, deps);
   registerJobsRoutes(app, deps);
