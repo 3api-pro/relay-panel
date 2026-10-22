@@ -38,6 +38,10 @@ relay-panel collapses that into one control plane:
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+## v2.8.0: Scoped financial collaboration
+
+Owners can explicitly grant finance collaborators a fixed date range, channel/model filters and separate permissions for supplier costs, consumption details, CSV exports and review submissions. Reports reuse stored logs and preserve unknown amounts and collection gaps. Versioned submissions retain the evidence for owner acceptance or return; narrower permissions hide older snapshots from collaborators. Existing invitations gain no automatic financial access, and reviews do not execute payments or modify engine balances.
+
 ## v2.7.0: Passive budgets and threshold alerts
 
 Track daily, weekly and monthly budgets from existing consumption logs, scoped to a site, channel or model. Reports distinguish missing amounts, scan coverage and observed threshold crossings. Versioned events, optional owner notifications, one-time review notes and daily CSV exports preserve the evidence. These policies never probe models, stop channels, change balances or enforce engine limits.
