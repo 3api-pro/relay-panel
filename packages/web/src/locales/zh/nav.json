@@ -56,5 +56,6 @@
   "services": "站点服务中心",
   "collaboration": "协作工作台",
   "knowledge": "客户知识库",
-  "groupServices": "服务与协作"
+  "groupServices": "服务与协作",
+  "budgets": "预算与阈值提醒"
 }

@@ -56,5 +56,6 @@
   "services": "Service center",
   "collaboration": "Collaboration",
   "knowledge": "Customer knowledge",
-  "groupServices": "Services & collaboration"
+  "groupServices": "Services & collaboration",
+  "budgets": "Budgets & alerts"
 }

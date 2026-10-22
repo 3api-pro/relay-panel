@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import { get, post } from '../api/client';
 import { session } from '../api/session';
 import { Button, Card, Field, Input, Select, EmptyState } from '../components/ui';
-const { locale }=useI18n();
+const { locale }=useI18n(),route=useRoute();
 const l=(zh:string,en:string)=>locale.value.startsWith('zh')?zh:en;
 interface Site {id:number;slug:string;label:string;engine:string;version:string;managed:string;status:string}
 interface Evidence {id:string;requestId:string|null;createdAt:string;model:string|null;channelId:string|null;outcome:string;durationMs:number|null;firstTokenMs:number|null;charge:number|null;supplierCost:number|null;expectedCharge:number|null}
@@ -52,7 +53,7 @@ async function load() {
     autoCollection.value=settings.enabled;collectionInterval.value=settings.intervalMs;
   }finally{if(epoch===loadEpoch)loading.value=false;}
 }
-onMounted(()=>void action(async()=>{const result=await get<{sites:Site[];checklists:Record<string,string[]>}>('/api/services/catalog');sites.value=result.sites;checklists.value=result.checklists;if(sites.value[0])siteId.value=sites.value[0].id;}));
+onMounted(()=>void action(async()=>{const result=await get<{sites:Site[];checklists:Record<string,string[]>}>('/api/services/catalog');sites.value=result.sites;checklists.value=result.checklists;if(sites.value[0])siteId.value=sites.value.find(s=>String(s.id)===route.query.site)?.id??sites.value[0].id;}));
 watch(siteId,()=>{report.value=null;items.value=[];partners.value=[];publication.value=null;selected.value=null;events.value=[];sourceId.value=null;partnerId.value='';ticketId.value='';title.value='';description.value='';requestId.value='';channel.value='';model.value='';pubPreview.value=false;void action(load);});
 async function collect(){await action(async()=>{await post('/api/services/collect',{siteId:Number(siteId.value),day:day.value});await load();});}
 async function toggleCollection(){await action(async()=>{await post('/api/services/collection-settings',{siteId:Number(siteId.value),enabled:!autoCollection.value});await load();});}
