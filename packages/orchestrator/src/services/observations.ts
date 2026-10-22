@@ -106,6 +106,8 @@ export function startObservationWorker(deps: SitesServiceDeps, intervalMs: numbe
   const service = new Observations(deps); let current:Promise<void>|null=null, cursor=0;
   async function tick() {
     const day=beijingDay(), { db }=deps;
+    // Retention must also run when every site is inactive or collection is slow.
+    await db.orm.delete(observationRuns).where(lt(observationRuns.day,beijingDay(Date.now()-30*86400000)));
     const candidates=await db.orm.select().from(sites).where(and(eq(sites.status,'active'),sql`${sites.id}>${cursor}`)).orderBy(asc(sites.id)).limit(10);
     if(!candidates.length) {cursor=0;return;}
     for(const site of candidates) {
@@ -116,7 +118,6 @@ export function startObservationWorker(deps: SitesServiceDeps, intervalMs: numbe
       if(last && Date.now()-fromPgTimestamp(last.updatedAt).getTime()<intervalMs) continue;
       await service.scan({operatorId:site.operatorId,role:'operator',email:'passive-collector'},site.id,day).catch(()=>undefined);
     }
-    await db.orm.delete(observationRuns).where(lt(observationRuns.day,beijingDay(Date.now()-30*86400000)));
   }
   const timer=intervalMs>0 ? setInterval(()=>{if(!current)current=tick().catch(()=>undefined).finally(()=>{current=null;});},Math.max(60000,intervalMs)) : null;
   timer?.unref();
