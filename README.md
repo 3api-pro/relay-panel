@@ -38,6 +38,10 @@ relay-panel collapses that into one control plane:
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+## v2.9.0: Delegated support and internal notes
+
+Platform administrators can assign individual support tickets to existing verified accounts, with separate reply, resolution and internal-note permissions and a maximum 90-day lifetime. Staff see only assigned conversations; customer identity fields, site access and financial access are not inherited. Internal notes stay outside customer messages and notifications. Search, status filters and cursor pagination retain older tickets and conversations; replies, notifications and revocation use transactional checks.
+
 ## v2.8.0: Scoped financial collaboration
 
 Owners can explicitly grant finance collaborators a fixed date range, channel/model filters and separate permissions for supplier costs, consumption details, CSV exports and review submissions. Reports reuse stored logs and preserve unknown amounts and collection gaps. Versioned submissions retain the evidence for owner acceptance or return; narrower permissions hide older snapshots from collaborators. Existing invitations gain no automatic financial access, and reviews do not execute payments or modify engine balances.
