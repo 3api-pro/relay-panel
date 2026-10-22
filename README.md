@@ -38,6 +38,12 @@ relay-panel collapses that into one control plane:
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+## v2.12.0: Durable lifecycle execution and interrupted-job review
+
+Install, upgrade, start, stop and destroy jobs now reserve their site and execution slot in the database. Concurrent submissions are serialized, and live workers share a two-job limit. Expired execution leases become “Needs review” and retain both reservations instead of automatically rerunning an uncertain operation. Late workers cannot overwrite guarded panel state after losing ownership; Docker commands have cancellation signals and a finite deadline.
+
+The job center adds status filters, history pagination, queued-job cancellation and administrator review with a fresh preview, observed outcome and stopped-process acknowledgement. Manual review releases the reservation without changing site state or retrying the operation. Stop old application workers before upgrading to migration 021; mixed old/new workers are unsupported. PostgreSQL coordination assumes one installation with the same host, paths and configuration; it is not multi-host orchestration. Real Docker installation, upgrade and recovery acceptance still requires a test machine. See [workflow and upgrade boundaries](docs/SERVICE-CENTER.md#生命周期任务与失联复核v2120).
+
 ## v2.11.0: Partner statements and partial receipt records
 
 Create site-scoped USD/CNY payable or receivable statements with six-decimal amounts, credit lines, billing periods and due dates. Accepted finance cost snapshots can seed drafts while preserving collection gaps. Issuing freezes the document; partial receipts, void corrections, outstanding recorded amounts and CSV exports retain history.
