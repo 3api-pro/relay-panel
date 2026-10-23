@@ -38,6 +38,12 @@ relay-panel collapses that into one control plane:
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
+## v2.14.0: One-click panel updates
+
+The administrator version menu can download a stable release, verify its archive and file checksums, install dependencies, back up the panel database, restart and check health. Progress survives browser disconnects. Failed candidates return to the previous binary before activation; databases are never automatically restored. Updates that change SQL migrations require manual deployment.
+
+New Docker deployments use the managed launcher. Existing native deployments must switch their service command to `node dist/system/supervisor.js` from the orchestrator directory once, preserving all environment variables and persistent data paths. This is for one managed application process; Node.js, container base images and engine sites retain their own upgrade procedures. See [upgrade requirements](docs/SELF-HOST.md#61-升级面板).
+
 ## v2.13.3: Observation retention for inactive sites
 
 The enabled observation worker cleans expired request records before selecting sites or waiting for collection. Cleanup therefore also runs when all sites are inactive. Linked case evidence and history remain available. Setting `RP_OBSERVATION_INTERVAL_MS=0` disables both automatic collection and this cleanup; no migration or extra upstream request is added.
