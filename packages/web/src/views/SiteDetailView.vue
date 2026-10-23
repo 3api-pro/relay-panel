@@ -27,16 +27,19 @@ import DomainsTab from './site-detail/DomainsTab.vue';
 import SettingsTab from './site-detail/SettingsTab.vue';
 import JobsTab from './site-detail/JobsTab.vue';
 import AuditTab from './site-detail/AuditTab.vue';
+import SiteRemoveDialog from './sites/SiteRemoveDialog.vue';
 
 /**
  * 单站钻取：站点头部（状态/引擎/域名/端口 + 生命周期操作）+ 七个懒载标签页。
- * 生命周期操作仅 canWrite 且非 external 站可见；渠道/用户/域名/设置对 external 站仍可写。
+ * 本机生命周期操作需自部署权限；面板移除支持所有站点并保留实际服务与历史。
  */
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 const slug = computed(() => String(route.params.slug ?? ''));
 const canWrite = inject<ComputedRef<boolean>>('canWrite', computed(() => false));
+const lifecycleEnabled = ref(false);
+const removeOpen = ref(false);
 
 const site = ref<SiteView | null>(null);
 const loading = ref(true);
@@ -58,6 +61,9 @@ async function loadSite(initial = false): Promise<void> {
 let timer: number | null = null;
 onMounted(() => {
   void loadSite(true);
+  void get<{ deploymentMode: string; localProvisionEnabled: boolean }>('/api/auth/config', { silent: true })
+    .then(config => { lifecycleEnabled.value = config.deploymentMode === 'self-hosted' && config.localProvisionEnabled; })
+    .catch(() => { lifecycleEnabled.value = false; });
   // 有进行中任务时轻量轮询头部，反映状态流转
   timer = window.setInterval(() => {
     if (site.value?.activeJob) void loadSite();
@@ -68,7 +74,7 @@ onBeforeUnmount(() => {
 });
 
 const isExternal = computed(() => site.value?.managed === 'external');
-const canLifecycle = computed(() => canWrite.value && !isExternal.value);
+const canLifecycle = computed(() => canWrite.value && lifecycleEnabled.value && !isExternal.value && !site.value?.readonly);
 const busy = computed(() => Boolean(site.value?.activeJob));
 const siteStatus = computed(() => {
   const s = site.value;
@@ -194,7 +200,7 @@ async function doDestroy(): Promise<void> {
           </div>
 
           <!-- 生命周期操作 -->
-          <div v-if="canLifecycle" class="flex shrink-0 items-center gap-2">
+          <div v-if="canWrite" class="flex shrink-0 flex-wrap items-center gap-2">
             <Badge v-if="busy && site.activeJob" tone="accent" size="sm">
               {{
                 site.activeJob.status === 'running'
@@ -202,17 +208,20 @@ async function doDestroy(): Promise<void> {
                   : t('siteDetail.header.jobQueued', { kind: jobKindText(site.activeJob.kind) })
               }}
             </Badge>
-            <Button v-if="canStart" size="sm" :disabled="busy" :loading="powerLoading" @click="doPower('start')">
+            <Button v-if="canLifecycle && canStart" size="sm" :disabled="busy" :loading="powerLoading" @click="doPower('start')">
               <Play :size="14" /> {{ t('siteDetail.header.start') }}
             </Button>
-            <Button v-if="canStop" size="sm" :disabled="busy" :loading="powerLoading" @click="doPower('stop')">
+            <Button v-if="canLifecycle && canStop" size="sm" :disabled="busy" :loading="powerLoading" @click="doPower('stop')">
               <Square :size="14" /> {{ t('siteDetail.header.stop') }}
             </Button>
-            <Button size="sm" :disabled="busy" @click="openUpgrade">
+            <Button v-if="canLifecycle" size="sm" :disabled="busy" @click="openUpgrade">
               <ArrowUpCircle :size="14" /> {{ t('siteDetail.header.upgrade') }}
             </Button>
-            <Button v-if="canDestroy" size="sm" variant="danger" :disabled="busy" @click="destroyOpen = true">
+            <Button v-if="canLifecycle && canDestroy" size="sm" variant="danger" :disabled="busy" @click="destroyOpen = true">
               <Trash2 :size="14" /> {{ t('siteDetail.header.destroy') }}
+            </Button>
+            <Button v-if="canDestroy" size="sm" variant="danger" :disabled="busy" @click="removeOpen = true">
+              <Trash2 :size="14" /> {{ t('sites.remove.action') }}
             </Button>
           </div>
         </div>
@@ -238,6 +247,8 @@ async function doDestroy(): Promise<void> {
         </div>
       </div>
     </template>
+
+    <SiteRemoveDialog v-model:open="removeOpen" :site="site" @removed="router.push('/sites')" />
 
     <!-- 升级 -->
     <Modal v-model:open="upgradeOpen" :title="t('siteDetail.upgrade.title')" width="440px">

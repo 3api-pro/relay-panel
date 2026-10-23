@@ -22,16 +22,27 @@ import {
 } from '../components/ui';
 import { toast } from '../components/ui/toast';
 import SiteRowActions from './sites/SiteRowActions.vue';
+import SiteRemoveDialog from './sites/SiteRemoveDialog.vue';
 
 /**
  * 站点列表、自部署引导与接入已有站点。
  * 数据源 GET /api/sites，30s 轻量自刷新。写操作 inject canWrite 后可见；
- * external（外部接管）站隐藏全部生命周期操作。销毁走 ConfirmDanger 逐字确认。
+ * 面板移除支持接入站和失败安装；本机销毁仅在自部署可用。危险操作逐字确认。
  */
 const router = useRouter();
 const route = useRoute();
 const { t } = useI18n();
 const canWrite = inject<ComputedRef<boolean>>('canWrite', computed(() => false));
+const lifecycleEnabled = ref(false);
+const removeOpen = ref(false);
+const removeSite = ref<SiteView | null>(null);
+async function loadCapabilities(): Promise<void> {
+  try {
+    const config = await get<{ deploymentMode: string; localProvisionEnabled: boolean }>('/api/auth/config', { silent: true });
+    lifecycleEnabled.value = config.deploymentMode === 'self-hosted' && config.localProvisionEnabled;
+  } catch { lifecycleEnabled.value = false; }
+}
+function onRemove(site: SiteView): void { removeSite.value = site; removeOpen.value = true; }
 
 // ---- 本视图专属请求/响应类型（不污染共享 types.ts） ----
 interface JobRef {
@@ -65,6 +76,7 @@ onMounted(() => {
   if (route.query.adopt === '1') openAdopt();
   void refresh(true);
   void loadVersions();
+  void loadCapabilities();
   timer = window.setInterval(() => void refresh(), 30_000);
 });
 onBeforeUnmount(() => {
@@ -411,13 +423,15 @@ async function submitAdopt(): Promise<void> {
 
         <template #cell-actions="{ row }">
           <div
-            v-if="canWrite && asSite(row).managed !== 'external'"
+            v-if="canWrite"
             class="flex justify-end"
             @click.stop
           >
             <SiteRowActions
               :site="asSite(row)"
               :busy="busySlug === asSite(row).slug"
+              :lifecycle-enabled="lifecycleEnabled"
+              @remove="onRemove(asSite(row))"
               @upgrade="onUpgrade(asSite(row))"
               @start="lifecycle(asSite(row), 'start')"
               @stop="lifecycle(asSite(row), 'stop')"
@@ -428,6 +442,8 @@ async function submitAdopt(): Promise<void> {
         </template>
       </Table>
     </div>
+
+    <SiteRemoveDialog v-model:open="removeOpen" :site="removeSite" @removed="refresh(true)" />
 
     <!-- 升级弹窗 -->
     <Modal v-model:open="upgradeOpen" :title="t('sites.upgrade.title')" width="420px">

@@ -1,4 +1,4 @@
-import { assertExecutionActive, guardedJobTransaction } from '../jobs/execution.js';
+import { assertExecutionActive, guardedJobTransaction, lockScheduler } from '../jobs/execution.js';
 import { tenantId } from '../auth/rbac.js';
 import { connect } from 'node:net';
 import { randomUUID } from 'node:crypto';
@@ -1445,6 +1445,29 @@ export class SitesService {
     const site = await this.requireComposeSite(ctx, slug);
     if (confirm !== slug) throw new ApiError(400, '销毁确认失败：请输入完整站点标识');
     return this.enqueueAudited(ctx, site, 'destroy', { keepData }, 'site.destroy', { keepData });
+  }
+
+  /** Remove panel management only; retain history and leave the actual application/data untouched. */
+  async removeSite(ctx: SessionCtx, slug: string, confirm: string): Promise<{ slug: string; removed: true }> {
+    requireWrite(ctx);
+    await this.requireSite(ctx, slug);
+    if (confirm !== slug) throw new ApiError(400, '移除确认失败：请确认所选站点');
+    await this.deps.db.orm.transaction(async orm => {
+      // Serialize with enqueue/dispatch so no queued or uncertain execution can be hidden.
+      await lockScheduler(orm);
+      const [site] = await orm.select().from(sites).where(eq(sites.slug, slug)).for('update');
+      if (!site || !canAccessSite(ctx, site)) throw new ApiError(404, '站点不存在');
+      if (site.status === 'destroyed') return;
+      const [job] = await orm.select({ id: jobsTable.id }).from(jobsTable)
+        .where(and(eq(jobsTable.slug, slug), inArray(jobsTable.status, ['queued', 'running', 'uncertain']))).limit(1);
+      if (job) throw new ApiError(409, `站点有未完成或待复核任务（#${job.id}），请先在任务记录中处理`);
+      await orm.update(sites).set({ status: 'destroyed', updatedAt: nowPg() }).where(eq(sites.id, site.id));
+      await orm.insert(auditEvents).values({ siteId: site.id, actor: ctx.email, action: 'site.remove',
+        payload: { slug, managed: site.managed, previousStatus: site.status, resourcesPreserved: true }, ok: true });
+    });
+    probeCache.delete(slug);
+    latestSnapshotCache.delete(slug);
+    return { slug, removed: true };
   }
 
   // ---- 写路径：引擎 admin 面（渠道/用户/品牌） ----

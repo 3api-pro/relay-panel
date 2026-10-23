@@ -244,6 +244,11 @@ export function registerSitesRoutes(app: FastifyInstance, deps: SitesServiceDeps
     return service.destroySite(ctx, req.params.slug, body.confirm, body.keepData === true);
   });
 
+  app.post<SlugParams>('/api/sites/:slug/remove', async (req) => {
+    const body = parseBody(z.object({ confirm: z.string().min(1), preserveResources: z.literal(true) }).strict(), req.body);
+    return service.removeSite(requireCtx(req), req.params.slug, body.confirm);
+  });
+
   // ---- 写：渠道 / 用户 / 品牌 ----
 
   app.post<SlugParams>('/api/sites/:slug/channels', async (req, reply) => {

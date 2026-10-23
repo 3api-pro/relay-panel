@@ -120,5 +120,12 @@
     "errLabelLength": "Site names can contain up to 64 characters",
     "editNameHint": "A name for this panel. Changing it keeps the site address and public branding intact.",
     "saveName": "Save nickname"
+  },
+  "remove": {
+    "title": "Remove site from panel",
+    "action": "Remove from panel",
+    "message": "This removes the site from the management list and stops panel management. History is retained. The actual site, containers and data will not be stopped or deleted. Uninstall them on their server if needed.",
+    "success": "Site removed from panel",
+    "menu": "Remove from panel…"
   }
 }

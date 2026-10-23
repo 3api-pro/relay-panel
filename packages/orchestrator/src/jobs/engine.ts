@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { jobs, type JobRow, type JobStep } from '../db/schema.js';
+import { jobs, sites, type JobRow, type JobStep } from '../db/schema.js';
 import { executionScope, JobOwnershipLost, liveLease, lockScheduler } from './execution.js';
 
 export type JobKind = 'provision' | 'upgrade' | 'start' | 'stop' | 'destroy';
@@ -41,6 +41,11 @@ export class JobEngine {
   async enqueue(kind: JobKind, slug: string, payload: Record<string,unknown>|undefined, createdBy: string, opts: {siteId?:number} = {}): Promise<number> {
     return this.db.orm.transaction(async orm => {
       await lockScheduler(orm);
+      if (opts.siteId !== undefined) {
+        const [site] = await orm.select({ status: sites.status }).from(sites)
+          .where(and(eq(sites.id, opts.siteId), eq(sites.slug, slug))).for('share');
+        if (!site || site.status === 'destroyed') throw httpError(409, '站点已移除，不能提交新的本机任务');
+      }
       const [dup]=await orm.select({id:jobs.id,status:jobs.status}).from(jobs).where(and(eq(jobs.slug,slug),inArray(jobs.status,['queued','running','uncertain']))).limit(1);
       if(dup)throw httpError(409,`站点 ${slug} 已有未完成或待复核任务（#${dup.id} ${dup.status}），请先处理该任务`);
       const [created]=await orm.insert(jobs).values({kind,slug,createdBy,...(payload?{payload}:{}),...opts}).returning({id:jobs.id});
