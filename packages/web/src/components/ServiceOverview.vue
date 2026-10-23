@@ -44,7 +44,7 @@ const metrics = computed(() => [
 <template>
   <section aria-live="polite" :aria-label="l('今日服务概览','Today’s service overview')" class="space-y-3" :data-status="state.reason">
     <div class="service-health rounded-xl border p-4 sm:p-5" :class="`health-${state.tone}`">
-      <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div class="flex min-w-0 flex-1 items-start gap-3">
           <div class="health-icon flex size-11 shrink-0 items-center justify-center rounded-xl"><component :is="loading ? RefreshCw : icon" :size="23" :class="{'animate-spin':loading}" aria-hidden="true" /></div>
           <div class="min-w-0"><p class="text-xs text-muted">{{ l('今日服务概览','Today’s service overview') }} · {{ day }} {{ l('北京时间','Beijing time') }}</p><h2 class="mt-1 text-xl font-semibold tracking-tight sm:text-2xl">{{ message[0] }}</h2><p class="mt-2 max-w-2xl text-sm leading-6 text-muted">{{ message[1] }}</p></div>
