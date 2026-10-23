@@ -43,7 +43,7 @@ RUN addgroup -g 10001 relay && adduser -D -u 10001 -G relay relay
 
 WORKDIR /app
 # 整树拷贝（dist + 生产 node_modules + src/db/migrations 等运行时资源）
-COPY --from=builder --chown=relay:relay /app/package.json ./package.json
+COPY --from=builder --chown=relay:relay /app/package.json /app/package-lock.json ./
 COPY --from=builder --chown=relay:relay /app/node_modules ./node_modules
 COPY --from=builder --chown=relay:relay /app/packages ./packages
 
@@ -54,4 +54,4 @@ USER relay
 WORKDIR /app/packages/orchestrator
 
 EXPOSE 7100
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/system/supervisor.js"]

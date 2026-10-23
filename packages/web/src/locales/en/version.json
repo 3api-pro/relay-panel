@@ -8,5 +8,26 @@
   "refresh": "Check again",
   "published": "Released",
   "releaseNotes": "Release notes",
-  "upgradeHint": "Pull the new release and redeploy to upgrade."
+  "upgradeHint": "Managed installations verify the release and back up data before updating. Schema changes require a manual upgrade.",
+  "oneClickUpdate": "Update now",
+  "confirmUpdate": "Back up and update",
+  "cancel": "Cancel",
+  "confirmHint": "The panel will back up its database and restart. The panel will be briefly unavailable; running API sites continue serving traffic.",
+  "updateStatusFailed": "Update status is unavailable. Reopen this panel to check again.",
+  "reconnecting": "Reconnecting to the panel…",
+  "progressHint": "You can close this popup while the update continues. If reconnection takes too long, check the panel service on the host.",
+  "updateSucceeded": "Updated to v{version}. Health checks passed.",
+  "reload": "Reload new version",
+  "stableOnly": "Install prereleases manually using the release instructions.",
+  "phases": {
+    "idle": "Ready",
+    "downloading": "Downloading release…",
+    "verifying": "Verifying release…",
+    "installing": "Preparing new version…",
+    "backing_up": "Backing up panel data…",
+    "restarting": "Restarting the panel…",
+    "checking": "Checking new version health…",
+    "succeeded": "Update complete",
+    "failed": "Update failed"
+  }
 }

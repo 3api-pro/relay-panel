@@ -1,13 +1,14 @@
 {
   "name": "@relay-panel/orchestrator",
-  "version": "2.13.3",
+  "version": "2.14.0",
   "type": "module",
   "license": "MIT",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc -b",
     "dev": "node --watch --experimental-strip-types src/index.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "start": "node dist/system/supervisor.js"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",
@@ -19,9 +20,11 @@
     "drizzle-orm": "^0.45.4",
     "fastify": "^5.12.7",
     "pg": "^8.13.0",
+    "yauzl": "^3.4.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@types/pg": "^8.11.0"
+    "@types/pg": "^8.11.0",
+    "@types/yauzl": "^3.4.0"
   }
 }

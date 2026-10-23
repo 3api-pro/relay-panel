@@ -60,13 +60,13 @@ describe('compareSemver', () => {
 // ---------------------------------------------------------------------------
 
 describe('pickLatestRelease', () => {
-  it('跳过草稿，保留 prerelease（v2 线全是 beta，跳过就会漏报）', () => {
+  it('跳过草稿，稳定版本优先', () => {
     const picked = pickLatestRelease([
       { tag_name: 'v9.9.9', draft: true },
       { tag_name: 'v2.1.0-beta.1', prerelease: true, html_url: 'u' },
       { tag_name: 'v0.5.0' },
     ]);
-    expect(picked?.tag_name).toBe('v2.1.0-beta.1');
+    expect(picked?.tag_name).toBe('v0.5.0');
   });
 
   it('空列表 / 无 tag → null', () => {
@@ -172,4 +172,15 @@ describe('GET /api/system/version', () => {
       await ts.close();
     }
   });
+});
+
+it('rejects ambiguous versions, sorts releases and isolates repository caches', async () => {
+  for (const value of ['2.1.0oops', '02.1.0', '2.1.0-beta..1', '2.1.0-01', '9999999999999999999.0.0']) expect(parseSemver(value)).toBeNull();
+  expect(pickLatestRelease([{ tag_name: 'v2.9.0' }, { tag_name: 'v2.14.0' }, { tag_name: 'garbage' }])?.tag_name).toBe('v2.14.0');
+  expect(pickLatestRelease([{ tag_name: 'v3.0.0-beta.1', prerelease: true }])?.tag_name).toBe('v3.0.0-beta.1');
+  const fetchImpl = vi.fn(async () => jsonResponse([{ tag_name: 'v2.14.0' }]));
+  await getVersionInfo({ repo: 'first/repo', fetchImpl });
+  expect((await getVersionInfo({ repo: 'second/repo', fetchImpl })).cached).toBe(false);
+  expect(fetchImpl).toHaveBeenCalledTimes(2);
+  expect((await fetchLatestRelease('../private', fetchImpl)).error).not.toBeNull();
 });

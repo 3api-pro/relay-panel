@@ -1,4 +1,6 @@
-import { startBackupWorker } from './operations/backup.js';
+import { createUpdateChannel, updaterFromChannel } from './system/update-channel.js';
+import type { UpdateMaintenance } from './system/update-routes.js';
+import { startBackupWorker, performPanelBackup } from './operations/backup.js';
 import { startObservationWorker } from './services/observations.js';
 import { startBudgetWorker } from './services/budgets.js';
 import { startNotificationWorker, TenantNotifier } from './notifications/worker.js';
@@ -32,6 +34,33 @@ import { makeDemoAdapters, makeDemoLifecycles, demoNotifier, seedDemo } from './
  */
 
 const config = loadConfig();
+const maintenance: UpdateMaintenance = { active: config.updateManaged && !!process.send, allowStatus: !(config.updateManaged && !!process.send), requests: new Set() };
+let workersStarted = false, closing = false;
+let stopWorkers: () => Promise<void> = async () => {};
+const updateChannel = config.updateManaged && process.send ? createUpdateChannel(process, async (method, args) => {
+  if (method === 'activate') {
+    if (!workersStarted) { await startWorkers(); workersStarted = true; }
+    maintenance.allowStatus = true; maintenance.active = false; return true;
+  }
+  if (method === 'resume') { maintenance.active = false; if (workersStarted) jobs.start(); return true; }
+  if (method === 'shutdown') { setTimeout(() => void shutdown(), 10); return true; }
+  if (method === 'backup') {
+    const actor = (args as { actor?: unknown })?.actor;
+    if (typeof actor !== 'string') throw new Error('更新操作者无效');
+    maintenance.active = true;
+    try {
+      const until = Date.now() + 30_000;
+      while (maintenance.requests.size && Date.now() < until) await new Promise(r => setTimeout(r, 50));
+      if (maintenance.requests.size) throw new Error('仍有请求正在执行，请稍后重试');
+      await jobs.pause();
+      if (jobs.runningCount) throw new Error('站点任务正在运行，请等待完成后更新');
+      const result = await performPanelBackup(db, config, actor);
+      return Number(result.backupId);
+    } catch (error) { maintenance.active = false; jobs.start(); throw error; }
+  }
+  throw new Error('更新操作无效');
+}) : null;
+if (updateChannel) process.on('disconnect', () => void shutdown());
 const db = await makeDb(config.dbUrl);
 const migrated = await runMigrations(db);
 
@@ -99,90 +128,99 @@ if (config.demo) {
 }
 
 const app = await buildServer(
-  { config, db, adapters, lifecycles, gateway, jobs, notifier },
+  { config, db, adapters, lifecycles, gateway, jobs, notifier, updater: updaterFromChannel(updateChannel), updateMaintenance: maintenance },
   { logger: true },
 );
 
 if (migrated.length > 0) app.log.info(`migrations applied: ${migrated.join(', ')}`);
 
-// Attach job-result alerts before boot reconciliation so interrupted jobs are also reported.
-// monitorIntervalMs=0 disables polling but keeps the job completion callback.
-const monitor = startMonitor({ config, db, adapters, notifier, jobs }, config.monitorIntervalMs);
+async function startWorkers(): Promise<void> {
+  // Attach job-result alerts before boot reconciliation so interrupted jobs are also reported.
+  // monitorIntervalMs=0 disables polling but keeps the job completion callback.
+  const monitor = startMonitor({ config, db, adapters, notifier, jobs }, config.monitorIntervalMs);
 
-// Only expired executions become uncertain; another live worker keeps its lease and site fence.
-const recovered = await jobs.reconcileOrphans();
-if (recovered > 0) app.log.warn(`${recovered} lifecycle job(s) require manual review`);
+  // Only expired executions become uncertain; another live worker keeps its lease and site fence.
+  const recovered = await jobs.reconcileOrphans();
+  if (recovered > 0) app.log.warn(`${recovered} lifecycle job(s) require manual review`);
 
-jobs.start();
+  jobs.start();
 
-// G2: 账本网关拉取循环（网关已配置且周期 > 0 时启动；启动即先拉一轮）
-const stopLedgerPull =
-  gateway !== null && config.ledgerPullIntervalMs > 0
-    ? startPullLoop(db, gateway, config.ledgerPullIntervalMs)
-    : null;
+  // G2: 账本网关拉取循环（网关已配置且周期 > 0 时启动；启动即先拉一轮）
+  const stopLedgerPull =
+    gateway !== null && config.ledgerPullIntervalMs > 0
+      ? startPullLoop(db, gateway, config.ledgerPullIntervalMs)
+      : null;
 
-// 订阅生命周期：计费扫描循环（收敛过期状态 + 到期提醒邮件）。
-// billingSweepIntervalMs=0 时不起；demo 模式不起（罐装数据不发信、不收敛）。
-// SMTP 未配（config.smtp 缺省）时提醒静默跳过，状态收敛仍照常执行。
-const billingSweep =
-  !config.demo && config.billingSweepIntervalMs > 0
-    ? startBillingSweep({ config, db, smtp: config.smtp ?? null }, config.billingSweepIntervalMs)
-    : null;
+  // 订阅生命周期：计费扫描循环（收敛过期状态 + 到期提醒邮件）。
+  // billingSweepIntervalMs=0 时不起；demo 模式不起（罐装数据不发信、不收敛）。
+  // SMTP 未配（config.smtp 缺省）时提醒静默跳过，状态收敛仍照常执行。
+  const billingSweep =
+    !config.demo && config.billingSweepIntervalMs > 0
+      ? startBillingSweep({ config, db, smtp: config.smtp ?? null }, config.billingSweepIntervalMs)
+      : null;
 
-// F2: 经营日报/周报扫描循环（阈值预警邮件 + margin_low/cost_spike 告警扇出）。
-// reportSweepIntervalMs=0 时不起（master kill switch）；demo 模式不起（罐装数据不发信）。
-// SMTP 未配或无收件人时报告发信静默跳过，阈值 openAlert 仍走已配 webhook/email 扇出。
-const financeReports =
-  !config.demo && config.reportSweepIntervalMs > 0
-    ? startFinanceReports(
-        { config, db, adapters, lifecycles, jobs, notifier, smtp: config.smtp ?? null },
-        config.reportSweepIntervalMs,
-      )
-    : null;
+  // F2: 经营日报/周报扫描循环（阈值预警邮件 + margin_low/cost_spike 告警扇出）。
+  // reportSweepIntervalMs=0 时不起（master kill switch）；demo 模式不起（罐装数据不发信）。
+  // SMTP 未配或无收件人时报告发信静默跳过，阈值 openAlert 仍走已配 webhook/email 扇出。
+  const financeReports =
+    !config.demo && config.reportSweepIntervalMs > 0
+      ? startFinanceReports(
+          { config, db, adapters, lifecycles, jobs, notifier, smtp: config.smtp ?? null },
+          config.reportSweepIntervalMs,
+        )
+      : null;
 
-// F3: 风控骤增扫描。riskScanIntervalMs=0 时不起自动循环（默认，避免线上骤增告警噪音）；
-// 仅 root 可 POST /api/risk/scan 按需触发或显式设正值开启。demo 模式不启用。
-// 🔴 限额写回受 config.riskEnforce（RP_RISK_ENFORCE，默认 off）门控，扫描本身绝不写回引擎。
-const riskScan = !config.demo ? startRiskScan({ config, db, adapters, notifier }, config.riskScanIntervalMs) : null;
+  // F3: 风控骤增扫描。riskScanIntervalMs=0 时不起自动循环（默认，避免线上骤增告警噪音）；
+  // 仅 root 可 POST /api/risk/scan 按需触发或显式设正值开启。demo 模式不启用。
+  // 🔴 限额写回受 config.riskEnforce（RP_RISK_ENFORCE，默认 off）门控，扫描本身绝不写回引擎。
+  const riskScan = !config.demo ? startRiskScan({ config, db, adapters, notifier }, config.riskScanIntervalMs) : null;
 
-// F4: 客户 CRM 每日快照循环（逐日为每站每客户落 customer_snapshots，供消费骤降/流失侦测）。
-// crmSnapshotIntervalMs=0 时不起（可关闭）；demo 模式不起（罐装数据不采集）。
-// 🔴 只做只读 GET /admin/users(翻页)+写我方新表，绝不触碰引擎/客户额度/余额；churn 告警默认关闭。
-const customerSnapshot =
-  !config.demo && config.crmSnapshotIntervalMs > 0
-    ? startCustomerSnapshot({ config, db, adapters, notifier }, config.crmSnapshotIntervalMs)
-    : null;
+  // F4: 客户 CRM 每日快照循环（逐日为每站每客户落 customer_snapshots，供消费骤降/流失侦测）。
+  // crmSnapshotIntervalMs=0 时不起（可关闭）；demo 模式不起（罐装数据不采集）。
+  // 🔴 只做只读 GET /admin/users(翻页)+写我方新表，绝不触碰引擎/客户额度/余额；churn 告警默认关闭。
+  const customerSnapshot =
+    !config.demo && config.crmSnapshotIntervalMs > 0
+      ? startCustomerSnapshot({ config, db, adapters, notifier }, config.crmSnapshotIntervalMs)
+      : null;
 
-const paymentReconciliation = !config.demo
-  ? startPaymentReconciliation({ config, db }, config.paymentReconcileIntervalMs) : null;
+  const paymentReconciliation = !config.demo
+    ? startPaymentReconciliation({ config, db }, config.paymentReconcileIntervalMs) : null;
 
-const backupWorker = !config.demo ? startBackupWorker(db, config) : null;
-const notificationWorker = !config.demo ? startNotificationWorker(db, config) : null;
-const observationWorker = !config.demo ? startObservationWorker({config,db,adapters,lifecycles,jobs},config.observationIntervalMs) : null;
+  const backupWorker = !config.demo ? startBackupWorker(db, config) : null;
+  const notificationWorker = !config.demo ? startNotificationWorker(db, config) : null;
+  const observationWorker = !config.demo ? startObservationWorker({config,db,adapters,lifecycles,jobs},config.observationIntervalMs) : null;
 
-const budgetWorker = !config.demo ? startBudgetWorker(db, config, config.observationIntervalMs) : null;
+  const budgetWorker = !config.demo ? startBudgetWorker(db, config, config.observationIntervalMs) : null;
 
-async function shutdown(): Promise<void> {
-  await budgetWorker?.stop();
-  await observationWorker?.stop();
-  await notificationWorker?.stop();
-  await backupWorker?.stop();
-  paymentReconciliation?.stop();
-  stopLedgerPull?.();
-  customerSnapshot?.stop();
-  riskScan?.stop();
-  financeReports?.stop();
-  billingSweep?.stop();
-  monitor.stop();
-  await jobs.shutdown();
+  stopWorkers = async () => {
+    await budgetWorker?.stop();
+    await observationWorker?.stop();
+    await notificationWorker?.stop();
+    await backupWorker?.stop();
+    paymentReconciliation?.stop();
+    stopLedgerPull?.();
+    customerSnapshot?.stop();
+    riskScan?.stop();
+    financeReports?.stop();
+    billingSweep?.stop();
+    monitor.stop();
+    await jobs.shutdown();
+  };
+}
+
+async function shutdown(exitCode = 0): Promise<void> {
+  if (closing) return; closing = true;
+  maintenance.active = true;
+  await stopWorkers();
   await app.close().catch(() => undefined);
   await db.close().catch(() => undefined);
-  process.exit(0);
+  process.exit(exitCode);
 }
 process.on('SIGINT', () => void shutdown());
 process.on('SIGTERM', () => void shutdown());
 
-app.listen({ port: config.port, host: config.host }).catch((err) => {
-  app.log.error(err);
-  process.exit(1);
-});
+try {
+  await app.listen({ port: config.port, host: config.host });
+  if (updateChannel) await updateChannel.call('ready');
+  else { await startWorkers(); workersStarted = true; }
+} catch (err) { app.log.error(err); await shutdown(1); }

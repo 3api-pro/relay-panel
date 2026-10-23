@@ -123,11 +123,17 @@ export interface Config {
   smtp?: SmtpSettings;
   /** 版本更新检查的发行仓库（owner/repo）；未配=官方仓库，fork 自建可指向自己的 */
   releaseRepo?: string;
+  updateDirectory: string;
+  updateNpmCli?: string;
+  updateManaged: boolean;
   /** RP_DEMO==='1' 时进入演示模式：纯罐装数据、不连生产、不起容器、公开一键登录（见 src/demo/*） */
   demo: boolean;
 }
 
 const envSchema = z.object({
+  RP_UPDATE_DIRECTORY: z.string().default('./data/panel-updates'),
+  RP_UPDATE_NPM_CLI: z.string().min(1).optional(),
+  RP_UPDATE_MANAGED: z.enum(['0', '1']).default('0'),
   RP_BACKUP_EXCLUDE_TABLES: z.string().default('').transform(v => [...new Set(v.split(',').map(x => x.trim()).filter(Boolean))])
     .refine(names => names.every(n => /^public\.ops_backup_[a-z0-9_]+$/.test(n)), 'Only explicitly named maintenance archive tables may be excluded'),
   RP_BACKUP_DIRECTORY: z.string().default('./data/panel-backups'),
@@ -236,6 +242,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       : undefined;
 
   return {
+    updateDirectory: e.RP_UPDATE_DIRECTORY,
+    updateManaged: e.RP_UPDATE_MANAGED === '1',
+    ...(e.RP_UPDATE_NPM_CLI ? { updateNpmCli: e.RP_UPDATE_NPM_CLI } : {}),
     backupDirectory: e.RP_BACKUP_DIRECTORY,
     backupExcludeTables: e.RP_BACKUP_EXCLUDE_TABLES,
     backupIntervalMs: e.RP_BACKUP_INTERVAL_MS,

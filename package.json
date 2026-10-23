@@ -1,7 +1,7 @@
 {
   "name": "relay-panel",
   "private": true,
-  "version": "2.13.3",
+  "version": "2.14.0",
   "description": "Multi-site orchestrator for open-source LLM relay engines (sub2api / new-api)",
   "license": "MIT",
   "type": "module",
@@ -14,7 +14,8 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "typecheck": "tsc -b && npm run typecheck -w @relay-panel/web",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "start": "npm run start -w @relay-panel/orchestrator"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

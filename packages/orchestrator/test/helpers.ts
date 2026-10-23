@@ -1,3 +1,5 @@
+import type { PanelUpdater } from '../src/system/update-types.js';
+import type { UpdateMaintenance } from '../src/system/update-routes.js';
 import type { FastifyInstance } from 'fastify';
 import type { EngineAdapter, EngineKind, EngineLifecycle } from '@relay-panel/adapter-core';
 import { loadConfig, type Config } from '../src/config.js';
@@ -43,6 +45,8 @@ export async function seedOperator(
 export interface MakeTestServerOverrides {
   /** 覆盖 Config 字段（signupMode/metricsToken 等） */
   config?: Partial<Config>;
+  updater?: PanelUpdater;
+  updateMaintenance?: UpdateMaintenance;
   /** 复用外部 db（缺省新建 pglite:memory + migrate；close() 时一并关闭） */
   db?: Db;
   /** 注入 SMTP 发信替身（F2 测试报告直投断言用）；缺省不注入，走真 sendMail */
@@ -93,6 +97,8 @@ export async function makeTestServer(overrides: MakeTestServerOverrides = {}): P
   const app = await buildServer({
     config,
     db,
+    ...(overrides.updater ? { updater: overrides.updater } : {}),
+    ...(overrides.updateMaintenance ? { updateMaintenance: overrides.updateMaintenance } : {}),
     // FakeAdapter/FakeLifecycle 结构化实现 EngineAdapter/EngineLifecycle
     adapters: adapters as Record<EngineKind, EngineAdapter>,
     lifecycles: lifecycles as Record<EngineKind, EngineLifecycle>,

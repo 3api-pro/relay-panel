@@ -44,6 +44,8 @@ import { registerDomainsRoutes } from './domains/routes.js';
 import { registerMetricsRoutes } from './metrics.js';
 import { registerSupportRoutes } from './support/routes.js';
 import { registerSystemRoutes } from './system/version.js';
+import { registerUpdateRoutes, type UpdateMaintenance } from './system/update-routes.js';
+import type { PanelUpdater } from './system/update-types.js';
 import { registerDemoRoutes } from './demo/routes.js';
 
 /**
@@ -108,6 +110,8 @@ export interface ServerDeps {
    * 生产不传，registerFinanceRoutes 内部回落 sendMail。
    */
   smtpSend?: SmtpSend;
+  updater?: PanelUpdater;
+  updateMaintenance?: UpdateMaintenance;
 }
 
 export interface BuildServerOptions {
@@ -138,6 +142,16 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
   const app = Fastify({ logger: opts.logger === true });
 
   await app.register(fastifyCookie);
+  const maintenance = deps.updateMaintenance;
+  if (maintenance) {
+    app.addHook('onRequest', async (req, reply) => {
+      const path = pathOf(req.url);
+      if (['/healthz', '/readyz'].includes(path) || (req.method === 'GET' && path === '/api/system/update' && maintenance.allowStatus !== false)) return;
+      if (maintenance.active) return reply.code(503).header('Retry-After', '3').send({ error: '面板正在更新，请稍后重试' });
+      maintenance.requests.add(req.id);
+    });
+    app.addHook('onResponse', async req => { maintenance.requests.delete(req.id); });
+  }
 
   // ---- 防缓存：/api/* 响应一律 no-store，杜绝浏览器/中间层缓存鉴权响应 ----
   // （否则 GET /api/auth/me 的"已登录"响应会被浏览器缓存，登出后访问首页守卫拿到旧响应 → 误进后台）
@@ -236,7 +250,8 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
   registerDomainsRoutes(app, deps);
   registerMetricsRoutes(app, deps);
   registerSupportRoutes(app, deps);
-  registerSystemRoutes(app, { config }); // GET /api/system/version：面板自身版本 + 可用更新提示
+  registerSystemRoutes(app, { config });
+  registerUpdateRoutes(app, deps.updater);
   // 演示路由仅在 demo 模式挂载（GET /api/demo 一键账号 + POST /api/demo/login）
   if (config.demo) registerDemoRoutes(app, deps);
 

@@ -1,21 +1,56 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ExternalLink, RefreshCw } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
-import { get } from '../api/client';
-import type { SystemVersionResponse } from '../api/types';
+import { get, post } from '../api/client';
+import type { SystemVersionResponse, SystemUpdateResponse } from '../api/types';
 
-/**
- * 版本徽章（顶栏，仅 root 渲染）：显示面板当前版本，GitHub 上有更新时转琥珀 + 呼吸点。
- * 点开下拉看当前/最新/发布时间，外链跳 release 说明，可手动强制刷新（?force=1 跳 6h 缓存）。
- * 🔴 只提示不自更新——升级动作由站长自己按 README 执行。
- */
 const { t, locale } = useI18n();
 
 const info = ref<SystemVersionResponse | null>(null);
 const loading = ref(false);
 const open = ref(false);
 const root = ref<HTMLElement | null>(null);
+const update = ref<SystemUpdateResponse | null>(null);
+const confirming = ref(false), submitting = ref(false), reconnecting = ref(false);
+const updateError = ref('');
+let poll: ReturnType<typeof setTimeout> | undefined;
+let disposed = false, polling = false;
+const busy = computed(() => submitting.value || reconnecting.value || (!!update.value && !['idle', 'succeeded', 'failed'].includes(update.value.phase)));
+const needsReload = computed(() => update.value?.phase === 'succeeded' && update.value.target !== current.value);
+const canUpdate = computed(() => hasUpdate.value && update.value?.supported && !info.value?.prerelease && !busy.value);
+async function loadUpdate(): Promise<void> {
+  if (polling || disposed) return;
+  polling = true;
+  try {
+    update.value = await get<SystemUpdateResponse>('/api/system/update', { silent: true, skipAuthRedirect: true });
+    reconnecting.value = false;
+    updateError.value = '';
+  } catch {
+    if (busy.value) reconnecting.value = true;
+    else updateError.value = t('version.updateStatusFailed');
+  } finally {
+    polling = false;
+    if (!disposed && (busy.value || open.value)) poll = setTimeout(() => void loadUpdate(), 3000);
+  }
+}
+async function startUpdate(): Promise<void> {
+  if (!canUpdate.value || !info.value?.latest) return;
+  submitting.value = true; confirming.value = false; updateError.value = '';
+  try {
+    update.value = await post<SystemUpdateResponse>('/api/system/update', { target: info.value.latest, confirmed: true }, { silent: true });
+  } catch (error) {
+    updateError.value = error instanceof Error ? error.message : t('version.updateStatusFailed');
+    // A lost HTTP response does not prove the update was rejected. Reconcile before allowing another click.
+    reconnecting.value = true;
+  } finally {
+    submitting.value = false;
+    if (poll) clearTimeout(poll);
+    void loadUpdate();
+  }
+}
+function reload(): void { window.location.reload(); }
+watch(open, value => { if (value) { if (poll) clearTimeout(poll); void loadUpdate(); } else confirming.value = false; });
 
 const current = computed(() => info.value?.current ?? null);
 const hasUpdate = computed(() => info.value?.hasUpdate === true);
@@ -44,7 +79,7 @@ const publishedText = computed(() => {
 });
 
 function onDocClick(ev: MouseEvent): void {
-  if (root.value && !root.value.contains(ev.target as Node)) open.value = false;
+  if (root.value && !ev.composedPath().includes(root.value)) open.value = false;
 }
 function onKey(ev: KeyboardEvent): void {
   if (ev.key === 'Escape') open.value = false;
@@ -52,10 +87,13 @@ function onKey(ev: KeyboardEvent): void {
 
 onMounted(() => {
   void load();
+  void loadUpdate();
   document.addEventListener('click', onDocClick);
   document.addEventListener('keydown', onKey);
 });
 onBeforeUnmount(() => {
+  disposed = true;
+  if (poll) clearTimeout(poll);
   document.removeEventListener('click', onDocClick);
   document.removeEventListener('keydown', onKey);
 });
@@ -82,8 +120,9 @@ onBeforeUnmount(() => {
     <Transition name="rp-pop">
       <div
         v-if="open"
-        class="rp-glass rp-glass-strong rp-ver-pop !absolute right-0 top-[calc(100%+8px)] z-50 w-[268px] p-3"
+        class="rp-glass rp-glass-strong rp-ver-pop !absolute right-0 top-[calc(100%+8px)] z-50 w-[320px] max-w-[calc(100vw-24px)] p-3"
         role="dialog"
+        :aria-label="t('version.updateAvailable')"
       >
         <div class="flex items-center justify-between gap-2">
           <span class="text-xs text-muted">{{ t('version.currentVersion') }}</span>
@@ -125,6 +164,32 @@ onBeforeUnmount(() => {
           <template v-else>
             <p class="text-muted">{{ t('version.checking') }}</p>
           </template>
+        </div>
+
+        <div v-if="hasUpdate || update?.phase === 'failed' || needsReload || busy" class="mt-3 text-xs" aria-live="polite">
+          <template v-if="busy">
+            <p class="flex items-center gap-2 font-medium"><RefreshCw :size="14" class="animate-spin" />{{ reconnecting ? t('version.reconnecting') : t(`version.phases.${update?.phase ?? 'downloading'}`) }}</p>
+            <p class="mt-1 text-muted">{{ t('version.progressHint') }}</p>
+          </template>
+          <template v-else-if="needsReload">
+            <p class="text-emerald-500">{{ t('version.updateSucceeded', { version: update?.target }) }}</p>
+            <button type="button" class="mt-2 w-full rounded-lg bg-accent hover:bg-accent-dim px-3 py-2 text-white" @click="reload">{{ t('version.reload') }}</button>
+          </template>
+          <template v-else>
+            <p v-if="update?.error" class="mb-2 text-red-400" role="alert">{{ update.error }}</p>
+            <template v-if="confirming">
+              <p class="font-medium">v{{ current }} → v{{ info?.latest }}</p>
+              <p class="mt-1 leading-relaxed text-muted">{{ t('version.confirmHint') }}</p>
+              <div class="mt-2 flex gap-2">
+                <button type="button" class="flex-1 rounded-lg border border-[var(--glass-border)] px-3 py-2" @click="confirming = false">{{ t('version.cancel') }}</button>
+                <button type="button" class="flex-1 rounded-lg bg-accent hover:bg-accent-dim px-3 py-2 text-white disabled:opacity-50" :disabled="!canUpdate" @click="startUpdate">{{ t('version.confirmUpdate') }}</button>
+              </div>
+            </template>
+            <button v-else-if="hasUpdate" type="button" class="w-full rounded-lg bg-accent hover:bg-accent-dim px-3 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="!canUpdate" @click="confirming = true">{{ t('version.oneClickUpdate') }}</button>
+            <p v-if="hasUpdate && update?.reason" class="mt-2 leading-relaxed text-muted">{{ update.reason }}</p>
+            <p v-if="hasUpdate && info?.prerelease" class="mt-2 text-muted">{{ t('version.stableOnly') }}</p>
+          </template>
+          <p v-if="updateError" class="mt-2 text-red-400" role="alert">{{ updateError }}</p>
         </div>
 
         <a

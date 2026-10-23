@@ -64,6 +64,11 @@ export class JobEngine {
     this.timer.unref();
   }
   stop(): void { if(this.timer)clearInterval(this.timer);this.timer=null; }
+  /** Pause scheduling without aborting an engine operation during panel maintenance. */
+  async pause(): Promise<void> {
+    this.stop();
+    while (this.ticking) await new Promise(r => setTimeout(r, 10));
+  }
   async shutdown(): Promise<void> {
     this.stop();this.closing=true;
     for(const controller of this.controllers.values())controller.abort();

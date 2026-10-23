@@ -72,6 +72,7 @@ services:
       RP_CHANNEL_BALANCE_THRESHOLD: ${RP_CHANNEL_BALANCE_THRESHOLD:-0}
       RP_UPSTREAM_RESET_ENABLED: ${RP_UPSTREAM_RESET_ENABLED:-0}
       # 版本更新检查的发行仓库（fork 自建可改；留空=官方仓库）
+      RP_UPDATE_DIRECTORY: /app/packages/orchestrator/data/panel-updates
       RP_RELEASE_REPO: ${RP_RELEASE_REPO:-}
     volumes:
       # 经宿主 docker 编排引擎站点

@@ -853,3 +853,17 @@ export interface BackupRunView {
 }
 export interface BackupsResponse { backups: BackupRunView[]; hasMore: boolean }
 export interface BackupChecksResponse { checks: BackupCheckView[]; hasMore: boolean }
+
+/** Administrator-only managed panel update, persisted by the host supervisor. */
+export interface SystemUpdateResponse {
+  supported: boolean;
+  reason: string | null;
+  phase: 'idle' | 'downloading' | 'verifying' | 'installing' | 'backing_up' | 'restarting' | 'checking' | 'succeeded' | 'failed';
+  id: string | null;
+  from: string | null;
+  target: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  error: string | null;
+  backupId: number | null;
+}

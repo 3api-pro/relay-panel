@@ -4,16 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ApiError, requireRoot } from '../auth/rbac.js';
 
-/**
- * 面板自身版本 + 可用更新检查（站长视角，仿 sub2api 的版本徽章）。
- *   GET /api/system/version[?force=1] → root
- * 当前版本 = orchestrator package.json 的 version（源码树/dist 都在 ../../package.json）。
- * 最新版本 = GitHub releases 列表第一条（**不能用 /releases/latest**：它跳过 prerelease，
- * 而本仓库 v2.x 线全是 beta，latest 会误报成 legacy 的 v0.5.0）。
- *
- * 🔴 只提示，不自更新：面板由 docker compose / 源码部署，升级动作留给站长自己执行。
- * 拉不到就如实回 error 文案 + hasUpdate=false，绝不猜测“已是最新”。
- */
+/** 管理员查看面板版本；稳定版本优先，预发布仅在没有稳定版时展示。 */
 
 /** 发行仓库（fork 自建可用 RP_RELEASE_REPO 覆盖，形如 owner/repo） */
 const DEFAULT_REPO = '3api-pro/relay-panel';
@@ -64,8 +55,8 @@ export interface ParsedVersion {
 }
 
 export function parseSemver(raw: string): ParsedVersion | null {
-  const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?/.exec(raw.trim());
-  if (!m) return null;
+  const m = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(raw.trim());
+  if (!m || !m.slice(1, 4).every(x => Number.isSafeInteger(Number(x))) || m[4]?.split('.').some(x => /^\d+$/.test(x) && (!Number.isSafeInteger(Number(x)) || (x.length > 1 && x[0] === '0')))) return null;
   return {
     major: Number(m[1]),
     minor: Number(m[2]),
@@ -105,14 +96,11 @@ export function compareSemver(a: string, b: string): number {
   return 0;
 }
 
-/** releases 列表 → 最新一条（跳过草稿；已发布顺序即 GitHub 返回顺序=创建时间倒序） */
+/** Stable releases take precedence; never mistake release creation order for version order. */
 export function pickLatestRelease(list: GithubRelease[]): GithubRelease | null {
-  for (const r of list) {
-    if (r.draft === true) continue;
-    if (typeof r.tag_name !== 'string' || r.tag_name === '') continue;
-    return r;
-  }
-  return null;
+  const valid = list.filter(r => r && !r.draft && typeof r.tag_name === 'string' && parseSemver(r.tag_name));
+  const stable = valid.filter(r => !r.prerelease && parseSemver(r.tag_name!)!.pre.length === 0);
+  return (stable.length ? stable : valid).sort((a, b) => compareSemver(b.tag_name!, a.tag_name!))[0] ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -139,6 +127,7 @@ export async function readCurrentVersion(): Promise<string> {
 
 let releaseCache: ReleaseCheck | null = null;
 let releaseCacheAt = 0;
+let releaseCacheRepo = '';
 
 export async function fetchLatestRelease(
   repo: string,
@@ -154,8 +143,9 @@ export async function fetchLatestRelease(
     error,
     checkedAt,
   });
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) || repo.split('/').some(x => x === '.' || x === '..')) return empty('发行仓库配置无效');
   try {
-    const resp = await fetchFn(`https://api.github.com/repos/${repo}/releases?per_page=10`, {
+    const resp = await fetchFn(`https://api.github.com/repos/${repo}/releases?per_page=30`, {
       headers: { accept: 'application/vnd.github+json', 'user-agent': 'relay-panel' },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
@@ -167,10 +157,10 @@ export async function fetchLatestRelease(
     const tag = rel.tag_name as string;
     return {
       latest: tag.replace(/^v/, ''),
-      url: rel.html_url ?? `https://github.com/${repo}/releases/tag/${tag}`,
+      url: `https://github.com/${repo}/releases/tag/${encodeURIComponent(tag)}`,
       name: rel.name ?? tag,
       publishedAt: rel.published_at ?? null,
-      prerelease: rel.prerelease === true,
+      prerelease: rel.prerelease === true || (parseSemver(tag)?.pre.length ?? 0) > 0,
       error: null,
       checkedAt,
     };
@@ -191,7 +181,7 @@ export async function getVersionInfo(
   // repo 来自 config.releaseRepo（RP_RELEASE_REPO，空串在 loadConfig 已按未设处理）
   const repo = opts.repo ?? DEFAULT_REPO;
   const current = await readCurrentVersion();
-  const fresh = releaseCache !== null && Date.now() - releaseCacheAt < CACHE_TTL_MS;
+  const fresh = releaseCacheRepo === repo && releaseCache !== null && Date.now() - releaseCacheAt < CACHE_TTL_MS;
   let cached = false;
   let check: ReleaseCheck;
   if (fresh && opts.force !== true) {
@@ -201,6 +191,7 @@ export async function getVersionInfo(
     check = await fetchLatestRelease(repo, opts.fetchImpl ?? fetch);
     // 失败结果不写缓存：下次访问立刻重试，不把“查不到”钉住 6 小时
     if (check.error === null) {
+      releaseCacheRepo = repo;
       releaseCache = check;
       releaseCacheAt = Date.now();
     }

@@ -8,5 +8,26 @@
   "refresh": "重新检查",
   "published": "发布于",
   "releaseNotes": "查看更新说明",
-  "upgradeHint": "拉取新版本并重新部署即可升级。"
+  "upgradeHint": "支持一键更新的部署会先校验发行包并备份；涉及数据库结构变更时需手动升级。",
+  "oneClickUpdate": "一键更新",
+  "confirmUpdate": "备份并更新",
+  "cancel": "取消",
+  "confirmHint": "将先备份面板数据，再重启服务。更新期间面板会短暂不可用，已运行的 API 站点继续服务。",
+  "updateStatusFailed": "暂时无法读取更新状态，请重新打开此窗口检查。",
+  "reconnecting": "正在重新连接面板…",
+  "progressHint": "可以关闭此窗口，更新会继续。若长时间无法连接，请检查宿主机上的面板服务。",
+  "updateSucceeded": "已更新至 v{version}，健康检查通过。",
+  "reload": "刷新使用新版",
+  "stableOnly": "预发布版本请按发布说明手动安装。",
+  "phases": {
+    "idle": "等待更新",
+    "downloading": "正在下载发行包…",
+    "verifying": "正在校验发行包…",
+    "installing": "正在准备新版本…",
+    "backing_up": "正在备份面板数据…",
+    "restarting": "正在重启面板…",
+    "checking": "正在检查新版本健康状态…",
+    "succeeded": "更新完成",
+    "failed": "更新失败"
+  }
 }
