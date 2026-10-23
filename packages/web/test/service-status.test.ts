@@ -6,18 +6,24 @@ function report(): ServiceReport {
 }
 const assess = (r: ServiceReport | null, extra: Partial<Parameters<typeof serviceStatus>[0]> = {}) => serviceStatus({report:r,works:[],siteStatus:'active',loading:false,failed:false,day:beijingDay(now),now,...extra});
 describe('honest passive service status', () => {
-  it('shows clear only for recent complete error-inclusive evidence', () => {
+  it('shows no issues for recent observed evidence', () => {
     expect(assess(report())).toMatchObject({reason:'clear',tone:'green',records:250});
   });
-  it.each(['partial','error','unsupported','changed','pending'])('never calls a %s collection healthy', status => {
+  it.each(['error','unsupported','pending'])('never calls a %s collection healthy', status => {
     const r=report();r.run!.status=status;expect(assess(r).tone).not.toBe('green');
   });
-  it('does not turn missing error coverage, no traffic or capped data into a healthy badge', () => {
+  it('keeps evidence scope separate from alerts and preserves the no-data state', () => {
     const r=report();r.sourceScope='consumption-only';r.groups[0]!.errorLogs=null;
-    expect(assess(r)).toMatchObject({reason:'coverage',tone:'amber'});
+    expect(assess(r)).toMatchObject({reason:'clear',tone:'green'});
     r.groups=[];r.latestEvidenceAt=null;expect(assess(r).reason).toBe('empty');
-    const capped=report();capped.sampleLimited=true;expect(assess(capped).reason).toBe('limited');
+    const capped=report();capped.sampleLimited=true;expect(assess(capped).reason).toBe('clear');
     expect(assess(null).tone).not.toBe('green');
+  });
+  it.each(['complete','partial','changed'])('does not warn merely because %s logs only cover consumption', status => {
+    const r=report();r.run!.status=status;r.sourceScope='consumption-only';r.groups[0]!.errorLogs=null;r.sampleLimited=true;
+    expect(assess(r)).toMatchObject({reason:'clear',tone:'green'});
+    expect(groupStatus(r.groups[0]!,r,now)).toMatchObject({key:'clear',tone:'green'});
+    r.groups[0]!.flagged=1;expect(assess(r)).toMatchObject({reason:'signals',tone:'red'});
   });
   it('uses group aggregates rather than a truncated request list and keeps issues visible after collection fails', () => {
     const r=report();r.run!.status='error';r.groups[0]!.flagged=230;
@@ -39,11 +45,11 @@ describe('honest passive service status', () => {
     expect(assess(report(),{works})).toMatchObject({reason:'incident',tone:'amber',pending:2,urgent:1,action:'work'});
     expect(assess(report(),{works:works.slice(1)}).reason).toBe('work');
   });
-  it('keeps stale and incomplete channel rows separate from clear or flagged rows', () => {
+  it('keeps stale channel rows separate from current unflagged or flagged rows', () => {
     const r=report(),g=r.groups[0]!;
     expect(groupStatus(g,r,now)).toMatchObject({key:'clear',tone:'green'});
     g.latestEvidenceAt='2026-10-23T01:00:00Z';expect(groupStatus(g,r,now).key).toBe('stale');
     g.flagged=1;expect(groupStatus(g,r,now).key).toBe('signals');
-    g.flagged=0;g.latestEvidenceAt=r.latestEvidenceAt!;r.sourceScope='consumption-only';expect(groupStatus(g,r,now).key).toBe('limited');
+    g.flagged=0;g.latestEvidenceAt=r.latestEvidenceAt!;r.sourceScope='consumption-only';expect(groupStatus(g,r,now).key).toBe('clear');
   });
 });

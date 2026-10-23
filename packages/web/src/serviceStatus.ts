@@ -37,18 +37,17 @@ export function serviceStatus(input: {
   if (pending.some(w => w.kind === 'incident')) return result('incident', 'amber', 'work');
   if (report.run?.status === 'error') return result('collection-error', 'amber', 'collect');
   if (report.run?.status === 'unsupported') return result('unsupported', 'amber', 'site');
-  if (report.run?.status === 'changed') return result('changed', 'amber', 'collect');
   if (!report.run || records === 0) return result('empty', 'muted', 'collect');
   if (!recent(report.latestEvidenceAt, now) || !recent(report.run.updatedAt, now)) return result('stale', 'muted', 'collect');
-  if (report.run.status !== 'complete') return result('partial', 'amber', 'collect');
-  if (report.sampleLimited) return result('limited', 'amber', 'quality');
-  if (report.sourceScope !== 'consume-and-error-logs' || report.groups.some(g => g.errorLogs === null)) return result('coverage', 'amber', 'quality');
+  // Coverage describes the evidence scope, not a service incident.
+  if (!['complete', 'partial', 'changed'].includes(report.run.status) || !['consumption-only', 'consume-and-error-logs'].includes(report.sourceScope)) return result('syncing', 'muted', 'collect');
   if (pending.length) return result('work', 'amber', 'work');
   return result('clear', 'green', 'quality');
 }
 export function groupStatus(group: ServiceGroup, report: ServiceReport, now: number) {
   if (group.flagged > 0) return { tone: 'red' as const, key: 'signals' };
-  if (!recent(group.latestEvidenceAt, now)) return { tone: 'muted' as const, key: 'stale' };
-  if (report.run?.status !== 'complete' || report.sampleLimited || report.sourceScope !== 'consume-and-error-logs' || group.errorLogs === null || !recent(report.run.updatedAt, now)) return { tone: 'amber' as const, key: 'limited' };
+  if (!group.records) return { tone: 'muted' as const, key: 'empty' };
+  if (!recent(group.latestEvidenceAt, now) || !recent(report.run?.updatedAt, now)) return { tone: 'muted' as const, key: 'stale' };
+  if (!['complete', 'partial', 'changed'].includes(report.run?.status ?? '') || !['consumption-only', 'consume-and-error-logs'].includes(report.sourceScope)) return { tone: 'muted' as const, key: 'unavailable' };
   return { tone: 'green' as const, key: 'clear' };
 }

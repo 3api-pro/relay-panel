@@ -51,7 +51,7 @@ const recordRows=computed(()=>[...(report.value?.records??[])].filter(r=>!onlyIs
 const workRows=computed(()=>items.value.filter(w=>!pendingOnly.value||['open','investigating','waiting'].includes(w.status)).sort((a,b)=>Number(b.priority==='urgent')-Number(a.priority==='urgent')||b.id-a.id));
 const filtered=computed(()=>Boolean(applied.value.requestId||applied.value.channelId||applied.value.model));
 const groupState=(g:Group)=>groupStatus(g,report.value!,now.value);
-const groupLabel=(key:string)=>key==='signals'?l('发现异常','Issues detected'):key==='clear'?l('未发现异常','No issues observed'):key==='stale'?l('证据已过期','Evidence stale'):l('覆盖有限','Limited coverage');
+const groupLabel=(key:string)=>key==='signals'?l('发现异常','Issues detected'):key==='clear'?l('未发现异常','No issues observed'):key==='stale'?l('暂无近期数据','No recent evidence'):key==='empty'?l('暂无数据','No data'):l('等待日志','Awaiting logs');
 let clock:ReturnType<typeof setInterval>|undefined;
 onMounted(()=>{clock=setInterval(()=>{now.value=Date.now();},30000);});
 onUnmounted(()=>{if(clock)clearInterval(clock);++loadEpoch;});

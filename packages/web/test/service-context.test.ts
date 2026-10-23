@@ -115,6 +115,24 @@ describe('service overview and detail scope', () => {
     expect(host.querySelector('#service-quality-results')?.textContent).toContain('当前为筛选结果');
     expect(host.querySelector('#service-quality-results')?.textContent).toContain('未发现异常');
   });
+  it('shows a clean observed scope without a persistent warning for partial consumption-only logs', async () => {
+    api.get.mockImplementation(async (path: string) => {
+      if (path.includes('/quality?')) { const r=evidence(0);r.run.status='partial';r.sourceScope='consumption-only';r.sampleLimited=true;return r; }
+      if (path.includes('/work?')) return {items:[],hasMore:false};
+      return getResult(path);
+    });
+    await mount();const overview=host.querySelector('[aria-label="今日服务概览"]')!;
+    expect(overview.getAttribute('data-tone')).toBe('green');
+    expect(overview.querySelector('h2')?.textContent).toBe('未发现异常');
+    expect(overview.textContent).toContain('今日已观测 20 条请求记录');
+    expect(overview.querySelector('.text-amber')).toBeNull();
+    const scope=overview.querySelector('details')!;expect(scope.open).toBe(false);
+    expect(scope.textContent).toContain('不包含全部失败请求');
+    expect(scope.textContent).toContain('日志仍在同步');
+    expect(scope.textContent).toContain('已达到样本上限');
+    expect(host.querySelector('#service-quality-results .text-amber')).toBeNull();
+  });
+
   it('removes a clear conclusion when a refresh cannot load data', async () => {
     let failed = false;
     api.get.mockImplementation(async (path: string) => {
@@ -125,7 +143,7 @@ describe('service overview and detail scope', () => {
     await mount();expect(host.querySelector('[data-status]')?.getAttribute('data-status')).toBe('clear');
     failed=true;button('刷新概览').click();await flush();
     expect(host.querySelector('[data-status]')?.getAttribute('data-status')).toBe('unavailable');
-    expect(host.querySelector('[aria-label="今日服务概览"]')?.textContent).not.toContain('暂未发现异常');
+    expect(host.querySelector('[aria-label="今日服务概览"]')?.textContent).not.toContain('未发现异常');
   });
   it('takes the pending-work action to a filtered queue without creating anything', async () => {
     await mount();button('查看待处理事项').click();await flush();

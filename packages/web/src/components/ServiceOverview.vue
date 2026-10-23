@@ -16,17 +16,21 @@ const messages = computed<Record<string, [string, string]>>(() => ({
   'day-changed': [l('今日状态待更新', 'Refresh today’s status'), l('日期已切换，刷新后查看今天的数据。', 'A new day has started. Refresh to load today’s evidence.')],
   signals: [l('发现异常线索', 'Issues detected'), l(`今日已读取的日志中，${state.value.flagged} 条记录需要核查，涉及 ${state.value.affected} 个渠道 / 模型。`, `${state.value.flagged} collected records need review across ${state.value.affected} channel / model groups today.`)],
   incident: [l('有故障事项待处理', 'Incidents need attention'), l('存在尚未解决的故障事项，请查看处理进展与验证结果。', 'Unresolved incident cases need follow-up and verification.')],
-  'collection-error': [l('状态待确认', 'Status unconfirmed'), l('日志读取失败，当前无法判断请求状态。请重试或检查站点权限。', 'Log collection failed. Retry or check site permissions to assess requests.')],
-  unsupported: [l('状态待确认', 'Status unconfirmed'), l('当前站点的日志接口暂不兼容，请检查引擎版本与接入配置。', 'The log interface is unsupported. Check the engine version and connection settings.')],
-  changed: [l('状态待确认', 'Status unconfirmed'), l('源日志发生变化，本轮数据尚未完整。可重新读取已有日志。', 'Source logs changed before collection completed. Read the logs again.')],
+  'collection-error': [l('日志读取失败', 'Log collection failed'), l('日志读取失败，当前无法判断请求状态。请重试或检查站点权限。', 'Log collection failed. Retry or check site permissions to assess requests.')],
+  unsupported: [l('接入配置需检查', 'Connection needs attention'), l('当前站点的日志接口暂不兼容，请检查引擎版本与接入配置。', 'The log interface is unsupported. Check the engine version and connection settings.')],
   empty: [l('暂无请求数据', 'No request evidence'), l('今天尚无可用于判断的请求记录；没有请求不代表服务正常或故障。', 'No request evidence is available today. No traffic does not establish health or failure.')],
-  stale: [l('状态待确认', 'Status unconfirmed'), l('最近请求或日志更新已超过 30 分钟，当前状态需要新的证据。', 'The latest request or log update is over 30 minutes old. Current status needs newer evidence.')],
-  partial: [l('状态待确认', 'Status unconfirmed'), l('已读取的日志暂未发现异常，但本轮还未读完。继续读取可补全判断依据。', 'No issues found in collected logs so far, but collection is incomplete. Read the next batch for more evidence.')],
-  limited: [l('状态待确认', 'Status unconfirmed'), l('已达到日志样本上限，请按渠道或模型查看；当前数据不能代表完整情况。', 'The sample limit was reached. Filter by channel or model; these logs do not cover the full scope.')],
-  coverage: [l('状态待确认', 'Status unconfirmed'), l('已读取的消费记录暂未发现异常，但来源不覆盖全部失败请求。', 'No issues found in the collected consumption records, but the source does not cover all failed requests.')],
+  stale: [l('暂无近期数据', 'No recent evidence'), l('最近请求或日志更新已超过 30 分钟，当前状态需要新的证据。', 'The latest request or log update is over 30 minutes old. Current status needs newer evidence.')],
   work: [l('有事项待跟进', 'Work needs follow-up'), l('已观测请求暂未发现异常，还有未完成的服务事项。', 'No issues found in observed requests. Service work still needs follow-up.')],
-  clear: [l('暂未发现异常', 'No issues observed'), l('近期请求证据有效，今日已读取的消费与错误日志中未发现异常线索。', 'Recent evidence is available. No issues were found in today’s collected consumption and error logs.')],
+  syncing: [l('正在整理日志', 'Preparing log evidence'), l('等待可用的请求记录，不代表站点异常。', 'Waiting for usable request evidence; this does not indicate a site incident.')],
+  clear: [l('未发现异常', 'No issues observed'), l(`今日已观测 ${state.value.records} 条请求记录，未发现异常线索。`, `No issues found in ${state.value.records} request records observed today.`)],
 }));
+const coverageNotes = computed(() => {
+  const notes: string[] = [];
+  if (props.report?.sourceScope === 'consumption-only') notes.push(l('当前来源为消费记录，不包含全部失败请求。', 'The source contains consumption records, not all failed requests.'));
+  if (['partial', 'changed'].includes(props.report?.run?.status ?? '')) notes.push(l('日志仍在同步，结论针对已读取的记录。', 'Log sync is ongoing; the conclusion applies to collected records.'));
+  if (props.report?.sampleLimited) notes.push(l('已达到样本上限，可按渠道或模型查看更多记录。', 'The sample limit was reached; filter by channel or model for more records.'));
+  return notes;
+});
 const message = computed(() => messages.value[state.value.reason]!);
 const icon = computed(() => state.value.tone === 'red' || state.value.tone === 'amber' ? AlertTriangle : state.value.tone === 'green' ? CircleCheck : CircleHelp);
 const action = computed(() => state.value.action === 'collect' && !props.canWrite ? 'refresh' : state.value.action);
@@ -42,7 +46,7 @@ const metrics = computed(() => [
 ]);
 </script>
 <template>
-  <section aria-live="polite" :aria-label="l('今日服务概览','Today’s service overview')" class="space-y-3" :data-status="state.reason">
+  <section aria-live="polite" :aria-label="l('今日服务概览','Today’s service overview')" class="space-y-3" :data-status="state.reason" :data-tone="state.tone">
     <div class="service-health rounded-xl border p-4 sm:p-5" :class="`health-${state.tone}`">
       <div class="flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div class="flex min-w-0 flex-1 items-start gap-3">
@@ -54,7 +58,8 @@ const metrics = computed(() => [
       </div>
       <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-current/10 pt-3 text-xs text-muted">
         <span>{{ l('日志更新','Logs updated') }} {{ updated }} {{ l('北京时间','Beijing time') }}</span>
-        <Badge :tone="report?.sourceScope==='consume-and-error-logs'?'muted':'amber'" size="sm">{{ report?.sourceScope==='consume-and-error-logs'?l('消费与错误日志','Consumption & error logs'):report?.sourceScope==='consumption-only'?l('仅消费记录','Consumption records only'):l('暂无可用来源','No evidence source') }}</Badge>
+        <Badge tone="muted" size="sm">{{ report?.sourceScope==='consume-and-error-logs'?l('消费与错误日志','Consumption & error logs'):report?.sourceScope==='consumption-only'?l('仅消费记录','Consumption records only'):l('暂无可用来源','No evidence source') }}</Badge>
+        <details v-if="coverageNotes.length" class="basis-note"><summary class="cursor-pointer">{{l('数据范围说明','Evidence scope')}}</summary><p v-for="note in coverageNotes" :key="note" class="mt-2 max-w-2xl leading-5">{{note}}</p></details>
         <span>{{l('依据已有日志判断，不额外调用模型','Based on existing logs; no extra model calls')}}</span>
       </div>
     </div>
