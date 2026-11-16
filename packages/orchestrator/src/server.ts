@@ -156,6 +156,25 @@ export async function buildServer(deps: ServerDeps, opts: BuildServerOptions = {
   // ---- 防缓存：/api/* 响应一律 no-store，杜绝浏览器/中间层缓存鉴权响应 ----
   // （否则 GET /api/auth/me 的"已登录"响应会被浏览器缓存，登出后访问首页守卫拿到旧响应 → 误进后台）
   app.addHook('onSend', async (req, reply) => {
+    const defaultHeader = (name: string, value: string): void => {
+      if (reply.getHeader(name) === undefined) reply.header(name, value);
+    };
+    defaultHeader('X-Content-Type-Options', 'nosniff');
+    defaultHeader('X-Frame-Options', 'DENY');
+    defaultHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    defaultHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    defaultHeader('Content-Security-Policy', [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "object-src 'none'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' data: https://fonts.gstatic.com",
+      "img-src 'self' data: https:",
+      "connect-src 'self'",
+    ].join('; '));
     if (pathOf(req.url).startsWith('/api/')) {
       reply.header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
       reply.header('Pragma', 'no-cache');

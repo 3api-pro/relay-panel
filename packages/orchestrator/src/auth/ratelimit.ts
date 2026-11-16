@@ -111,3 +111,20 @@ export function normalizeEmail(raw: string): string {
   }
   return `${local}@${domain}`;
 }
+
+/** 用于反滥发分桶的邮箱键。非 Gmail 域名也去掉 +tag，避免同一收件箱被别名轮换击穿限流。 */
+export function abuseEmailKey(raw: string): string {
+  const normalized = normalizeEmail(raw);
+  const at = normalized.lastIndexOf('@');
+  if (at <= 0) return normalized;
+  const local = normalized.slice(0, at);
+  const domain = normalized.slice(at + 1);
+  const plus = local.indexOf('+');
+  return `${plus >= 0 ? local.slice(0, plus) : local}@${domain}`;
+}
+
+/** 返回已归一化邮箱的域名，用于域名级邮件预算。 */
+export function emailDomain(raw: string): string {
+  const at = raw.lastIndexOf('@');
+  return at > 0 && at < raw.length - 1 ? raw.slice(at + 1) : 'unknown';
+}

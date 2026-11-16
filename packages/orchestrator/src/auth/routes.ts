@@ -21,7 +21,7 @@ import {
 import { ApiError, authenticate, requireRoot, type OperatorRole, type SessionCtx } from './rbac.js';
 import { accountMailReady, queueAccountMail, issueAccountToken, securityLimit, consumeMfa } from './security.js';
 import { withBillingTransaction } from '../billing/transaction.js';
-import { SlidingWindowLimiter, clientIp, normalizeEmail } from './ratelimit.js';
+import { SlidingWindowLimiter, abuseEmailKey, clientIp, emailDomain, normalizeEmail } from './ratelimit.js';
 
 /**
  * 认证/账号路由（规格 §4）：/api/auth/*、/api/invites、/api/operators。
@@ -107,7 +107,7 @@ function isUniqueViolation(err: unknown): boolean {
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): void {
   const { config, db } = deps;
-  // 内存滑窗限速器（单实例进程内共享；本 app 生命周期内有效）
+  // 登录失败仍使用进程内滑窗，注册改用 auth_attempts 数据库限流，跨进程共享。
   const rateLimiter = new SlidingWindowLimiter();
 
   async function getCtx(req: FastifyRequest): Promise<SessionCtx> {
@@ -224,25 +224,20 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
 
     // 邮箱归一化：gmail 别名(点/+tag)收敛到同一账号，杜绝派生海量小号
     const email = normalizeEmail(body.email);
-
-    // 限速：单 IP + 单邮箱双维度滑窗（超任一即拒），CF-Connecting-IP 取真实 IP
-    const ipKey = `signup:ip:${clientIp(req)}`;
-    const emailKey = `signup:email:${email}`;
-    if (
-      rateLimiter.tooMany(ipKey, SIGNUP_WINDOW_MS, config.signupMaxPerIp) ||
-      rateLimiter.tooMany(emailKey, SIGNUP_WINDOW_MS, config.signupMaxPerEmail)
-    ) {
-      await writeAudit(db, {
-        actor: email,
-        action: 'auth.signup',
-        payload: { email, mode: config.signupMode },
-        ok: false,
-        error: 'rate limited',
-      });
-      throw new ApiError(429, '操作过于频繁，请稍后再试');
+    const abuseKey = abuseEmailKey(body.email);
+    const domain = emailDomain(abuseKey);
+    const rawLocal = body.email.trim().toLowerCase().split('@')[0] ?? '';
+    const rawDomain = body.email.trim().toLowerCase().split('@').at(-1) ?? '';
+    if (rawLocal.includes('+') && rawDomain !== 'gmail.com' && rawDomain !== 'googlemail.com') {
+      throw new ApiError(400, '公开注册暂不支持邮箱 + 别名，请使用主邮箱地址');
     }
-    rateLimiter.record(ipKey);
-    rateLimiter.record(emailKey);
+
+    // 限速：数据库原子计数，覆盖真实 IP、邮箱、域名和全局四个维度。
+    // auth_attempts 的唯一键让多进程、多副本和滚动重启共享同一窗口。
+    await securityLimit(db, `signup:ip:${clientIp(req)}`, config.signupMaxPerIp, SIGNUP_WINDOW_MS);
+    await securityLimit(db, `signup:email:${abuseKey}`, config.signupMaxPerEmail, SIGNUP_WINDOW_MS);
+    await securityLimit(db, `signup:domain:${domain}`, config.signupMaxPerDomain, SIGNUP_WINDOW_MS);
+    await securityLimit(db, 'signup:global', config.signupMaxGlobal, SIGNUP_WINDOW_MS);
 
     const dup = await db.orm.select({ id: operators.id }).from(operators).where(eq(operators.email, email)).limit(1);
     if (dup.length > 0) throw new ApiError(409, '邮箱已注册');

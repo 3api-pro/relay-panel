@@ -7,7 +7,7 @@ import type { Db } from '../db/client.js';
 import { authAttempts, authTokens, operators, sessions, type OperatorRow } from '../db/schema.js';
 import { ApiError } from './rbac.js';
 import { hashPassword, verifyPassword } from './passwords.js';
-import { normalizeEmail } from './ratelimit.js';
+import { abuseEmailKey, clientIp, normalizeEmail } from './ratelimit.js';
 import { createSession, hashToken, SESSION_COOKIE, sessionCookieOptions, toPgTimestamp } from './sessions.js';
 import { decryptSecret, encryptSecret } from '../secrets.js';
 import { withBillingTransaction } from '../billing/transaction.js';
@@ -23,7 +23,7 @@ export async function securityLimit(db: Db, key: string, max = 6, windowMs = 600
       count: sql`CASE WHEN ${authAttempts.expiresAt} <= ${now}::timestamp THEN 1 ELSE ${authAttempts.count} + 1 END`,
       expiresAt: sql`CASE WHEN ${authAttempts.expiresAt} <= ${now}::timestamp THEN ${expiry}::timestamp ELSE ${authAttempts.expiresAt} END`,
     } }).returning();
-  if (row!.count > max) throw new ApiError(429, '操作过于频繁，请稍后重试');
+  if (row!.count > max) throw new ApiError(429, '操作过于频繁，请稍后再试');
 }
 
 export function accountMailReady(config: Config): boolean {
@@ -103,9 +103,10 @@ export function registerSecurityRoutes(app: FastifyInstance, deps: { db: Db; con
   app.post('/api/auth/recovery/request', async req => {
     const body = parse(z.object({ email: z.string().email().max(254), purpose: z.enum(['reset', 'verify']) }), req.body);
     const email = normalizeEmail(body.email);
-    // Per-email limit cannot be evaded by forging a forwarding header.
-    await securityLimit(db, `recovery:ip:${req.ip}`, 30, 3_600_000);
-    await securityLimit(db, `recovery:email:${email}`, 4, 3_600_000);
+    const abuseKey = abuseEmailKey(body.email);
+    // 统一使用受信代理解析出的客户端 IP，避免 Cloudflare 隧道把所有用户压进同一桶。
+    await securityLimit(db, `recovery:ip:${clientIp(req)}`, 30, 3_600_000);
+    await securityLimit(db, `recovery:email:${abuseKey}`, 4, 3_600_000);
     if (!accountMailReady(config)) throw new ApiError(503, '账号邮件服务尚未配置，请联系管理员');
     const [op] = await db.orm.select().from(operators).where(eq(operators.email, email));
     if (op?.status === 'active' && (body.purpose === 'reset' || !op.emailVerifiedAt)) await queueAccountMail(db, config, op, body.purpose);

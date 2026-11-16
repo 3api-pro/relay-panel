@@ -54,6 +54,10 @@ export interface Config {
   signupMaxPerIp: number;
   /** 注册限速：单邮箱每小时最多注册尝试数 */
   signupMaxPerEmail: number;
+  /** 注册限速：单邮箱域名每小时最多注册尝试数，跨进程共享 */
+  signupMaxPerDomain: number;
+  /** 注册限速：全局每小时最多注册尝试数，跨进程共享 */
+  signupMaxGlobal: number;
   /** 登录限速：单 (IP,账号) 每 10 分钟最多失败次数，超限退避 429 */
   loginMaxFails: number;
   /** operator 触发的 adopt 探测统一超时（毫秒）防 slowloris 挂起；root 走引擎原超时 */
@@ -154,6 +158,8 @@ const envSchema = z.object({
   RP_SESSION_TTL_HOURS: z.coerce.number().positive().default(168),
   RP_SIGNUP_MAX_PER_IP: z.coerce.number().int().min(1).default(20),
   RP_SIGNUP_MAX_PER_EMAIL: z.coerce.number().int().min(1).default(5),
+  RP_SIGNUP_MAX_PER_DOMAIN: z.coerce.number().int().min(1).default(20),
+  RP_SIGNUP_MAX_GLOBAL: z.coerce.number().int().min(1).default(100),
   RP_LOGIN_MAX_FAILS: z.coerce.number().int().min(1).default(10),
   RP_ADOPT_PROBE_TIMEOUT_MS: z.coerce.number().int().min(500).default(6000),
   RP_SITES_ROOT: z.string().default('./data/sites'),
@@ -264,6 +270,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     sessionTtlHours: e.RP_SESSION_TTL_HOURS,
     signupMaxPerIp: e.RP_SIGNUP_MAX_PER_IP,
     signupMaxPerEmail: e.RP_SIGNUP_MAX_PER_EMAIL,
+    signupMaxPerDomain: e.RP_SIGNUP_MAX_PER_DOMAIN,
+    signupMaxGlobal: e.RP_SIGNUP_MAX_GLOBAL,
     loginMaxFails: e.RP_LOGIN_MAX_FAILS,
     adoptProbeTimeoutMs: e.RP_ADOPT_PROBE_TIMEOUT_MS,
     sitesRoot: e.RP_SITES_ROOT,

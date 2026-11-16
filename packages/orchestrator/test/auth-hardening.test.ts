@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { normalizeEmail } from '../src/auth/ratelimit.js';
+import { abuseEmailKey, emailDomain, normalizeEmail } from '../src/auth/ratelimit.js';
 import { makeTestServer, type TestServer } from './helpers.js';
 
 /**
@@ -24,6 +24,12 @@ describe('normalizeEmail', () => {
   it('非 gmail 仅 trim+lowercase（点/+tag 保留语义）', () => {
     expect(normalizeEmail('User+x@Example.COM')).toBe('user+x@example.com');
     expect(normalizeEmail('  A.B@corp.io ')).toBe('a.b@corp.io');
+  });
+
+  it('反滥发键会收敛所有域名的 +tag，但不改变登录邮箱规范化语义', () => {
+    expect(abuseEmailKey('User+one@Example.COM')).toBe('user@example.com');
+    expect(abuseEmailKey('A.B+two@corp.io')).toBe('a.b@corp.io');
+    expect(emailDomain(abuseEmailKey('User+one@Example.COM'))).toBe('example.com');
   });
 });
 
@@ -75,6 +81,12 @@ describe('signup 限速与归一化', () => {
     expect((await signup('shared@corp.com', '203.0.113.5')).statusCode).toBe(409);
     // 第三次同邮箱再换 IP：邮箱维度已超限 → 429（先于 dup 判定）
     expect((await signup('shared@corp.com', '203.0.113.6')).statusCode).toBe(429);
+  });
+
+  it('非 Gmail + 别名注册直接拒绝', async () => {
+    const rejected = await signup('shared+alias@corp.com', '203.0.113.9');
+    expect(rejected.statusCode).toBe(400);
+    expect((rejected.json() as { message: string }).message).toContain('不支持邮箱 + 别名');
   });
 });
 
