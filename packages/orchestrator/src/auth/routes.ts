@@ -118,6 +118,23 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
     return ctx;
   }
 
+  async function enforceSignupLimit(key: string, max: number, email: string): Promise<void> {
+    try {
+      await securityLimit(db, key, max, SIGNUP_WINDOW_MS);
+    } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 429) {
+        await writeAudit(db, {
+          actor: email,
+          action: 'auth.signup',
+          payload: { email, mode: config.signupMode },
+          ok: false,
+          error: 'rate limited',
+        });
+      }
+      throw err;
+    }
+  }
+
   // ---- /api/auth/* ----
 
   app.post('/api/auth/login', async (req, reply) => {
@@ -234,10 +251,10 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
 
     // 限速：数据库原子计数，覆盖真实 IP、邮箱、域名和全局四个维度。
     // auth_attempts 的唯一键让多进程、多副本和滚动重启共享同一窗口。
-    await securityLimit(db, `signup:ip:${clientIp(req)}`, config.signupMaxPerIp, SIGNUP_WINDOW_MS);
-    await securityLimit(db, `signup:email:${abuseKey}`, config.signupMaxPerEmail, SIGNUP_WINDOW_MS);
-    await securityLimit(db, `signup:domain:${domain}`, config.signupMaxPerDomain, SIGNUP_WINDOW_MS);
-    await securityLimit(db, 'signup:global', config.signupMaxGlobal, SIGNUP_WINDOW_MS);
+    await enforceSignupLimit(`signup:ip:${clientIp(req)}`, config.signupMaxPerIp, email);
+    await enforceSignupLimit(`signup:email:${abuseKey}`, config.signupMaxPerEmail, email);
+    await enforceSignupLimit(`signup:domain:${domain}`, config.signupMaxPerDomain, email);
+    await enforceSignupLimit('signup:global', config.signupMaxGlobal, email);
 
     const dup = await db.orm.select({ id: operators.id }).from(operators).where(eq(operators.email, email)).limit(1);
     if (dup.length > 0) throw new ApiError(409, '邮箱已注册');
